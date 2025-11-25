@@ -27,6 +27,7 @@ print(f"The sum of {x} and {y} is {result}")
 
 const defaultJavaCode = `// Welcome to NexusQuest IDE!
 // Write your Java code here and click Run
+// NOTE: Scanner/user input is not supported in this environment
 
 public class Main {
     public static void main(String[] args) {
@@ -39,6 +40,14 @@ public class Main {
         int y = 20;
         int result = x + y;
         System.out.println("The sum of " + x + " and " + y + " is " + result);
+        
+        // Example: Arrays and loops
+        int[] numbers = {1, 2, 3, 4, 5};
+        int sum = 0;
+        for (int num : numbers) {
+            sum += num;
+        }
+        System.out.println("Sum of array: " + sum);
     }
 }
 `;
@@ -168,6 +177,17 @@ function App() {
     if (!code.trim()) {
       addToConsole('Please write some code first!', 'error');
       return;
+    }
+
+    // Check for interactive input (Scanner/input)
+    if (language === 'java' && /Scanner.*next|BufferedReader/.test(code)) {
+      addToConsole('⚠️ Warning: Scanner and user input are not supported in this environment.', 'info');
+      addToConsole('💡 Tip: Use predefined variables instead of Scanner.', 'info');
+    }
+    
+    if (language === 'python' && /input\s*\(/.test(code)) {
+      addToConsole('⚠️ Warning: input() function is not supported in this environment.', 'info');
+      addToConsole('💡 Tip: Use predefined variables instead of input().', 'info');
     }
 
     setIsRunning(true);

@@ -57,5 +57,15 @@ export function validateCode(req: Request, res: Response, next: NextFunction) {
     });
   }
 
+  // Check for interactive input (Scanner, input()) - warn user
+  if (language === 'java' && /Scanner.*nextInt|nextDouble|nextLine|next\(\)/.test(code)) {
+    // Just a warning, don't block execution
+    console.warn('⚠️ Code uses Scanner for input. This may cause issues in non-interactive environment.');
+  }
+  
+  if (language === 'python' && /input\s*\(/.test(code)) {
+    console.warn('⚠️ Code uses input() function. This may cause issues in non-interactive environment.');
+  }
+
   next();
 }
