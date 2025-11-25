@@ -40,6 +40,12 @@ codeExecutionRouter.get('/languages', (req, res) => {
         version: '3.10',
         extensions: ['.py'],
         supported: true
+      },
+      {
+        name: 'java',
+        version: '17',
+        extensions: ['.java'],
+        supported: true
       }
     ]
   });

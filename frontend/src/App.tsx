@@ -10,7 +10,7 @@ interface ConsoleOutput {
   timestamp: Date;
 }
 
-const defaultCode = `# Welcome to NexusQuest IDE!
+const defaultPythonCode = `# Welcome to NexusQuest IDE!
 # Write your Python code here and click Run
 
 def greet(name):
@@ -24,6 +24,26 @@ y = 20
 result = x + y
 print(f"The sum of {x} and {y} is {result}")
 `;
+
+const defaultJavaCode = `// Welcome to NexusQuest IDE!
+// Write your Java code here and click Run
+
+public class Main {
+    public static void main(String[] args) {
+        // Example: Greeting
+        String name = "Developer";
+        System.out.println("Hello, " + name + "! Welcome to the IDE.");
+        
+        // Example: Basic calculations
+        int x = 10;
+        int y = 20;
+        int result = x + y;
+        System.out.println("The sum of " + x + " and " + y + " is " + result);
+    }
+}
+`;
+
+const defaultCode = defaultPythonCode;
 
 // Code suggestions based on patterns
 const getCodeSuggestions = (code: string): string[] => {
@@ -128,11 +148,21 @@ function App() {
   const [output, setOutput] = useState<ConsoleOutput[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [language, setLanguage] = useState<'python' | 'java'>('python');
 
   // Initialize suggestions on mount
   useEffect(() => {
     setSuggestions(getCodeSuggestions(defaultCode));
   }, []);
+
+  // Change default code when language changes
+  useEffect(() => {
+    if (language === 'python') {
+      setCode(defaultPythonCode);
+    } else if (language === 'java') {
+      setCode(defaultJavaCode);
+    }
+  }, [language]);
 
   const runCode = async () => {
     if (!code.trim()) {
@@ -151,7 +181,7 @@ function App() {
         },
         body: JSON.stringify({ 
           code: code.trim(),
-          language: 'python'
+          language: language
         }),
       });
 
@@ -291,8 +321,15 @@ function App() {
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Code Editor</h2>
             </div>
-            <div className="flex gap-2">
-              <span className="text-xs px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Python</span>
+            <div className="flex gap-2 items-center">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'python' | 'java')}
+                className="text-xs px-3 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="python">Python</option>
+                <option value="java">Java</option>
+              </select>
               <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">{code.split('\n').length} lines</span>
             </div>
           </div>
@@ -300,7 +337,7 @@ function App() {
             <CodeEditor
               value={code}
               onChange={handleCodeChange}
-              language="python"
+              language={language}
               height="100%"
             />
           </div>

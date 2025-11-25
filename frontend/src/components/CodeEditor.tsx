@@ -226,13 +226,134 @@ export function CodeEditor({
         };
       },
     });
+
+    // Register Java autocomplete provider
+    monaco.languages.registerCompletionItemProvider('java', {
+      triggerCharacters: ['.', ' ', '(', '\n'],
+      provideCompletionItems: async (model, position) => {
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+
+        const suggestions: any[] = [];
+
+        // Get AI-powered suggestions for Java
+        try {
+          const code = model.getValue();
+          const aiSuggestions = await getAiCompletions({
+            code,
+            cursorPosition: { line: position.lineNumber - 1, column: position.column },
+            language: 'java',
+          });
+
+          aiSuggestions.forEach((suggestion, index) => {
+            suggestions.push({
+              label: `🤖 AI: ${suggestion.split('\n')[0].substring(0, 50)}...`,
+              kind: monaco.languages.CompletionItemKind.Text,
+              insertText: suggestion,
+              documentation: 'AI-generated suggestion',
+              detail: 'AI Completion',
+              sortText: `0${index}`,
+              preselect: index === 0,
+              range,
+            });
+          });
+        } catch (error) {
+          console.warn('AI completions unavailable:', error);
+        }
+
+        // Java snippets
+        if (textUntilPosition.trim().endsWith('psvm')) {
+          suggestions.push({
+            label: 'psvm - public static void main',
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: 'public static void main(String[] args) {\n\t$0\n}',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: 'Main method',
+            range,
+          });
+        }
+
+        if (textUntilPosition.trim().endsWith('sout')) {
+          suggestions.push({
+            label: 'sout - System.out.println',
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: 'System.out.println($0);',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: 'Print to console',
+            range,
+          });
+        }
+
+        if (textUntilPosition.trim().endsWith('for')) {
+          suggestions.push({
+            label: 'for - enhanced for loop',
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            insertText: 'for (${1:Type} ${2:item} : ${3:collection}) {\n\t$0\n}',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            documentation: 'Enhanced for loop',
+            range,
+          });
+        }
+
+        // Java keywords and common classes
+        const javaKeywords = [
+          'public', 'private', 'protected', 'static', 'final', 'class', 'interface',
+          'extends', 'implements', 'return', 'if', 'else', 'for', 'while', 'do',
+          'switch', 'case', 'default', 'break', 'continue', 'try', 'catch', 'finally',
+          'throw', 'throws', 'new', 'this', 'super', 'void', 'int', 'String',
+          'boolean', 'double', 'float', 'long', 'char', 'byte', 'short'
+        ];
+
+        javaKeywords.forEach((keyword) => {
+          if (keyword.startsWith(word.word)) {
+            suggestions.push({
+              label: keyword,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: keyword,
+              range,
+            });
+          }
+        });
+
+        // Common Java classes
+        const javaClasses = [
+          'System', 'String', 'Integer', 'ArrayList', 'HashMap', 'List', 'Map',
+          'Scanner', 'Math', 'Arrays', 'Collections', 'Exception'
+        ];
+
+        javaClasses.forEach((className) => {
+          if (className.toLowerCase().startsWith(word.word.toLowerCase())) {
+            suggestions.push({
+              label: className,
+              kind: monaco.languages.CompletionItemKind.Class,
+              insertText: className,
+              range,
+            });
+          }
+        });
+
+        return { suggestions };
+      },
+    });
   };
 
   return (
     <div className="h-full w-full relative overflow-hidden">
       <Editor
         height={height}
-        defaultLanguage={language}
+        language={language}
         value={value}
         onChange={handleEditorChange}
         onMount={handleEditorDidMount}
