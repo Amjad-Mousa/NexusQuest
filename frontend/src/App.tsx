@@ -192,6 +192,7 @@ function App() {
 
     setIsRunning(true);
     addToConsole('Running code...', 'info');
+    console.log('Executing code with language:', language);
 
     try {
       const response = await fetch('http://localhost:9876/api/run', {
@@ -355,6 +356,7 @@ function App() {
           </div>
           <div className="flex-1 rounded-xl overflow-hidden border border-gray-700 shadow-2xl bg-gray-900/50 backdrop-blur-sm">
             <CodeEditor
+              key={language}
               value={code}
               onChange={handleCodeChange}
               language={language}
