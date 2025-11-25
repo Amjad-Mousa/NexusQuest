@@ -48,6 +48,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Documentation files
+*.md
 pip-log.txt
 
 # Docker
