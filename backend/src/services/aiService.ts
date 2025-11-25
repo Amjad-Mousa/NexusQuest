@@ -41,8 +41,9 @@ export async function getAiCompletions(request: CompletionRequest): Promise<Comp
     const currentLine = lines[cursorPosition.line] || '';
     const beforeCursor = lines.slice(Math.max(0, cursorPosition.line - 5), cursorPosition.line + 1).join('\n');
     
-    // Create prompt for AI
-    const prompt = `You are an AI code completion assistant. Given the Python code context, suggest the next line(s) of code.
+    // Create language-specific prompt
+    const languageName = language === 'java' ? 'Java' : 'Python';
+    const prompt = `You are an AI code completion assistant. Given the ${languageName} code context, suggest the next line(s) of code.
 Only return the code suggestion, no explanations.
 
 Context:
@@ -53,7 +54,7 @@ Suggest the next line of code that would logically follow. Keep it concise (1-3 
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
-        { role: 'system', content: 'You are a helpful Python code completion assistant. Only respond with code, no explanations.' },
+        { role: 'system', content: `You are a helpful ${languageName} code completion assistant. Only respond with code, no explanations.` },
         { role: 'user', content: prompt }
       ],
       max_tokens: 100,
@@ -76,16 +77,108 @@ Suggest the next line of code that would logically follow. Keep it concise (1-3 
 }
 
 /**
+ * Java-specific fallback completions
+ */
+function getJavaFallbackCompletions(code: string, currentLine: string): CompletionResponse {
+  const suggestions: string[] = [];
+
+  // After main method declaration
+  if (currentLine.includes('public static void main')) {
+    suggestions.push(
+      '        System.out.println("Hello, World!");',
+      '        // Your code here',
+      '        Scanner scanner = new Scanner(System.in);'
+    );
+  }
+  
+  // After class declaration
+  else if (currentLine.includes('class ') && currentLine.endsWith('{')) {
+    suggestions.push(
+      '    public static void main(String[] args) {\n        \n    }',
+      '    private int value;\n    \n    public void setValue(int value) {\n        this.value = value;\n    }',
+      '    // Add your methods here'
+    );
+  }
+  
+  // After for loop
+  else if (currentLine.includes('for ') && currentLine.endsWith('{')) {
+    suggestions.push(
+      '            System.out.println(i);',
+      '            // Process item',
+      '            result.add(i);'
+    );
+  }
+  
+  // After if statement
+  else if (currentLine.includes('if ') && currentLine.endsWith('{')) {
+    suggestions.push(
+      '            return true;',
+      '            System.out.println("Condition met");',
+      '            // Handle condition'
+    );
+  }
+  
+  // Method declaration
+  else if (currentLine.includes('public ') && currentLine.endsWith('{')) {
+    suggestions.push(
+      '        // TODO: Implement method',
+      '        return null;',
+      '        throw new UnsupportedOperationException("Not implemented");'
+    );
+  }
+  
+  // Try-catch
+  else if (currentLine.trim() === 'try {') {
+    suggestions.push(
+      '            // Your code here\n        } catch (Exception e) {\n            e.printStackTrace();\n        }',
+      '            // Code that might throw exception\n        } catch (IOException e) {\n            System.err.println("IO Error: " + e.getMessage());\n        }'
+    );
+  }
+  
+  // System.out
+  else if (currentLine.includes('System.out.println')) {
+    suggestions.push(
+      'System.out.println("Value: " + value);',
+      'System.out.println("Hello, World!");',
+      'System.out.println(result);'
+    );
+  }
+  
+  // Default suggestions
+  else {
+    if (!code.includes('System.out.println')) {
+      suggestions.push('System.out.println("Hello, World!");');
+    }
+    if (!code.includes('Scanner')) {
+      suggestions.push('Scanner scanner = new Scanner(System.in);');
+    }
+    if (!code.includes('ArrayList')) {
+      suggestions.push('ArrayList<String> list = new ArrayList<>();');
+    }
+  }
+
+  return {
+    suggestions: suggestions.slice(0, 3),
+    isAiGenerated: false,
+  };
+}
+
+/**
  * Fallback completions when AI is not available
  * Smart pattern-based suggestions
  */
 function getFallbackCompletions(request: CompletionRequest): CompletionResponse {
-  const { code, cursorPosition } = request;
+  const { code, cursorPosition, language } = request;
   const lines = code.split('\n');
   const currentLine = (lines[cursorPosition.line] || '').trim();
   const suggestions: string[] = [];
 
-  // Pattern-based intelligent suggestions
+  // Java-specific patterns
+  if (language === 'java') {
+    return getJavaFallbackCompletions(code, currentLine);
+  }
+
+  // Python pattern-based intelligent suggestions
   
   // After for loop, suggest body
   if (currentLine.startsWith('for ') && currentLine.endsWith(':')) {
@@ -165,11 +258,11 @@ function getFallbackCompletions(request: CompletionRequest): CompletionResponse 
  * Get inline AI suggestion for the current context
  * This provides a single, most likely completion
  */
-export async function getInlineSuggestion(code: string, cursorLine: number): Promise<string> {
+export async function getInlineSuggestion(code: string, cursorLine: number, language: string = 'python'): Promise<string> {
   const completions = await getAiCompletions({
     code,
     cursorPosition: { line: cursorLine, column: 0 },
-    language: 'python',
+    language: language,
   });
 
   return completions.suggestions[0] || '';
