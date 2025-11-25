@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { CodeEditor } from './components/CodeEditor';
 import { Console } from './components/Console';
 import { Button } from './components/ui/button';
-import { Play, Square, Download } from 'lucide-react';
+import { Play, Square, Download, Upload } from 'lucide-react';
 
 interface ConsoleOutput {
   type: 'output' | 'error' | 'info';
@@ -198,6 +198,30 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  const loadCodeFile = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.py,.txt,.js,.ts,.jsx,.tsx,.java,.cpp,.c,.cs,.php,.rb,.go,.rs,.kt,.swift';
+    
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target?.result as string;
+          setCode(content);
+          addToConsole(`📂 Loaded file: ${file.name}`, 'info');
+        };
+        reader.onerror = () => {
+          addToConsole(`❌ Error loading file: ${file.name}`, 'error');
+        };
+        reader.readAsText(file);
+      }
+    };
+    
+    input.click();
+  };
+
   const handleCodeChange = (value: string | undefined) => {
     const newCode = value || '';
     setCode(newCode);
@@ -231,6 +255,13 @@ function App() {
               >
                 <Play className="w-4 h-4" fill="currentColor" />
                 {isRunning ? 'Running...' : 'Run Code'}
+              </Button>
+              <Button 
+                onClick={loadCodeFile} 
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/30 transition-all duration-200 hover:scale-105"
+              >
+                <Upload className="w-4 h-4" />
+                Open File
               </Button>
               <Button 
                 onClick={clearConsole} 
