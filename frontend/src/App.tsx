@@ -505,43 +505,68 @@ function App() {
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Code Editor</h2>
+              <h2 className={`text-sm font-semibold uppercase tracking-wide ${
+                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+              }`}>Code Editor</h2>
             </div>
             <div className="flex gap-2 items-center">
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as 'python' | 'java')}
-                className="text-xs px-3 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`text-xs px-3 py-1 rounded border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  theme === 'dark'
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30'
+                    : 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200'
+                }`}
               >
                 <option value="python">Python</option>
                 <option value="java">Java</option>
               </select>
-              <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">{code.split('\n').length} lines</span>
+              <span className={`text-xs px-2 py-1 rounded border ${
+                theme === 'dark'
+                  ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                  : 'bg-purple-100 text-purple-700 border-purple-300'
+              }`}>{code.split('\n').length} lines</span>
             </div>
           </div>
-          <div className="flex-1 rounded-xl overflow-hidden border border-gray-700 shadow-2xl bg-gray-900/50 backdrop-blur-sm">
+          <div className={`flex-1 rounded-xl overflow-hidden border shadow-2xl backdrop-blur-sm ${
+            theme === 'dark'
+              ? 'border-gray-700 bg-gray-900/50'
+              : 'border-gray-300 bg-white/90'
+          }`}>
             <CodeEditor
               key={language}
               value={code}
               onChange={handleCodeChange}
               language={language}
               height="100%"
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
             />
           </div>
 
           {/* Code Suggestions */}
           {suggestions.length > 0 && (
-            <div className="mt-3 p-3 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 backdrop-blur-sm">
+            <div className={`mt-3 p-3 rounded-lg border backdrop-blur-sm ${
+              theme === 'dark'
+                ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30'
+                : 'bg-gradient-to-r from-blue-100 to-purple-100 border-blue-300'
+            }`}>
               <div className="flex items-center gap-2 mb-2">
-                <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                <svg className={`w-4 h-4 ${
+                  theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                }`} fill="currentColor" viewBox="0 0 20 20">
                   <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"/>
                 </svg>
-                <span className="text-xs font-semibold text-blue-300">Code Suggestions</span>
+                <span className={`text-xs font-semibold ${
+                  theme === 'dark' ? 'text-blue-300' : 'text-blue-700'
+                }`}>Code Suggestions</span>
               </div>
               <div className="space-y-1">
                 {suggestions.map((suggestion, index) => (
-                  <div key={index} className="text-xs text-gray-300 flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">•</span>
+                  <div key={index} className={`text-xs flex items-start gap-2 ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    <span className={theme === 'dark' ? 'text-blue-400 mt-0.5' : 'text-blue-600 mt-0.5'}>•</span>
                     <span>{suggestion}</span>
                   </div>
                 ))}
@@ -551,32 +576,49 @@ function App() {
         </div>
 
         {/* Vertical Divider */}
-        <div className="w-1 bg-gradient-to-b from-transparent via-gray-700 to-transparent my-4"></div>
+        <div className={`w-1 bg-gradient-to-b from-transparent to-transparent my-4 ${
+          theme === 'dark' ? 'via-gray-700' : 'via-gray-300'
+        }`}></div>
 
         {/* Console */}
         <div className="w-96 p-4 flex flex-col">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Console Output</h2>
+              <h2 className={`text-sm font-semibold uppercase tracking-wide ${
+                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+              }`}>Console Output</h2>
             </div>
-            <span className="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">{output.length} messages</span>
+            <span className={`text-xs px-2 py-1 rounded border ${
+              theme === 'dark'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                : 'bg-emerald-100 text-emerald-700 border-emerald-300'
+            }`}>{output.length} messages</span>
           </div>
-          <div className="flex-1 rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
+          <div className={`flex-1 rounded-xl overflow-hidden border shadow-2xl ${
+            theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
+          }`}>
             <Console 
               output={output} 
               height="100%" 
               onInput={handleConsoleInput}
               waitingForInput={waitingForInput}
+              theme={theme}
             />
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-gray-700 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 backdrop-blur-sm">
+      <footer className={`border-t backdrop-blur-sm ${
+        theme === 'dark'
+          ? 'border-gray-700 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900'
+          : 'border-gray-300 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100'
+      }`}>
         <div className="px-6 py-3 flex justify-between items-center text-xs">
-          <div className="flex items-center gap-4 text-gray-400">
+          <div className={`flex items-center gap-4 ${
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+          }`}>
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500"></span>
               Ready to execute
@@ -586,12 +628,14 @@ function App() {
             <span>|</span>
             <span>Docker Isolated</span>
           </div>
-          <div className="flex items-center gap-4 text-gray-400">
+          <div className={`flex items-center gap-4 ${
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+          }`}>
             <span>Memory: {language === 'python' ? '128MB' : '256MB'}</span>
             <span>|</span>
             <span>Timeout: {language === 'python' ? '10s' : '15s'}</span>
             <span>|</span>
-            <span className="text-blue-400">Secure Mode ✓</span>
+            <span className={theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}>Secure Mode ✓</span>
           </div>
         </div>
       </footer>

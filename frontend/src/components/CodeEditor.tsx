@@ -6,13 +6,15 @@ interface CodeEditorProps {
   onChange: (value: string | undefined) => void;
   language?: string;
   height?: string;
+  theme?: string;
 }
 
 export function CodeEditor({ 
   value, 
   onChange, 
   language = 'python',
-  height = '400px' 
+  height = '400px',
+  theme = 'vs-dark'
 }: CodeEditorProps) {
   const handleEditorChange = (value: string | undefined) => {
     onChange(value);
@@ -357,7 +359,7 @@ export function CodeEditor({
         value={value}
         onChange={handleEditorChange}
         onMount={handleEditorDidMount}
-        theme="vs-dark"
+        theme={theme}
         options={{
           minimap: { enabled: true },
           fontSize: 14,
