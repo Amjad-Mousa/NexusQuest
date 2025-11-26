@@ -257,11 +257,11 @@ ${code.split('\n').map(line => '        ' + line).join('\n')}
       cmd = `cd /tmp && cat << 'JAVACODE' > ${className}.java
 ${javaCode}
 JAVACODE
-javac ${className}.java && cat << 'INPUT' | java ${className}
+javac -d . ${className}.java && cat << 'INPUT' | java -cp . ${className}
 ${inputData}
 INPUT`;
     } else {
-      cmd = `cd /tmp && echo '${escapedCode}' > ${className}.java && javac ${className}.java && java ${className}`;
+      cmd = `cd /tmp && echo '${escapedCode}' > ${className}.java && javac -d . ${className}.java && java -cp . ${className}`;
     }
     
     // Create container with Java
