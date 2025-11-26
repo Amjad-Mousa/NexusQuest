@@ -286,28 +286,49 @@ function App() {
     // Use provided inputs or current queue
     const inputs = providedInputs || inputQueue;
 
-    // Check for interactive input (Scanner/input) and prompt user to provide inputs
+    // Check for interactive input (Scanner/input) and show instructions if no inputs provided
     const needsInput = (language === 'java' && (/Scanner/.test(code) && (/nextInt|nextLine|next\(|nextDouble|nextFloat/.test(code) || /BufferedReader/.test(code)))) ||
                        (language === 'python' && /input\s*\(/.test(code));
     
     if (needsInput && inputs.length === 0) {
-      // Count how many inputs are needed
-      let inputCount = 0;
-      if (language === 'java') {
-        inputCount = (code.match(/nextInt|nextLine|nextDouble|nextFloat|next\(/g) || []).length;
-      } else if (language === 'python') {
-        inputCount = (code.match(/input\s*\(/g) || []).length;
+      // Extract input prompts from the code to show user what inputs are expected
+      const prompts: string[] = [];
+      
+      if (language === 'python') {
+        // Match input("prompt") patterns
+        const inputMatches = code.matchAll(/input\s*\(\s*['"](.*?)['"]\s*\)/g);
+        for (const match of inputMatches) {
+          prompts.push(match[1] || 'Enter value');
+        }
+      } else if (language === 'java') {
+        // Match System.out.print patterns before Scanner calls
+        const lines = code.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes('System.out.print') && lines[i].includes('"')) {
+            const promptMatch = lines[i].match(/["'](.*?)["']/);
+            if (promptMatch && i + 1 < lines.length && /next(Int|Line|Double|Float|\()/.test(lines[i + 1])) {
+              prompts.push(promptMatch[1]);
+            }
+          }
+        }
       }
       
-      setExpectedInputCount(inputCount);
+      setExpectedInputCount(prompts.length || 1);
       addToConsole('⚠️ Your code requires input!', 'error');
       addToConsole('', 'output');
-      addToConsole(`📝 Your code needs ${inputCount} input${inputCount > 1 ? 's' : ''}:`, 'info');
-      addToConsole('   • Type each value in the console input field below', 'output');
-      addToConsole('   • Press Enter after each value', 'output');
-      addToConsole(`   • Code will auto-run after ${inputCount} input${inputCount > 1 ? 's' : ''}`, 'output');
+      
+      if (prompts.length > 0) {
+        addToConsole(`📝 Your code expects these inputs:`, 'info');
+        prompts.forEach((prompt, i) => {
+          addToConsole(`   ${i + 1}. ${prompt}`, 'output');
+        });
+      } else {
+        addToConsole(`📝 Your code requires input values`, 'info');
+      }
+      
       addToConsole('', 'output');
-      addToConsole(`💡 Example: Type "10" and press Enter, then "20" and press Enter`, 'info');
+      addToConsole('💡 Type each value below and press Enter', 'info');
+      addToConsole(`   After ${prompts.length || 'all'} input${prompts.length !== 1 ? 's' : ''}, code will run automatically`, 'output');
       setWaitingForInput(true);
       return;
     }
