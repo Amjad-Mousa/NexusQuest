@@ -42,7 +42,7 @@ export function validateCode(req: Request, res: Response, next: NextFunction) {
   }
 
   // Validate language
-  const supportedLanguages = ['python', 'java', 'javascript', 'js', 'cpp', 'c++', 'go', 'golang'];
+  const supportedLanguages = ['python', 'java', 'javascript', 'js', 'cpp', 'c++'];
   if (language && !supportedLanguages.includes(language.toLowerCase())) {
     return res.status(400).json({
       success: false,
@@ -56,7 +56,7 @@ export function validateCode(req: Request, res: Response, next: NextFunction) {
     // Just a warning, don't block execution
     console.warn('⚠️ Code uses Scanner for input. This may cause issues in non-interactive environment.');
   }
-  
+
   if (language === 'python' && /input\s*\(/.test(code)) {
     console.warn('⚠️ Code uses input() function. This may cause issues in non-interactive environment.');
   }

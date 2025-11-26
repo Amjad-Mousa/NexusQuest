@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:9876';
+const API_BASE_URL = 'http://localhost:3001';
 
 export interface AiCompletionRequest {
   code: string;

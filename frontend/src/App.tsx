@@ -1,9 +1,17 @@
-import { useState, useEffect } from 'react';
-import { CodeEditor } from './components/CodeEditor';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { CodeEditor, CodeErrorMarker } from './components/CodeEditor';
 import { Console } from './components/Console';
 import { Button } from './components/ui/button';
-import { Play, Square, Download, Upload, Moon, Sun, Lightbulb, Sparkles } from 'lucide-react';
+import { Play, Square, Download, Upload, Sparkles, FolderTree, ChevronRight, ChevronLeft, User, LogIn, LogOut, X, FolderOpen, Trophy, Settings, Moon, Sun, Minus, Plus, FilePlus, FolderPlus, Trash2, ChevronDown, File, Save, Folder } from 'lucide-react';
 import * as aiService from './services/aiService';
+import * as projectService from './services/projectService';
+import type { Project, ProjectFile } from './services/projectService';
+
+interface AppProps {
+  user: { name: string; email: string } | null;
+  onLogout: () => void;
+}
 
 interface ConsoleOutput {
   type: 'output' | 'error' | 'info' | 'input';
@@ -95,131 +103,11 @@ int main() {
 }
 `;
 
-const defaultGoCode = `// Welcome to NexusQuest IDE!
-// Write your Go code here and click Run
-// Available frameworks: Gin, GORM, Chi
-
-package main
-
-import (
-	"fmt"
-)
-
-func main() {
-	fmt.Println("Hello from Go!")
-	
-	// Example: Slices and range
-	numbers := []int{5, 2, 8, 1, 9}
-	
-	fmt.Print("Numbers: ")
-	for _, num := range numbers {
-		fmt.Printf("%d ", num)
-	}
-	fmt.Println()
-}
-`;
-
 const defaultCode = defaultPythonCode;
 
-// Code suggestions based on patterns
-const getCodeSuggestions = (code: string): string[] => {
-  const suggestions: string[] = [];
-  const lines = code.split('\n');
-  const lineCount = lines.length;
-  
-  // Performance suggestions
-  if (code.includes('for ') && code.includes('range(len(')) {
-    suggestions.push('⚡ Performance Tip: Use enumerate() instead of range(len()) - More pythonic and efficient');
-  }
-  
-  if (code.match(/\blist\(\[.*\]\)/) || code.match(/\bdict\(\{.*\}\)/)) {
-    suggestions.push('⚡ Optimization: Remove redundant list() or dict() wrappers around literals');
-  }
-  
-  // Code quality suggestions
-  if (!code.includes('def ') && lineCount > 10) {
-    suggestions.push('💡 Best Practice: Break code into reusable functions for better organization');
-  }
-  
-  if (!code.includes('#') && lineCount > 15) {
-    suggestions.push('📝 Readability: Add docstrings and comments to explain your code logic');
-  }
-  
-  if (code.includes('== True') || code.includes('== False')) {
-    suggestions.push('⚡ Pythonic: Use "if condition:" instead of "if condition == True:"');
-  }
-  
-  // String formatting suggestions
-  if (code.match(/\"\s*\+\s*.*\s*\+\s*\"/)) {
-    suggestions.push('✨ Modern Python: Replace string concatenation (+) with f-strings for clarity');
-  }
-  
-  if (code.includes('%') && code.includes('(')) {
-    suggestions.push('✨ Upgrade: Consider using f-strings instead of % formatting');
-  }
-  
-  if (code.includes('.format(') && !code.includes('f"')) {
-    suggestions.push('✨ Tip: f-strings are faster and more readable than .format()');
-  }
-  
-  // Error handling suggestions
-  if (code.includes('try:') && !code.includes('except')) {
-    suggestions.push('⚠️ Safety: Add except clause to handle potential errors gracefully');
-  }
-  
-  if (code.includes('except:') && !code.includes('except ')) {
-    suggestions.push('⚠️ Best Practice: Catch specific exceptions instead of bare except');
-  }
-  
-  // Code structure suggestions
-  if (lineCount > 20 && !code.includes('\n\n')) {
-    suggestions.push('📐 Structure: Add blank lines between logical sections per PEP 8');
-  }
-  
-  if (code.includes('lambda') && code.split('lambda').length > 3) {
-    suggestions.push('💡 Clarity: Consider using named functions instead of complex lambdas');
-  }
-  
-  // Variable naming suggestions
-  if (code.match(/\b[a-z]\b/g) && lineCount > 5) {
-    suggestions.push('📝 Naming: Use descriptive variable names instead of single letters');
-  }
-  
-  // List comprehension suggestions
-  if (code.includes('for ') && code.includes('.append(')) {
-    suggestions.push('✨ Pythonic: Consider using list comprehension instead of append in loop');
-  }
-  
-  // Positive feedback
-  if (code.includes('def ') && code.includes('return ')) {
-    suggestions.push('✅ Excellent: Good use of functions with return statements!');
-  }
-  
-  if (code.includes('#') || code.includes('"""')) {
-    suggestions.push('✅ Great: Well-documented code is maintainable code!');
-  }
-  
-  if (code.includes('f"') || code.includes("f'")) {
-    suggestions.push('✅ Modern: Using f-strings - the best way to format strings in Python!');
-  }
-  
-  if (code.includes('with ')) {
-    suggestions.push('✅ Professional: Using context managers for resource management!');
-  }
-  
-  if (code.includes('if __name__ == "__main__"')) {
-    suggestions.push('✅ Best Practice: Proper main guard usage - excellent structure!');
-  }
-  
-  // Learning suggestions for beginners
-  if (code.length < 30 && lineCount < 5) {
-    suggestions.push('💡 Try: Experiment with functions, loops, and list comprehensions!');
-  }
-  
-  return suggestions.slice(0, 4); // Limit to 4 suggestions
-};
-
-function App() {
+function App({ user, onLogout }: AppProps) {
+  const navigate = useNavigate();
+  const { projectId: urlProjectId } = useParams<{ projectId?: string }>();
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('nexusquest-theme');
     return (saved as 'dark' | 'light') || 'dark';
@@ -230,27 +118,209 @@ function App() {
   });
   const [output, setOutput] = useState<ConsoleOutput[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [language, setLanguage] = useState<'python' | 'java' | 'javascript' | 'cpp' | 'go'>(() => {
+  const [language, setLanguage] = useState<'python' | 'java' | 'javascript' | 'cpp'>(() => {
     const saved = localStorage.getItem('nexusquest-language');
-    return (saved as 'python' | 'java' | 'javascript' | 'cpp' | 'go') || 'python';
+    return (saved as 'python' | 'java' | 'javascript' | 'cpp') || 'python';
   });
   const [waitingForInput, setWaitingForInput] = useState(false);
   const [inputQueue, setInputQueue] = useState<string[]>([]);
   const [expectedInputCount, setExpectedInputCount] = useState(0);
+  const [codeErrors, setCodeErrors] = useState<CodeErrorMarker[]>([]);
+  const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(true);
+  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal'>('console');
+  const [showSidePanel, setShowSidePanel] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [fontSize, setFontSize] = useState<number>(() => {
+    const saved = localStorage.getItem('nexusquest-fontsize');
+    return saved ? parseInt(saved) : 14;
+  });
+
+  // Project state
+  const [projects, setProjects] = useState<Project[]>([]); // Used for session restoration
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentFile, setCurrentFile] = useState<ProjectFile | null>(null);
+  const [showNewFileInput, setShowNewFileInput] = useState<string | null>(null); // null, project._id, or "folder:path"
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileLanguage, setNewFileLanguage] = useState<'python' | 'java' | 'javascript' | 'cpp'>('python');
+  const [isSaving, setIsSaving] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedCode, setLastSavedCode] = useState<string>('');
+
+  // Load projects when user is logged in
+  const loadProjects = useCallback(async () => {
+    if (!user) {
+      setProjects([]);
+      return;
+    }
+    try {
+      const data = await projectService.getProjects();
+      setProjects(data);
+      return data;
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      return [];
+    }
+  }, [user]);
+
+  // Load projects and restore last session (or load project from URL)
+  useEffect(() => {
+    const initSession = async () => {
+      const projectsData = await loadProjects();
+
+      // If user is logged in, try to restore session
+      if (user && projectsData && projectsData.length > 0) {
+        // Priority: URL project ID > localStorage last project
+        const targetProjectId = urlProjectId || localStorage.getItem('nexusquest-last-project');
+        const lastFileId = localStorage.getItem('nexusquest-last-file');
+
+        if (targetProjectId) {
+          const project = projectsData.find((p: Project) => p._id === targetProjectId);
+          if (project) {
+            setCurrentProject(project);
+
+            // Find the last file or default to first file
+            if (lastFileId && !urlProjectId) {
+              // Only use last file if not coming from URL (URL should show first file)
+              const file = project.files.find((f: ProjectFile) => f._id === lastFileId);
+              if (file) {
+                setCurrentFile(file);
+                setCode(file.content);
+                setLanguage(file.language as 'python' | 'java' | 'javascript' | 'cpp');
+                return;
+              }
+            }
+            // If no file found but project has files, open the first one
+            if (project.files.length > 0) {
+              const firstFile = project.files[0];
+              setCurrentFile(firstFile);
+              setCode(firstFile.content);
+              setLanguage(firstFile.language as 'python' | 'java' | 'javascript' | 'cpp');
+            }
+          } else if (urlProjectId) {
+            // Project from URL not found - redirect to home
+            navigate('/');
+          }
+        }
+      } else if (urlProjectId && !user) {
+        // Not logged in but trying to access a project - redirect to login
+        navigate('/login');
+      }
+    };
+
+    initSession();
+  }, [user, urlProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save current project/file to localStorage when they change
+  useEffect(() => {
+    if (currentProject) {
+      localStorage.setItem('nexusquest-last-project', currentProject._id);
+    } else {
+      localStorage.removeItem('nexusquest-last-project');
+    }
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (currentFile) {
+      localStorage.setItem('nexusquest-last-file', currentFile._id);
+    } else {
+      localStorage.removeItem('nexusquest-last-file');
+    }
+  }, [currentFile]);
+
+  // Clear project state and show default code when user logs out
+  useEffect(() => {
+    if (!user) {
+      setCurrentProject(null);
+      setCurrentFile(null);
+      setProjects([]);
+      setCode(defaultPythonCode);
+      setLanguage('python');
+    }
+  }, [user]);
 
   // Save theme to localStorage
   useEffect(() => {
     localStorage.setItem('nexusquest-theme', theme);
   }, [theme]);
 
-  // Save code to localStorage
+  // Save font size to localStorage
   useEffect(() => {
-    const timer = setTimeout(() => {
+    localStorage.setItem('nexusquest-fontsize', fontSize.toString());
+  }, [fontSize]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    if (currentFile) {
+      setHasUnsavedChanges(code !== lastSavedCode);
+    }
+  }, [code, lastSavedCode, currentFile]);
+
+  // Update lastSavedCode when file changes
+  useEffect(() => {
+    if (currentFile) {
+      setLastSavedCode(currentFile.content);
+    }
+  }, [currentFile]);
+
+  // Manual save function
+  const saveFile = useCallback(async () => {
+    if (!currentProject || !currentFile) {
+      // Just save to localStorage for standalone mode
       localStorage.setItem('nexusquest-code', code);
-    }, 1000); // Debounce 1 second
-    return () => clearTimeout(timer);
-  }, [code]);
+      addToConsole('💾 Code saved to local storage', 'info');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await projectService.updateFile(currentProject._id, currentFile._id, { content: code });
+      setLastSavedCode(code);
+      setHasUnsavedChanges(false);
+      addToConsole(`💾 Saved: ${currentFile.name}`, 'info');
+
+      // Update the file in the projects list
+      setProjects(prev => prev.map(p =>
+        p._id === currentProject._id
+          ? { ...p, files: p.files.map(f => f._id === currentFile._id ? { ...f, content: code } : f) }
+          : p
+      ));
+      // Update currentProject as well
+      setCurrentProject(prev => prev ? {
+        ...prev,
+        files: prev.files.map(f => f._id === currentFile._id ? { ...f, content: code } : f)
+      } : null);
+    } catch (err) {
+      console.error('Failed to save file:', err);
+      addToConsole(`❌ Failed to save: ${err}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [currentProject, currentFile, code]);
+
+  // Keyboard shortcut: Shift+S to save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveFile();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [saveFile]);
+
+  // Save code to localStorage (for standalone mode only, no auto-save for projects)
+  useEffect(() => {
+    if (!currentProject) {
+      const timer = setTimeout(() => {
+        localStorage.setItem('nexusquest-code', code);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [code, currentProject]);
 
   // Save language to localStorage
   useEffect(() => {
@@ -262,27 +332,83 @@ function App() {
     setWaitingForInput(false);
     setInputQueue([]);
     setExpectedInputCount(0);
+    setCodeErrors([]);
   }, [language]);
 
-  // Initialize suggestions on mount
+  // Change default code when language changes (only when not logged in or not in a project)
   useEffect(() => {
-    setSuggestions(getCodeSuggestions(code));
-  }, []);
-
-  // Change default code when language changes
-  useEffect(() => {
-    if (language === 'python') {
-      setCode(defaultPythonCode);
-    } else if (language === 'java') {
-      setCode(defaultJavaCode);
-    } else if (language === 'javascript') {
-      setCode(defaultJavaScriptCode);
-    } else if (language === 'cpp') {
-      setCode(defaultCppCode);
-    } else if (language === 'go') {
-      setCode(defaultGoCode);
+    // Only show default code if user is NOT logged in (temporary coding mode)
+    // If user is logged in, they should be working with projects
+    if (!user && !currentProject) {
+      if (language === 'python') {
+        setCode(defaultPythonCode);
+      } else if (language === 'java') {
+        setCode(defaultJavaCode);
+      } else if (language === 'javascript') {
+        setCode(defaultJavaScriptCode);
+      } else if (language === 'cpp') {
+        setCode(defaultCppCode);
+      }
     }
-  }, [language]);
+    // Clear previous error markers when switching language
+    setCodeErrors([]);
+  }, [language, user, currentProject]);
+
+  // Parse error text coming from backend to extract line numbers
+  const parseErrorLocations = (errorText: string, lang: typeof language): CodeErrorMarker[] => {
+    const markers: CodeErrorMarker[] = [];
+
+    const addMarker = (line: number, message: string) => {
+      if (!Number.isFinite(line) || line <= 0) return;
+      markers.push({ line, message });
+    };
+
+    const lines = errorText.split('\n');
+
+    if (lang === 'python') {
+      for (const line of lines) {
+        const m = line.match(/File\s+"<string>",\s+line\s+(\d+)/);
+        if (m) {
+          addMarker(parseInt(m[1], 10), errorText);
+        }
+      }
+    } else if (lang === 'java') {
+      for (const line of lines) {
+        let m = line.match(/\.java:(\d+):\s+error:/);
+        if (m) {
+          addMarker(parseInt(m[1], 10), line.trim());
+        }
+        m = line.match(/\((?:[A-Za-z0-9_$.]+\.java):(\d+)\)/);
+        if (m) {
+          addMarker(parseInt(m[1], 10), line.trim());
+        }
+      }
+    } else if (lang === 'javascript') {
+      for (const line of lines) {
+        let m = line.match(/<anonymous>:(\d+):\d+/);
+        if (m) {
+          addMarker(parseInt(m[1], 10), line.trim());
+        }
+        if (/^\w*Error:/.test(line)) {
+          addMarker(1, line.trim());
+        }
+      }
+    } else if (lang === 'cpp') {
+      for (const line of lines) {
+        const m = line.match(/main\.cpp:(\d+):\d*:\s+error:/);
+        if (m) {
+          addMarker(parseInt(m[1], 10), line.trim());
+        }
+      }
+    }
+
+    // Fallback: if nothing parsed but we have an error, attach it to first line
+    if (markers.length === 0 && errorText.trim()) {
+      addMarker(1, errorText.trim());
+    }
+
+    return markers;
+  };
 
   const runCode = async (providedInputs?: string[]) => {
     if (!code.trim()) {
@@ -297,8 +423,7 @@ function App() {
     const needsInput = (language === 'java' && (/Scanner/.test(code) && (/nextInt|nextLine|next\(|nextDouble|nextFloat/.test(code) || /BufferedReader/.test(code)))) ||
                        (language === 'python' && /input\s*\(/.test(code)) ||
                        (language === 'cpp' && /cin\s*>>/.test(code)) ||
-                       (language === 'javascript' && /readline|stdin/.test(code)) ||
-                       (language === 'go' && /fmt\.Scan|bufio\.NewScanner/.test(code));
+                       (language === 'javascript' && /readline|stdin/.test(code));
     
     if (needsInput && inputs.length === 0) {
       // Extract input prompts from the code to show user what inputs are expected
@@ -343,17 +468,6 @@ function App() {
             }
           }
         }
-      } else if (language === 'go') {
-        // Match fmt.Print patterns before Scan
-        const lines = code.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].includes('fmt.Print') && lines[i].includes('"') && i + 1 < lines.length && /Scan/.test(lines[i + 1])) {
-            const promptMatch = lines[i].match(/["'](.*?)["']/);
-            if (promptMatch) {
-              prompts.push(promptMatch[1]);
-            }
-          }
-        }
       }
       
       setExpectedInputCount(prompts.length || 1);
@@ -378,38 +492,64 @@ function App() {
 
     setIsRunning(true);
     setWaitingForInput(false);
-    
+
     if (inputs.length > 0) {
       addToConsole(`📥 Using inputs: ${inputs.join(', ')}`, 'info');
     }
     addToConsole('⏳ Running code...', 'info');
 
     try {
-      const response = await fetch('http://localhost:9876/api/run', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          code: code.trim(),
-          language: language,
-          input: inputs.join(',')
-        }),
-      });
+      let result;
 
-      const result = await response.json();
+      // If we're in a project, use multi-file execution
+      if (currentProject && currentFile) {
+        addToConsole(`📁 Running project: ${currentProject.name} (main: ${currentFile.name})`, 'info');
+
+        // Get all project files with current editor content for the active file
+        const projectFiles = currentProject.files.map(f => ({
+          name: f.name,
+          content: f._id === currentFile._id ? code.trim() : f.content,
+          language: f.language
+        }));
+
+        result = await projectService.runProject(
+          projectFiles,
+          currentFile.name,
+          currentProject.language,
+          inputs.join(',')
+        );
+      } else {
+        // Single file execution
+        const response = await fetch('http://localhost:3001/api/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code: code.trim(),
+            language: language,
+            input: inputs.join(',')
+          }),
+        });
+
+        result = await response.json();
+      }
 
       if (result.error) {
         addToConsole(result.error, 'error');
-        
+        // Extract error locations for highlighting in editor
+        const effectiveLanguage = (currentProject?.language || language) as 'python' | 'java' | 'javascript' | 'cpp';
+        const markers = parseErrorLocations(result.error, effectiveLanguage);
+        setCodeErrors(markers);
+
         // Get AI error suggestions
         try {
-          const errorAnalysis = await aiService.getErrorSuggestions(result.error, code, language);
+          const errorAnalysis = await aiService.getErrorSuggestions(result.error, code, effectiveLanguage);
           if (errorAnalysis.explanation) {
             addToConsole('', 'output');
             addToConsole('🤖 AI Error Analysis:', 'info');
             addToConsole(errorAnalysis.explanation, 'info');
-            
+
             if (errorAnalysis.suggestions.length > 0) {
               addToConsole('', 'output');
               addToConsole('💡 Suggested Fixes:', 'info');
@@ -423,12 +563,13 @@ function App() {
         }
       } else {
         addToConsole(result.output || '✅ Code executed successfully', 'output');
+        setCodeErrors([]);
       }
-      
+
       // Clear input queue after successful execution
       setInputQueue([]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
         addToConsole('❌ Cannot connect to backend server!\n\nMake sure the backend is running:\n  cd backend\n  npm run dev', 'error');
       } else {
@@ -493,13 +634,6 @@ function App() {
   const handleCodeChange = (value: string | undefined) => {
     const newCode = value || '';
     setCode(newCode);
-    // Update suggestions when code changes
-    const newSuggestions = getCodeSuggestions(newCode);
-    setSuggestions(newSuggestions);
-  };
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
   const explainSelectedCode = async () => {
@@ -556,118 +690,168 @@ function App() {
       {/* Header */}
       <header className={`border-b ${
         theme === 'dark'
-          ? 'border-gray-700 bg-gradient-to-r from-blue-900/50 via-purple-900/50 to-blue-900/50'
-          : 'border-gray-300 bg-gradient-to-r from-blue-100/50 via-purple-100/50 to-blue-100/50'
+          ? 'border-gray-800 bg-gradient-to-r from-gray-950 via-gray-900 to-gray-950'
+          : 'border-gray-200 bg-gradient-to-r from-gray-50 via-white to-gray-50'
       } backdrop-blur-sm`}>
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-xl">N</span>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                  NexusQuest IDE
-                </h1>
-                <p className="text-xs text-gray-400">Python Development Environment</p>
+        <div className="px-4 py-2">
+          <div className="flex items-center justify-between gap-4">
+            {/* Logo only */}
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center shadow-md flex-shrink-0">
+                <span className="text-white font-bold text-lg">N</span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+
+            {/* Center toolbar with language chooser and run button */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               {inputQueue.length > 0 && (
-                <div className="px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/50 rounded-lg flex items-center gap-2">
-                  <span className="text-yellow-400 text-xs font-semibold">📥 {inputQueue.length} input{inputQueue.length > 1 ? 's' : ''} ready</span>
+                <div className="px-2 py-1 bg-yellow-500/10 border border-yellow-500/40 rounded-md flex items-center gap-1">
+                  <span className="text-yellow-400 text-[10px] font-semibold">📥 {inputQueue.length} input{inputQueue.length > 1 ? 's' : ''}</span>
                 </div>
               )}
-              <Button 
-                onClick={() => runCode()} 
+              {/* Only show language selector when not in a project */}
+              {!currentProject ? (
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp')}
+                  className={`h-8 text-[11px] px-2 py-1 rounded border transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                    theme === 'dark'
+                      ? 'bg-blue-500/10 text-blue-300 border-blue-500/40 hover:bg-blue-500/20'
+                      : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                  }`}
+                >
+                  <option value="python">Python 🐍</option>
+                  <option value="javascript">JavaScript 📜</option>
+                  <option value="java">Java ☕</option>
+                  <option value="cpp">C++ ⚡</option>
+                </select>
+              ) : (
+                <div className={`h-8 px-2 py-1 flex items-center gap-2 text-[11px] rounded border ${
+                  theme === 'dark'
+                    ? 'bg-gray-700/50 text-gray-300 border-gray-600'
+                    : 'bg-gray-100 text-gray-600 border-gray-300'
+                }`}>
+                  <span>📁 {currentProject.name} {currentFile ? `/ ${currentFile.name}` : ''}</span>
+                  <button
+                    onClick={() => {
+                      setCurrentProject(null);
+                      setCurrentFile(null);
+                      setCode(localStorage.getItem('nexusquest-code') || defaultCode);
+                      navigate('/');
+                    }}
+                    className={`p-0.5 rounded hover:bg-gray-500/30 ${
+                      theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Close project"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <Button
+                onClick={() => runCode()}
                 disabled={isRunning}
-                className={`flex items-center gap-2 ${
-                  waitingForInput 
-                    ? 'bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 shadow-yellow-500/30 animate-pulse' 
+                className={`h-8 px-3 flex items-center gap-1 text-xs ${
+                  waitingForInput
+                    ? 'bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-600 hover:to-orange-700 shadow-yellow-500/30 animate-pulse'
                     : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/30'
                 } text-white shadow-lg transition-all duration-200 hover:scale-105`}
               >
-                <Play className="w-4 h-4" fill="currentColor" />
+                <Play className="w-3 h-3" fill="currentColor" />
                 {isRunning ? 'Running...' : waitingForInput ? 'Waiting for Input' : inputQueue.length > 0 ? `Run with ${inputQueue.length} input${inputQueue.length > 1 ? 's' : ''}` : 'Run Code'}
               </Button>
-              <Button 
-                onClick={loadCodeFile} 
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-lg shadow-purple-500/30 transition-all duration-200 hover:scale-105"
+              <Button
+                onClick={saveFile}
+                disabled={isSaving || (!currentProject && !hasUnsavedChanges)}
+                className={`h-8 px-3 flex items-center gap-1 text-xs transition-all duration-200 hover:scale-105 ${
+                  hasUnsavedChanges
+                    ? 'bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-600 hover:to-amber-700 text-white shadow-md shadow-yellow-500/30'
+                    : 'bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white shadow-md shadow-slate-500/30'
+                }`}
+                title="Save file (Shift+S)"
               >
-                <Upload className="w-4 h-4" />
+                <Save className="w-3 h-3" />
+                {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save*' : 'Save'}
+              </Button>
+              <Button
+                onClick={loadCodeFile}
+                className="h-8 px-3 flex items-center gap-1 text-xs bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white shadow-md shadow-purple-500/30 transition-all duration-200 hover:scale-105"
+              >
+                <Upload className="w-3 h-3" />
                 Open File
               </Button>
-              <Button 
-                onClick={clearConsole} 
-                className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg shadow-orange-500/30 transition-all duration-200 hover:scale-105"
+              <Button
+                onClick={clearConsole}
+                className="h-8 px-3 flex items-center gap-1 text-xs bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-md shadow-orange-500/30 transition-all duration-200 hover:scale-105"
               >
-                <Square className="w-4 h-4" />
+                <Square className="w-3 h-3" />
                 Clear
               </Button>
-              <Button 
+              <Button
                 onClick={explainSelectedCode}
-                className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/30 transition-all duration-200 hover:scale-105"
+                className="h-8 px-3 hidden sm:flex items-center gap-1 text-xs bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-md shadow-indigo-500/30 transition-all duration-200 hover:scale-105"
                 title="Explain code with AI"
               >
-                <Sparkles className="w-4 h-4" />
+                <Sparkles className="w-3 h-3" />
                 Explain
               </Button>
-              <Button 
-                onClick={downloadCode} 
-                className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-lg shadow-blue-500/30 transition-all duration-200 hover:scale-105"
+              <Button
+                onClick={downloadCode}
+                className="h-8 px-3 hidden md:flex items-center gap-1 text-xs bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-md shadow-blue-500/30 transition-all duration-200 hover:scale-105"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-3 h-3" />
                 Download
               </Button>
-              <Button 
-                onClick={toggleTheme}
-                className={`flex items-center gap-2 ${
-                  theme === 'dark'
-                    ? 'bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700'
-                    : 'bg-gradient-to-r from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400'
-                } text-white shadow-lg transition-all duration-200 hover:scale-105`}
-                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </Button>
+            </div>
+
+            {/* User login section */}
+            <div className="flex items-center gap-2 flex-shrink-0 relative">
+              {user ? (
+                <button
+                  onClick={() => setShowSidePanel(true)}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  }`}>
+                    <User className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
+                  </div>
+                  <span className={`text-xs hidden sm:block ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    {user.name}
+                  </span>
+                </button>
+              ) : (
+                <Button
+                  onClick={() => navigate('/login')}
+                  className={`h-8 px-3 flex items-center gap-1 text-xs ${
+                    theme === 'dark'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700'
+                      : 'bg-gradient-to-r from-gray-200 to-gray-300 hover:from-gray-300 hover:to-gray-400'
+                  } text-white shadow-lg transition-all duration-200 hover:scale-105`}
+                >
+                  <LogIn className="w-3 h-3" />
+                  Login
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Code Editor */}
-        <div className="flex-1 p-4 flex flex-col">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <h2 className={`text-sm font-semibold uppercase tracking-wide ${
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              }`}>Code Editor</h2>
-            </div>
-            <div className="flex gap-2 items-center">
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp' | 'go')}
-                className={`text-xs px-3 py-1 rounded border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  theme === 'dark'
-                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 hover:bg-blue-500/30'
-                    : 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200'
-                }`}
-              >
-                <option value="python">Python 🐍</option>
-                <option value="javascript">JavaScript 📜</option>
-                <option value="java">Java ☕</option>
-                <option value="cpp">C++ ⚡</option>
-                <option value="go">Go 🚀</option>
-              </select>
-              <span className={`text-xs px-2 py-1 rounded border ${
-                theme === 'dark'
-                  ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-                  : 'bg-purple-100 text-purple-700 border-purple-300'
-              }`}>{code.split('\n').length} lines</span>
-            </div>
+      {/* Main Layout: editor + right project panel, console at bottom */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top area: editor + side panel */}
+        <div className="flex-1 flex overflow-hidden px-4 pt-3 pb-2">
+          {/* Code Editor */}
+          <div className="flex-1 flex flex-col min-w-0 mr-2">
+          <div className="mb-2 flex items-center justify-end">
+            {codeErrors.length > 0 && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/40">
+                {codeErrors.length} error{codeErrors.length > 1 ? 's' : ''}{' '}
+                {`on line${codeErrors.length > 1 ? 's' : ''} `}
+                {Array.from(new Set(codeErrors.map(e => e.line))).sort((a, b) => a - b).join(', ')}
+              </span>
+            )}
           </div>
           <div className={`flex-1 rounded-xl overflow-hidden border shadow-2xl backdrop-blur-sm ${
             theme === 'dark'
@@ -681,104 +865,730 @@ function App() {
               language={language}
               height="100%"
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
+              errors={codeErrors}
+              fontSize={fontSize}
             />
           </div>
 
-          {/* Code Suggestions */}
-          {suggestions.length > 0 && (
-            <div className={`mt-3 p-3 rounded-lg border backdrop-blur-sm ${
-              theme === 'dark'
-                ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30'
-                : 'bg-gradient-to-r from-blue-100 to-purple-100 border-blue-300'
-            }`}>
-              <div className="flex items-center gap-2 mb-2">
-                <svg className={`w-4 h-4 ${
-                  theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                }`} fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"/>
-                </svg>
-                <span className={`text-xs font-semibold ${
-                  theme === 'dark' ? 'text-blue-300' : 'text-blue-700'
-                }`}>Code Suggestions</span>
-              </div>
-              <div className="space-y-1">
-                {suggestions.map((suggestion, index) => (
-                  <div key={index} className={`text-xs flex items-start gap-2 ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    <span className={theme === 'dark' ? 'text-blue-400 mt-0.5' : 'text-blue-600 mt-0.5'}>•</span>
-                    <span>{suggestion}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Vertical Divider */}
-        <div className={`w-1 bg-gradient-to-b from-transparent to-transparent my-4 ${
-          theme === 'dark' ? 'via-gray-700' : 'via-gray-300'
-        }`}></div>
-
-        {/* Console */}
-        <div className="w-96 p-4 flex flex-col">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <h2 className={`text-sm font-semibold uppercase tracking-wide ${
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-              }`}>Console Output</h2>
-            </div>
-            <span className={`text-xs px-2 py-1 rounded border ${
+          {/* Right collapsible project panel */}
+          <div
+            className={`transition-all duration-200 flex flex-col border rounded-xl shadow-2xl overflow-hidden ${
               theme === 'dark'
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                : 'bg-emerald-100 text-emerald-700 border-emerald-300'
-            }`}>{output.length} messages</span>
+                ? 'border-gray-700 bg-gray-900/70'
+                : 'border-gray-200 bg-white/90'
+            }`}
+            style={{ width: isProjectPanelOpen ? 220 : 32 }}
+          >
+            <div
+              className={`flex items-center justify-between px-2 py-1 border-b cursor-pointer ${
+                theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+              }`}
+              onClick={() => setIsProjectPanelOpen((prev) => !prev)}
+            >
+              {isProjectPanelOpen ? (
+                <div className="flex items-center gap-1">
+                  <FolderTree className="w-3 h-3 text-blue-400" />
+                  <span className={`text-[11px] font-semibold ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                    Project Explorer
+                  </span>
+                </div>
+              ) : (
+                <FolderTree className="w-3 h-3 mx-auto text-blue-400" />
+              )}
+              <button
+                type="button"
+                className={`p-0.5 rounded hover:bg-gray-700/40 ${!isProjectPanelOpen && 'hidden'}`}
+              >
+                {isProjectPanelOpen ? (
+                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                ) : (
+                  <ChevronLeft className="w-3 h-3 text-gray-400" />
+                )}
+              </button>
+            </div>
+            {isProjectPanelOpen && (
+              <div className="flex-1 overflow-auto text-[11px] py-1">
+                {/* Header with All Projects button */}
+                <div className="px-2 pb-1 flex items-center justify-between">
+                  <span className="font-semibold text-gray-400 uppercase tracking-wide text-[10px]">
+                    {currentProject ? 'Current Project' : 'Project'}
+                  </span>
+                  {user && (
+                    <button
+                      onClick={() => navigate('/projects')}
+                      className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
+                      title="All Projects"
+                    >
+                      <FolderPlus className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Current Project Files */}
+                <div className="space-y-0.5 px-1">
+                  {!user ? (
+                    <div className={`px-2 py-4 text-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p>Login to see your projects</p>
+                    </div>
+                  ) : !currentProject ? (
+                    <div className={`px-2 py-4 text-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p>No project open</p>
+                      <button
+                        onClick={() => navigate('/projects')}
+                        className={`mt-2 text-[11px] px-3 py-1 rounded ${
+                          theme === 'dark'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-blue-500 hover:bg-blue-600 text-white'
+                        }`}
+                      >
+                        Open Project
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      {/* Current Project Header */}
+                      <div
+                        className={`flex items-center gap-1 px-1 py-0.5 rounded group cursor-pointer ${
+                          theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                        }`}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setContextMenu({ x: e.clientX, y: e.clientY });
+                        }}
+                      >
+                        <ChevronDown className="w-3 h-3 text-gray-500" />
+                        <FolderOpen className="w-3 h-3 text-yellow-500" />
+                        <span className={`flex-1 truncate font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                          {currentProject.name}
+                        </span>
+                        {/* Project Actions */}
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => {
+                              setShowNewFileInput(currentProject._id);
+                            }}
+                            className="p-0.5 rounded hover:bg-gray-600/50 text-gray-400"
+                            title="New File"
+                          >
+                            <FilePlus className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const folderName = prompt('Enter folder name:');
+                              if (folderName && folderName.trim()) {
+                                // Create folder by adding a placeholder file (folder/.gitkeep style)
+                                // Actually, we'll just prompt for folder name and let user add files to it
+                                setShowNewFileInput(`folder:${folderName.trim()}`);
+                                setExpandedFolders(prev => new Set(prev).add(folderName.trim()));
+                              }
+                            }}
+                            className="p-0.5 rounded hover:bg-gray-600/50 text-gray-400"
+                            title="New Folder"
+                          >
+                            <FolderPlus className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Delete project "${currentProject.name}"?`)) {
+                                try {
+                                  await projectService.deleteProject(currentProject._id);
+                                  setCurrentProject(null);
+                                  setCurrentFile(null);
+                                  navigate('/');
+                                  loadProjects();
+                                } catch (err) {
+                                  console.error('Failed to delete project:', err);
+                                }
+                              }
+                            }}
+                            className="p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+                            title="Delete Project"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Context Menu */}
+                      {contextMenu && (
+                        <>
+                          {/* Backdrop to close menu */}
+                          <div
+                            className="fixed inset-0 z-50"
+                            onClick={() => setContextMenu(null)}
+                          />
+                          {/* Menu */}
+                          <div
+                            className={`fixed z-50 py-1 rounded-md shadow-lg border min-w-[120px] ${
+                              theme === 'dark'
+                                ? 'bg-gray-800 border-gray-700'
+                                : 'bg-white border-gray-200'
+                            }`}
+                            style={{ left: contextMenu.x, top: contextMenu.y }}
+                          >
+                            <button
+                              onClick={() => {
+                                setCurrentProject(null);
+                                setCurrentFile(null);
+                                setCode(defaultPythonCode);
+                                setLanguage('python');
+                                localStorage.removeItem('nexusquest-last-project');
+                                localStorage.removeItem('nexusquest-last-file');
+                                navigate('/');
+                                setContextMenu(null);
+                              }}
+                              className={`w-full px-3 py-1.5 text-left text-[11px] flex items-center gap-2 ${
+                                theme === 'dark'
+                                  ? 'hover:bg-gray-700 text-gray-300'
+                                  : 'hover:bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              <X className="w-3 h-3" />
+                              Close Project
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Files Tree */}
+                      <div className="ml-4 space-y-0.5 mt-0.5">
+                        {(() => {
+                          // Build tree structure from flat file list
+                          interface TreeNode {
+                            name: string;
+                            path: string;
+                            isFolder: boolean;
+                            file?: ProjectFile;
+                            children: TreeNode[];
+                          }
+
+                          const buildTree = (files: ProjectFile[]): TreeNode[] => {
+                            const root: TreeNode[] = [];
+                            const folders = new Map<string, TreeNode>();
+
+                            // Sort files: folders first, then by name
+                            const sortedFiles = [...files].sort((a, b) => {
+                              const aDepth = a.name.split('/').length;
+                              const bDepth = b.name.split('/').length;
+                              if (aDepth !== bDepth) return aDepth - bDepth;
+                              return a.name.localeCompare(b.name);
+                            });
+
+                            sortedFiles.forEach(file => {
+                              const parts = file.name.split('/');
+                              if (parts.length === 1) {
+                                // Root level file
+                                root.push({ name: file.name, path: file.name, isFolder: false, file, children: [] });
+                              } else {
+                                // File in folder - create folder structure
+                                let currentPath = '';
+                                let currentLevel = root;
+                                for (let i = 0; i < parts.length - 1; i++) {
+                                  const folderName = parts[i];
+                                  currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+
+                                  let folder = folders.get(currentPath);
+                                  if (!folder) {
+                                    folder = { name: folderName, path: currentPath, isFolder: true, children: [] };
+                                    folders.set(currentPath, folder);
+                                    currentLevel.push(folder);
+                                  }
+                                  currentLevel = folder.children;
+                                }
+                                // Add file to deepest folder
+                                currentLevel.push({ name: parts[parts.length - 1], path: file.name, isFolder: false, file, children: [] });
+                              }
+                            });
+
+                            // Sort: folders first, then files alphabetically
+                            const sortNodes = (nodes: TreeNode[]) => {
+                              nodes.sort((a, b) => {
+                                if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                                return a.name.localeCompare(b.name);
+                              });
+                              nodes.forEach(n => sortNodes(n.children));
+                            };
+                            sortNodes(root);
+                            return root;
+                          };
+
+                          const renderNode = (node: TreeNode, depth: number = 0): JSX.Element => {
+                            if (node.isFolder) {
+                              const isExpanded = expandedFolders.has(node.path);
+                              return (
+                                <div key={node.path}>
+                                  <div
+                                    className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group hover:bg-blue-500/10`}
+                                    style={{ paddingLeft: `${depth * 12}px` }}
+                                    onClick={() => {
+                                      setExpandedFolders(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(node.path)) next.delete(node.path);
+                                        else next.add(node.path);
+                                        return next;
+                                      });
+                                    }}
+                                    onContextMenu={(e) => {
+                                      e.preventDefault();
+                                      // Could add folder context menu here
+                                    }}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-3 h-3 text-gray-500" />
+                                    ) : (
+                                      <ChevronRight className="w-3 h-3 text-gray-500" />
+                                    )}
+                                    {isExpanded ? (
+                                      <FolderOpen className="w-3 h-3 text-yellow-500" />
+                                    ) : (
+                                      <Folder className="w-3 h-3 text-yellow-500" />
+                                    )}
+                                    <span className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                                      {node.name}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowNewFileInput(`folder:${node.path}`);
+                                        setExpandedFolders(prev => new Set(prev).add(node.path));
+                                      }}
+                                      className="hidden group-hover:block p-0.5 rounded hover:bg-gray-600/50 text-gray-400"
+                                      title="New File in Folder"
+                                    >
+                                      <FilePlus className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                  {isExpanded && node.children.map(child => renderNode(child, depth + 1))}
+                                </div>
+                              );
+                            } else {
+                              const file = node.file!;
+                              return (
+                                <div
+                                  key={file._id}
+                                  className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group ${
+                                    currentFile?._id === file._id
+                                      ? theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                                      : 'hover:bg-blue-500/10'
+                                  }`}
+                                  style={{ paddingLeft: `${depth * 12 + 16}px` }}
+                                  onClick={() => {
+                                    setCurrentFile(file);
+                                    setCode(file.content);
+                                    const ext = file.name.split('.').pop()?.toLowerCase();
+                                    if (ext === 'py') setLanguage('python');
+                                    else if (ext === 'js') setLanguage('javascript');
+                                    else if (ext === 'java') setLanguage('java');
+                                    else if (ext === 'cpp' || ext === 'cc' || ext === 'h' || ext === 'hpp') setLanguage('cpp');
+                                  }}
+                                >
+                                  <File className="w-3 h-3 text-blue-400" />
+                                  <span className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {node.name}
+                                  </span>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`Delete file "${file.name}"?`)) {
+                                        try {
+                                          await projectService.deleteFile(currentProject._id, file._id);
+                                          if (currentFile?._id === file._id) {
+                                            setCurrentFile(null);
+                                          }
+                                          loadProjects();
+                                        } catch (err) {
+                                          console.error('Failed to delete file:', err);
+                                        }
+                                      }
+                                    }}
+                                    className="hidden group-hover:block p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+                                    title="Delete File"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              );
+                            }
+                          };
+
+                          const tree = buildTree(currentProject.files);
+                          return tree.map(node => renderNode(node));
+                        })()}
+
+                        {/* New File Input - at root or in folder */}
+                        {(showNewFileInput === currentProject._id || showNewFileInput?.startsWith('folder:')) && (
+                          <div className="py-0.5" style={{ paddingLeft: showNewFileInput?.startsWith('folder:') ? '16px' : '0px' }}>
+                            <form
+                              onSubmit={async (e) => {
+                                e.preventDefault();
+                                if (newFileName.trim()) {
+                                  try {
+                                    const extensions: Record<string, string> = {
+                                      python: '.py',
+                                      javascript: '.js',
+                                      java: '.java',
+                                      cpp: '.cpp'
+                                    };
+                                    let fileName = newFileName.trim();
+                                    const ext = extensions[newFileLanguage];
+                                    const hasExtension = ['.py', '.js', '.java', '.cpp', '.h', '.hpp'].some(e => fileName.endsWith(e));
+                                    if (!hasExtension && ext) {
+                                      fileName += ext;
+                                    }
+                                    // If creating in a folder, prepend the folder path
+                                    if (showNewFileInput?.startsWith('folder:')) {
+                                      const folderPath = showNewFileInput.replace('folder:', '');
+                                      fileName = `${folderPath}/${fileName}`;
+                                    }
+                                    await projectService.addFile(currentProject._id, fileName, '', newFileLanguage);
+                                    setNewFileName('');
+                                    setNewFileLanguage('python');
+                                    setShowNewFileInput(null);
+                                    loadProjects();
+                                  } catch (err) {
+                                    console.error('Failed to add file:', err);
+                                    alert('Failed to add file');
+                                  }
+                                }
+                              }}
+                              className="space-y-1"
+                            >
+                              <input
+                                type="text"
+                                value={newFileName}
+                                onChange={(e) => setNewFileName(e.target.value)}
+                                placeholder="filename..."
+                                className={`w-full px-2 py-0.5 text-[11px] rounded border ${
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-600 text-white'
+                                    : 'bg-white border-gray-300 text-gray-900'
+                                }`}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    setNewFileName('');
+                                    setNewFileLanguage('python');
+                                    setShowNewFileInput(null);
+                                  }
+                                }}
+                              />
+                              <select
+                                value={newFileLanguage}
+                                onChange={(e) => setNewFileLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp')}
+                                className={`w-full px-2 py-0.5 text-[11px] rounded border ${
+                                  theme === 'dark'
+                                    ? 'bg-gray-800 border-gray-600 text-white'
+                                    : 'bg-white border-gray-300 text-gray-900'
+                                }`}
+                              >
+                                <option value="python">Python 🐍</option>
+                                <option value="javascript">JavaScript 📜</option>
+                                <option value="java">Java ☕</option>
+                                <option value="cpp">C++ ⚡</option>
+                              </select>
+                              <button
+                                type="submit"
+                                className={`w-full px-2 py-0.5 text-[11px] rounded ${
+                                  theme === 'dark'
+                                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                }`}
+                              >
+                                Add File
+                              </button>
+                            </form>
+                          </div>
+                        )}
+
+                        {currentProject.files.length === 0 && !showNewFileInput && (
+                          <div className={`px-2 py-1 text-[10px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                            No files yet
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <div className={`flex-1 rounded-xl overflow-hidden border shadow-2xl ${
-            theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
-          }`}>
-            <Console 
-              output={output} 
-              height="100%" 
-              onInput={handleConsoleInput}
-              waitingForInput={waitingForInput}
-              theme={theme}
-            />
+        </div>
+
+        {/* Bottom area: tabs (Console / Terminal) */}
+        <div className="h-[30vh] min-h-[170px] px-4 pb-3">
+          <div className="h-full flex flex-col">
+            <div className="mb-1 flex items-center justify-between">
+              <div className="flex items-center gap-1 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setActiveBottomTab('console')}
+                  className={`px-2 py-0.5 rounded-t-md border-b-2 ${
+                    activeBottomTab === 'console'
+                      ? 'border-emerald-400 text-emerald-300'
+                      : 'border-transparent text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  Console
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBottomTab('terminal')}
+                  className={`px-2 py-0.5 rounded-t-md border-b-2 ${
+                    activeBottomTab === 'terminal'
+                      ? 'border-blue-400 text-blue-300'
+                      : 'border-transparent text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  Terminal
+                </button>
+              </div>
+              {activeBottomTab === 'console' && (
+                <span className={`text-[10px] px-2 py-0.5 rounded border ${
+                  theme === 'dark'
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                }`}>{output.length} messages</span>
+              )}
+            </div>
+            <div className={`flex-1 rounded-xl overflow-hidden border shadow-2xl ${
+              theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
+            }`}>
+              {activeBottomTab === 'console' ? (
+                <Console 
+                  output={output} 
+                  height="100%" 
+                  onInput={handleConsoleInput}
+                  waitingForInput={waitingForInput}
+                  theme={theme}
+                />
+              ) : (
+                <div className={`h-full w-full font-mono text-xs flex flex-col ${
+                  theme === 'dark'
+                    ? 'bg-gradient-to-b from-gray-950 to-gray-900 text-gray-200'
+                    : 'bg-gradient-to-b from-gray-100 to-white text-gray-800'
+                }`}>
+                  <div className={`px-3 py-2 border-b text-[11px] flex items-center justify-between ${
+                    theme === 'dark' ? 'border-gray-800' : 'border-gray-300'
+                  }`}>
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                      Integrated Terminal (preview)
+                    </span>
+                    <span className={theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}>No shell attached</span>
+                  </div>
+                  <div className="flex-1 px-3 py-2 overflow-auto">
+                    <div className={theme === 'dark' ? 'text-gray-500' : 'text-gray-600'}>
+                      Terminal support is not wired to a real shell yet.
+                    </div>
+                    <div className={theme === 'dark' ? 'text-gray-600 mt-2' : 'text-gray-700 mt-2'}>
+                      Future features could include:
+                    </div>
+                    <ul className="mt-1 list-disc list-inside space-y-0.5 text-[11px]">
+                      <li>Run build and test commands</li>
+                      <li>Watch Docker status and logs</li>
+                      <li>Interactive REPL for languages</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
+      {/* User Side Panel */}
+      {showSidePanel && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setShowSidePanel(false)}
+          />
+          {/* Panel */}
+          <div className={`fixed top-0 right-0 h-full w-80 z-50 shadow-2xl transform transition-transform duration-300 ${
+            theme === 'dark' ? 'bg-gray-900 border-l border-gray-800' : 'bg-white border-l border-gray-200'
+          }`}>
+            {/* Header */}
+            <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                  }`}>
+                    <User className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
+                  </div>
+                  <div>
+                    <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                      {user?.name}
+                    </p>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {user?.email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSidePanel(false)}
+                  className={`p-1 rounded-lg transition-colors ${
+                    theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
 
-      {/* Footer */}
-      <footer className={`border-t backdrop-blur-sm ${
-        theme === 'dark'
-          ? 'border-gray-700 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900'
-          : 'border-gray-300 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100'
-      }`}>
-        <div className="px-6 py-3 flex justify-between items-center text-xs">
-          <div className={`flex items-center gap-4 ${
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-          }`}>
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              Ready to execute
-            </span>
-            <span>|</span>
-            <span>{language === 'python' ? 'Python 3.10' : 'Java 17'}</span>
-            <span>|</span>
-            <span>Docker Isolated</span>
+            {/* Menu Items */}
+            <nav className="p-2">
+              <button
+                onClick={() => {
+                  setShowSidePanel(false);
+                  navigate('/profile');
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-gray-800 text-gray-300'
+                    : 'hover:bg-gray-100 text-gray-700'
+                }`}
+              >
+                <User className="w-5 h-5" />
+                <span>Profile</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowSidePanel(false);
+                  navigate('/projects');
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-gray-800 text-gray-300'
+                    : 'hover:bg-gray-100 text-gray-700'
+                }`}
+              >
+                <FolderOpen className="w-5 h-5" />
+                <span>Projects</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowSidePanel(false);
+                  navigate('/tournaments');
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-gray-800 text-gray-300'
+                    : 'hover:bg-gray-100 text-gray-700'
+                }`}
+              >
+                <Trophy className="w-5 h-5" />
+                <span>Tournaments</span>
+              </button>
+
+              {/* Settings Section */}
+              <div className="mt-2">
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+                    theme === 'dark'
+                      ? 'hover:bg-gray-800 text-gray-300'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Settings className="w-5 h-5" />
+                    <span>Settings</span>
+                  </div>
+                  <ChevronRight className={`w-4 h-4 transition-transform ${showSettings ? 'rotate-90' : ''}`} />
+                </button>
+
+                {showSettings && (
+                  <div className={`mt-1 ml-4 mr-2 p-3 rounded-lg ${
+                    theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-100'
+                  }`}>
+                    {/* Dark Mode Toggle */}
+                    <div className="flex items-center justify-between py-2">
+                      <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Dark Mode
+                      </span>
+                      <button
+                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        className={`relative w-11 h-6 rounded-full transition-colors ${
+                          theme === 'dark' ? 'bg-blue-600' : 'bg-gray-300'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform flex items-center justify-center ${
+                          theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
+                        }`}>
+                          {theme === 'dark' ? (
+                            <Moon className="w-2.5 h-2.5 text-blue-600" />
+                          ) : (
+                            <Sun className="w-2.5 h-2.5 text-yellow-500" />
+                          )}
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Font Size Control */}
+                    <div className="flex items-center justify-between py-2">
+                      <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Font Size
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setFontSize(Math.max(10, fontSize - 2))}
+                          className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                            theme === 'dark'
+                              ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          }`}
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className={`w-8 text-center text-sm font-medium ${
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          {fontSize}
+                        </span>
+                        <button
+                          onClick={() => setFontSize(Math.min(24, fontSize + 2))}
+                          className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                            theme === 'dark'
+                              ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          }`}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </nav>
+
+            {/* Logout at bottom */}
+            <div className={`absolute bottom-0 left-0 right-0 p-4 border-t ${
+              theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={() => {
+                  setShowSidePanel(false);
+                  onLogout();
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-red-500/10 text-red-400'
+                    : 'hover:bg-red-50 text-red-600'
+                }`}
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Sign out</span>
+              </button>
+            </div>
           </div>
-          <div className={`flex items-center gap-4 ${
-            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-          }`}>
-            <span>Memory: {language === 'python' ? '128MB' : '256MB'}</span>
-            <span>|</span>
-            <span>Timeout: {language === 'python' ? '10s' : '15s'}</span>
-            <span>|</span>
-            <span className={theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}>Secure Mode ✓</span>
-          </div>
-        </div>
-      </footer>
+        </>
+      )}
     </div>
   );
 }
