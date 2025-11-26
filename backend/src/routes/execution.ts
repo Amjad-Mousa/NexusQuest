@@ -39,12 +39,35 @@ codeExecutionRouter.get('/languages', (req, res) => {
         name: 'python',
         version: '3.10',
         extensions: ['.py'],
+        frameworks: ['Flask', 'NumPy', 'Pandas', 'Requests'],
+        supported: true
+      },
+      {
+        name: 'javascript',
+        version: '20',
+        extensions: ['.js'],
+        frameworks: ['Express', 'Axios', 'Lodash', 'Moment'],
         supported: true
       },
       {
         name: 'java',
         version: '17',
         extensions: ['.java'],
+        frameworks: ['Maven'],
+        supported: true
+      },
+      {
+        name: 'cpp',
+        version: 'C++20',
+        extensions: ['.cpp'],
+        frameworks: ['STL', 'CMake'],
+        supported: true
+      },
+      {
+        name: 'go',
+        version: '1.23',
+        extensions: ['.go'],
+        frameworks: ['Gin', 'GORM', 'Chi'],
         supported: true
       }
     ]

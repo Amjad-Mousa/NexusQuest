@@ -39,5 +39,60 @@ services:
     volumes:
       - docker-data:/var/lib/docker
 
+  # Python execution container
+  python-runner:
+    build:
+      context: ./docker/python
+      dockerfile: Dockerfile
+    image: nexusquest-python:latest
+    container_name: nexusquest-python
+    volumes:
+      - python-code:/app
+
+  # JavaScript/Node.js execution container
+  javascript-runner:
+    build:
+      context: ./docker/javascript
+      dockerfile: Dockerfile
+    image: nexusquest-javascript:latest
+    container_name: nexusquest-javascript
+    volumes:
+      - javascript-code:/app
+
+  # Java execution container
+  java-runner:
+    build:
+      context: ./docker/java
+      dockerfile: Dockerfile
+    image: nexusquest-java:latest
+    container_name: nexusquest-java
+    volumes:
+      - java-code:/app
+
+  # C++ execution container
+  cpp-runner:
+    build:
+      context: ./docker/cpp
+      dockerfile: Dockerfile
+    image: nexusquest-cpp:latest
+    container_name: nexusquest-cpp
+    volumes:
+      - cpp-code:/app
+
+  # Go execution container
+  go-runner:
+    build:
+      context: ./docker/go
+      dockerfile: Dockerfile
+    image: nexusquest-go:latest
+    container_name: nexusquest-go
+    volumes:
+      - go-code:/app
+
 volumes:
   docker-data:
+  python-code:
+  javascript-code:
+  java-code:
+  cpp-code:
+  go-code:

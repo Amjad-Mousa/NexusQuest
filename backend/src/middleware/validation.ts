@@ -21,20 +21,14 @@ export function validateCode(req: Request, res: Response, next: NextFunction) {
     });
   }
 
-  // Check for potentially dangerous operations
+  // Check for extremely dangerous operations only
+  // Note: Docker isolation provides the main security layer
   const dangerousPatterns = [
-    /import\s+os/i,
     /import\s+subprocess/i,
-    /import\s+sys/i,
     /import\s+socket/i,
-    /import\s+urllib/i,
-    /import\s+requests/i,
     /exec\s*\(/i,
     /eval\s*\(/i,
-    /open\s*\(/i,
     /__import__/i,
-    /\bfile\b/i,
-    /\bdir\b/i,
   ];
 
   for (const pattern of dangerousPatterns) {
@@ -48,7 +42,7 @@ export function validateCode(req: Request, res: Response, next: NextFunction) {
   }
 
   // Validate language
-  const supportedLanguages = ['python', 'java'];
+  const supportedLanguages = ['python', 'java', 'javascript', 'js', 'cpp', 'c++', 'go', 'golang'];
   if (language && !supportedLanguages.includes(language.toLowerCase())) {
     return res.status(400).json({
       success: false,

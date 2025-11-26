@@ -4,6 +4,13 @@ FROM python:3.10-slim
 # Create app directory
 WORKDIR /app
 
+# Install popular frameworks and libraries
+RUN pip install --no-cache-dir \
+    flask==3.0.0 \
+    requests==2.31.0 \
+    numpy==1.26.0 \
+    pandas==2.1.0
+
 # Install security updates and remove package manager
 RUN apt-get update && \
     apt-get upgrade -y && \

@@ -267,3 +267,175 @@ export async function getInlineSuggestion(code: string, cursorLine: number, lang
 
   return completions.suggestions[0] || '';
 }
+
+/**
+ * Analyze error and provide AI-powered fix suggestions
+ */
+export async function getErrorSuggestions(error: string, code: string, language: string): Promise<{ suggestions: string[]; explanation: string }> {
+  if (!openai) {
+    return getFallbackErrorSuggestions(error, language);
+  }
+
+  try {
+    const languageName = language === 'java' ? 'Java' : 'Python';
+    const prompt = `You are a ${languageName} debugging assistant. Analyze this error and provide:
+1. A brief explanation of what caused the error
+2. 2-3 specific suggestions to fix it
+
+Error:
+${error}
+
+Code:
+${code}
+
+Format your response as:
+EXPLANATION: [brief explanation]
+SUGGESTIONS:
+- [suggestion 1]
+- [suggestion 2]
+- [suggestion 3]`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 300,
+    });
+
+    const content = response.choices[0]?.message?.content || '';
+    const explanationMatch = content.match(/EXPLANATION:\s*(.+?)(?=SUGGESTIONS:|$)/s);
+    const suggestionsMatch = content.match(/SUGGESTIONS:\s*(.+)/s);
+
+    const explanation = explanationMatch ? explanationMatch[1].trim() : 'Error analysis not available';
+    const suggestions = suggestionsMatch
+      ? suggestionsMatch[1]
+          .split('\n')
+          .filter(s => s.trim().startsWith('-'))
+          .map(s => s.replace(/^-\s*/, '').trim())
+      : [];
+
+    return { explanation, suggestions };
+  } catch (err) {
+    console.error('AI error analysis failed:', err);
+    return getFallbackErrorSuggestions(error, language);
+  }
+}
+
+/**
+ * Explain selected code using AI
+ */
+export async function explainCode(code: string, language: string): Promise<string> {
+  if (!openai) {
+    return getFallbackCodeExplanation(code, language);
+  }
+
+  try {
+    const languageName = language === 'java' ? 'Java' : 'Python';
+    const prompt = `Explain this ${languageName} code in simple terms. Keep it concise (2-3 sentences).
+
+Code:
+${code}`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+      max_tokens: 150,
+    });
+
+    return response.choices[0]?.message?.content || 'No explanation available';
+  } catch (error) {
+    console.error('AI code explanation failed:', error);
+    return getFallbackCodeExplanation(code, language);
+  }
+}
+
+// Fallback error suggestions
+function getFallbackErrorSuggestions(error: string, language: string): { suggestions: string[]; explanation: string } {
+  const suggestions: string[] = [];
+  let explanation = '';
+
+  if (language === 'python') {
+    if (error.includes('SyntaxError')) {
+      explanation = 'Syntax error detected - check for missing colons, parentheses, or indentation issues';
+      suggestions.push(
+        'Check for missing colons after if/for/def statements',
+        'Verify proper indentation (use 4 spaces)',
+        'Ensure all parentheses and brackets are closed'
+      );
+    } else if (error.includes('NameError')) {
+      explanation = 'Variable or function not found - it may not be defined yet';
+      suggestions.push(
+        'Define the variable before using it',
+        'Check for typos in variable names',
+        'Make sure imports are at the top of the file'
+      );
+    } else if (error.includes('TypeError')) {
+      explanation = 'Operation attempted on incompatible types';
+      suggestions.push(
+        'Convert types using int(), str(), or float()',
+        'Check function argument types',
+        'Verify the data type before operations'
+      );
+    } else {
+      explanation = 'An error occurred during execution';
+      suggestions.push(
+        'Read the error message carefully',
+        'Check the line number mentioned in the error',
+        'Try adding print statements to debug'
+      );
+    }
+  } else if (language === 'java') {
+    if (error.includes('NoSuchElementException')) {
+      explanation = 'Scanner tried to read input but none was available';
+      suggestions.push(
+        'Provide input values before running',
+        'Check if you have enough inputs for all Scanner calls',
+        'Verify input format matches what Scanner expects'
+      );
+    } else if (error.includes('NullPointerException')) {
+      explanation = 'Trying to use an object that is null';
+      suggestions.push(
+        'Initialize the object before using it',
+        'Check if the object is null before calling methods',
+        'Use Optional or defensive null checks'
+      );
+    } else if (error.includes('ArrayIndexOutOfBoundsException')) {
+      explanation = 'Array index is outside valid range';
+      suggestions.push(
+        'Check array length before accessing',
+        'Use array.length - 1 for last element',
+        'Verify loop conditions'
+      );
+    } else {
+      explanation = 'A runtime error occurred';
+      suggestions.push(
+        'Review the stack trace for the error location',
+        'Add try-catch blocks for error handling',
+        'Check input validation'
+      );
+    }
+  }
+
+  return { explanation, suggestions: suggestions.slice(0, 3) };
+}
+
+// Fallback code explanation
+function getFallbackCodeExplanation(code: string, language: string): string {
+  const lines = code.split('\n').length;
+  const languageName = language === 'java' ? 'Java' : 'Python';
+  
+  if (code.includes('for') || code.includes('while')) {
+    return `This ${languageName} code contains a loop that repeats operations. It processes data iteratively over ${lines} line${lines > 1 ? 's' : ''}.`;
+  }
+  
+  if (code.includes('if')) {
+    return `This ${languageName} code uses conditional logic to make decisions based on certain conditions.`;
+  }
+  
+  if (code.includes('def') || code.includes('public')) {
+    return `This ${languageName} code defines a function/method that encapsulates reusable logic.`;
+  }
+  
+  return `This is ${languageName} code spanning ${lines} line${lines > 1 ? 's' : ''}. It performs programmatic operations.`;
+}
