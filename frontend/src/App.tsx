@@ -5,7 +5,7 @@ import { Button } from './components/ui/button';
 import { Play, Square, Download, Upload } from 'lucide-react';
 
 interface ConsoleOutput {
-  type: 'output' | 'error' | 'info';
+  type: 'output' | 'error' | 'info' | 'input';
   message: string;
   timestamp: Date;
 }
@@ -157,7 +157,8 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [language, setLanguage] = useState<'python' | 'java'>('python');
-  const [inputData, setInputData] = useState<string>('');
+  const [waitingForInput, setWaitingForInput] = useState(false);
+  const [inputQueue, setInputQueue] = useState<string[]>([]);
 
   // Initialize suggestions on mount
   useEffect(() => {
@@ -181,13 +182,11 @@ function App() {
 
     // Check for interactive input (Scanner/input)
     if (language === 'java' && /Scanner.*next|BufferedReader/.test(code)) {
-      addToConsole('⚠️ Warning: Scanner and user input are not supported in this environment.', 'info');
-      addToConsole('💡 Tip: Use predefined variables instead of Scanner.', 'info');
+      addToConsole('💡 Scanner detected: Enter values when prompted in the console below', 'info');
     }
     
     if (language === 'python' && /input\s*\(/.test(code)) {
-      addToConsole('⚠️ Warning: input() function is not supported in this environment.', 'info');
-      addToConsole('💡 Tip: Use predefined variables instead of input().', 'info');
+      addToConsole('💡 input() detected: Enter values when prompted in the console below', 'info');
     }
 
     setIsRunning(true);
@@ -203,7 +202,7 @@ function App() {
         body: JSON.stringify({ 
           code: code.trim(),
           language: language,
-          input: inputData
+          input: inputQueue.join(',')
         }),
       });
 
@@ -282,6 +281,12 @@ function App() {
     setSuggestions(newSuggestions);
   };
 
+  const handleConsoleInput = (value: string) => {
+    setInputQueue(prev => [...prev, value]);
+    setWaitingForInput(false);
+    addToConsole(`> ${value}`, 'input' as ConsoleOutput['type']);
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
@@ -300,13 +305,6 @@ function App() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <input
-                type="text"
-                value={inputData}
-                onChange={(e) => setInputData(e.target.value)}
-                placeholder="Input (comma-separated for multiple values)"
-                className="px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-600 text-gray-300 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-              />
               <Button 
                 onClick={runCode} 
                 disabled={isRunning}
@@ -406,7 +404,12 @@ function App() {
             <span className="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">{output.length} messages</span>
           </div>
           <div className="flex-1 rounded-xl overflow-hidden border border-gray-700 shadow-2xl">
-            <Console output={output} height="100%" />
+            <Console 
+              output={output} 
+              height="100%" 
+              onInput={handleConsoleInput}
+              waitingForInput={waitingForInput}
+            />
           </div>
         </div>
       </div>

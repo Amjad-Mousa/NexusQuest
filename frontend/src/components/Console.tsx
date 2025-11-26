@@ -1,5 +1,7 @@
+import React from 'react';
+
 interface ConsoleOutput {
-  type: 'output' | 'error' | 'info';
+  type: 'output' | 'error' | 'info' | 'input';
   message: string;
   timestamp: Date;
 }
@@ -7,17 +9,31 @@ interface ConsoleOutput {
 interface ConsoleProps {
   output: ConsoleOutput[];
   height?: string;
+  onInput?: (value: string) => void;
+  waitingForInput?: boolean;
 }
 
-export function Console({ output, height = '200px' }: ConsoleProps) {
+export function Console({ output, height = '200px', onInput, waitingForInput = false }: ConsoleProps) {
+  const [inputValue, setInputValue] = React.useState('');
+  
   const getTypeClass = (type: ConsoleOutput['type']) => {
     switch (type) {
       case 'error':
         return 'text-red-400';
       case 'info':
         return 'text-blue-400';
+      case 'input':
+        return 'text-yellow-400';
       default:
         return 'text-green-400';
+    }
+  };
+
+  const handleInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputValue.trim() && onInput) {
+      onInput(inputValue);
+      setInputValue('');
     }
   };
 
@@ -67,6 +83,11 @@ export function Console({ output, height = '200px' }: ConsoleProps) {
                         <span className="text-green-500 text-xs">✓</span>
                       </div>
                     )}
+                    {item.type === 'input' && (
+                      <div className="w-5 h-5 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                        <span className="text-yellow-500 text-xs">›</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-gray-500 mb-1">
@@ -79,6 +100,23 @@ export function Console({ output, height = '200px' }: ConsoleProps) {
                 </div>
               </div>
             ))}
+            
+            {/* Input field when waiting for input */}
+            {waitingForInput && (
+              <div className="mt-4 flex items-center gap-2 p-2 bg-gray-800/50 rounded border border-yellow-500/30">
+                <span className="text-yellow-400">›</span>
+                <form onSubmit={handleInputSubmit} className="flex-1">
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder="Enter input and press Enter..."
+                    className="w-full bg-transparent text-white outline-none placeholder-gray-500"
+                    autoFocus
+                  />
+                </form>
+              </div>
+            )}
           </div>
         )}
       </div>
