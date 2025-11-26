@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App.tsx'
 import { Login } from './pages/Login.tsx'
 import { Signup } from './pages/Signup.tsx'
+import { Projects } from './pages/Projects.tsx'
 import './index.css'
 
 function Root() {
@@ -26,6 +27,8 @@ function Root() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App user={user} onLogout={handleLogout} />} />
+        <Route path="/projects" element={<Projects user={user} />} />
+        <Route path="/project/:projectId" element={<App user={user} onLogout={handleLogout} />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
       </Routes>

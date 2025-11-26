@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { CodeEditor, CodeErrorMarker } from './components/CodeEditor';
 import { Console } from './components/Console';
 import { Button } from './components/ui/button';
@@ -107,6 +107,7 @@ const defaultCode = defaultPythonCode;
 
 function App({ user, onLogout }: AppProps) {
   const navigate = useNavigate();
+  const { projectId: urlProjectId } = useParams<{ projectId?: string }>();
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('nexusquest-theme');
     return (saved as 'dark' | 'light') || 'dark';
@@ -158,14 +159,89 @@ function App({ user, onLogout }: AppProps) {
     try {
       const data = await projectService.getProjects();
       setProjects(data);
+      return data;
     } catch (error) {
       console.error('Failed to load projects:', error);
+      return [];
     }
   }, [user]);
 
+  // Load projects and restore last session (or load project from URL)
   useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+    const initSession = async () => {
+      const projectsData = await loadProjects();
+
+      // If user is logged in, try to restore session
+      if (user && projectsData && projectsData.length > 0) {
+        // Priority: URL project ID > localStorage last project
+        const targetProjectId = urlProjectId || localStorage.getItem('nexusquest-last-project');
+        const lastFileId = localStorage.getItem('nexusquest-last-file');
+
+        if (targetProjectId) {
+          const project = projectsData.find((p: Project) => p._id === targetProjectId);
+          if (project) {
+            setCurrentProject(project);
+            setExpandedProjects(new Set([project._id]));
+
+            // Find the last file or default to first file
+            if (lastFileId && !urlProjectId) {
+              // Only use last file if not coming from URL (URL should show first file)
+              const file = project.files.find((f: ProjectFile) => f._id === lastFileId);
+              if (file) {
+                setCurrentFile(file);
+                setCode(file.content);
+                setLanguage(file.language as 'python' | 'java' | 'javascript' | 'cpp');
+                return;
+              }
+            }
+            // If no file found but project has files, open the first one
+            if (project.files.length > 0) {
+              const firstFile = project.files[0];
+              setCurrentFile(firstFile);
+              setCode(firstFile.content);
+              setLanguage(firstFile.language as 'python' | 'java' | 'javascript' | 'cpp');
+            }
+          } else if (urlProjectId) {
+            // Project from URL not found - redirect to home
+            navigate('/');
+          }
+        }
+      } else if (urlProjectId && !user) {
+        // Not logged in but trying to access a project - redirect to login
+        navigate('/login');
+      }
+    };
+
+    initSession();
+  }, [user, urlProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save current project/file to localStorage when they change
+  useEffect(() => {
+    if (currentProject) {
+      localStorage.setItem('nexusquest-last-project', currentProject._id);
+    } else {
+      localStorage.removeItem('nexusquest-last-project');
+    }
+  }, [currentProject]);
+
+  useEffect(() => {
+    if (currentFile) {
+      localStorage.setItem('nexusquest-last-file', currentFile._id);
+    } else {
+      localStorage.removeItem('nexusquest-last-file');
+    }
+  }, [currentFile]);
+
+  // Clear project state and show default code when user logs out
+  useEffect(() => {
+    if (!user) {
+      setCurrentProject(null);
+      setCurrentFile(null);
+      setProjects([]);
+      setCode(defaultPythonCode);
+      setLanguage('python');
+    }
+  }, [user]);
 
   // Save theme to localStorage
   useEffect(() => {
@@ -262,20 +338,24 @@ function App({ user, onLogout }: AppProps) {
     setCodeErrors([]);
   }, [language]);
 
-  // Change default code when language changes
+  // Change default code when language changes (only when not logged in or not in a project)
   useEffect(() => {
-    if (language === 'python') {
-      setCode(defaultPythonCode);
-    } else if (language === 'java') {
-      setCode(defaultJavaCode);
-    } else if (language === 'javascript') {
-      setCode(defaultJavaScriptCode);
-    } else if (language === 'cpp') {
-      setCode(defaultCppCode);
+    // Only show default code if user is NOT logged in (temporary coding mode)
+    // If user is logged in, they should be working with projects
+    if (!user && !currentProject) {
+      if (language === 'python') {
+        setCode(defaultPythonCode);
+      } else if (language === 'java') {
+        setCode(defaultJavaCode);
+      } else if (language === 'javascript') {
+        setCode(defaultJavaScriptCode);
+      } else if (language === 'cpp') {
+        setCode(defaultCppCode);
+      }
     }
     // Clear previous error markers when switching language
     setCodeErrors([]);
-  }, [language]);
+  }, [language, user, currentProject]);
 
   // Parse error text coming from backend to extract line numbers
   const parseErrorLocations = (errorText: string, lang: typeof language): CodeErrorMarker[] => {
@@ -660,6 +740,7 @@ function App({ user, onLogout }: AppProps) {
                       setCurrentProject(null);
                       setCurrentFile(null);
                       setCode(localStorage.getItem('nexusquest-code') || defaultCode);
+                      navigate('/');
                     }}
                     className={`p-0.5 rounded hover:bg-gray-500/30 ${
                       theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
@@ -963,7 +1044,10 @@ function App({ user, onLogout }: AppProps) {
                           <FolderOpen className="w-3 h-3 text-yellow-500" />
                           <span
                             className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}
-                            onClick={() => setCurrentProject(project)}
+                            onClick={() => {
+                              setCurrentProject(project);
+                              navigate(`/project/${project._id}`);
+                            }}
                           >
                             {project.name}
                           </span>
@@ -989,6 +1073,7 @@ function App({ user, onLogout }: AppProps) {
                                     if (currentProject?._id === project._id) {
                                       setCurrentProject(null);
                                       setCurrentFile(null);
+                                      navigate('/');
                                     }
                                     loadProjects();
                                   } catch (err) {
@@ -1015,7 +1100,21 @@ function App({ user, onLogout }: AppProps) {
                                     e.preventDefault();
                                     if (newFileName.trim()) {
                                       try {
-                                        await projectService.addFile(project._id, newFileName.trim(), '', newFileLanguage);
+                                        // Add extension based on language if not already present
+                                        const extensions: Record<string, string> = {
+                                          python: '.py',
+                                          javascript: '.js',
+                                          java: '.java',
+                                          cpp: '.cpp'
+                                        };
+                                        let fileName = newFileName.trim();
+                                        const ext = extensions[newFileLanguage];
+                                        // Only add extension if filename doesn't already have a valid extension
+                                        const hasExtension = ['.py', '.js', '.java', '.cpp', '.h', '.hpp'].some(e => fileName.endsWith(e));
+                                        if (!hasExtension && ext) {
+                                          fileName += ext;
+                                        }
+                                        await projectService.addFile(project._id, fileName, '', newFileLanguage);
                                         setNewFileName('');
                                         setNewFileLanguage('python');
                                         setShowNewFileInput(null);
@@ -1094,6 +1193,8 @@ function App({ user, onLogout }: AppProps) {
                                   else if (ext === 'js') setLanguage('javascript');
                                   else if (ext === 'java') setLanguage('java');
                                   else if (ext === 'cpp' || ext === 'cc') setLanguage('cpp');
+                                  // Update URL to project page
+                                  navigate(`/project/${project._id}`);
                                 }}
                               >
                                 <File className="w-3 h-3 text-blue-400" />
