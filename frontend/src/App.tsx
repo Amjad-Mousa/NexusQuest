@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CodeEditor, CodeErrorMarker } from './components/CodeEditor';
 import { Console } from './components/Console';
 import { Button } from './components/ui/button';
-import { Play, Square, Download, Upload, Sparkles, FolderTree, ChevronRight, ChevronLeft, User, LogIn, LogOut, X, FolderOpen, Trophy, Settings, Moon, Sun, Minus, Plus } from 'lucide-react';
+import { Play, Square, Download, Upload, Sparkles, FolderTree, ChevronRight, ChevronLeft, User, LogIn, LogOut, X, FolderOpen, Trophy, Settings, Moon, Sun, Minus, Plus, FilePlus, FolderPlus, Trash2, ChevronDown, File } from 'lucide-react';
 import * as aiService from './services/aiService';
+import * as projectService from './services/projectService';
+import type { Project, ProjectFile } from './services/projectService';
 
 interface AppProps {
   user: { name: string; email: string } | null;
@@ -132,6 +134,36 @@ function App({ user, onLogout }: AppProps) {
     return saved ? parseInt(saved) : 14;
   });
 
+  // Project state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [currentFile, setCurrentFile] = useState<ProjectFile | null>(null);
+  const [showNewProjectInput, setShowNewProjectInput] = useState(false);
+  const [showNewFileInput, setShowNewFileInput] = useState<string | null>(null);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectLanguage, setNewProjectLanguage] = useState<'python' | 'java' | 'javascript' | 'cpp'>('python');
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileLanguage, setNewFileLanguage] = useState<'python' | 'java' | 'javascript' | 'cpp'>('python');
+
+  // Load projects when user is logged in
+  const loadProjects = useCallback(async () => {
+    if (!user) {
+      setProjects([]);
+      return;
+    }
+    try {
+      const data = await projectService.getProjects();
+      setProjects(data);
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
   // Save theme to localStorage
   useEffect(() => {
     localStorage.setItem('nexusquest-theme', theme);
@@ -142,13 +174,18 @@ function App({ user, onLogout }: AppProps) {
     localStorage.setItem('nexusquest-fontsize', fontSize.toString());
   }, [fontSize]);
 
-  // Save code to localStorage
+  // Save code to localStorage and sync with current file
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem('nexusquest-code', code);
+      // Auto-save to current file if one is selected
+      if (currentProject && currentFile) {
+        projectService.updateFile(currentProject._id, currentFile._id, { content: code })
+          .catch(err => console.error('Failed to auto-save file:', err));
+      }
     }, 1000); // Debounce 1 second
     return () => clearTimeout(timer);
-  }, [code]);
+  }, [code, currentProject, currentFile]);
 
   // Save language to localStorage
   useEffect(() => {
@@ -316,41 +353,64 @@ function App({ user, onLogout }: AppProps) {
 
     setIsRunning(true);
     setWaitingForInput(false);
-    
+
     if (inputs.length > 0) {
       addToConsole(`📥 Using inputs: ${inputs.join(', ')}`, 'info');
     }
     addToConsole('⏳ Running code...', 'info');
 
     try {
-      const response = await fetch('http://localhost:3001/api/run', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          code: code.trim(),
-          language: language,
-          input: inputs.join(',')
-        }),
-      });
+      let result;
 
-      const result = await response.json();
+      // If we're in a project, use multi-file execution
+      if (currentProject && currentFile) {
+        addToConsole(`📁 Running project: ${currentProject.name} (main: ${currentFile.name})`, 'info');
+
+        // Get all project files with current editor content for the active file
+        const projectFiles = currentProject.files.map(f => ({
+          name: f.name,
+          content: f._id === currentFile._id ? code.trim() : f.content,
+          language: f.language
+        }));
+
+        result = await projectService.runProject(
+          projectFiles,
+          currentFile.name,
+          currentProject.language,
+          inputs.join(',')
+        );
+      } else {
+        // Single file execution
+        const response = await fetch('http://localhost:3001/api/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code: code.trim(),
+            language: language,
+            input: inputs.join(',')
+          }),
+        });
+
+        result = await response.json();
+      }
 
       if (result.error) {
         addToConsole(result.error, 'error');
         // Extract error locations for highlighting in editor
-        const markers = parseErrorLocations(result.error, language);
+        const effectiveLanguage = (currentProject?.language || language) as 'python' | 'java' | 'javascript' | 'cpp';
+        const markers = parseErrorLocations(result.error, effectiveLanguage);
         setCodeErrors(markers);
-        
+
         // Get AI error suggestions
         try {
-          const errorAnalysis = await aiService.getErrorSuggestions(result.error, code, language);
+          const errorAnalysis = await aiService.getErrorSuggestions(result.error, code, effectiveLanguage);
           if (errorAnalysis.explanation) {
             addToConsole('', 'output');
             addToConsole('🤖 AI Error Analysis:', 'info');
             addToConsole(errorAnalysis.explanation, 'info');
-            
+
             if (errorAnalysis.suggestions.length > 0) {
               addToConsole('', 'output');
               addToConsole('💡 Suggested Fixes:', 'info');
@@ -366,7 +426,7 @@ function App({ user, onLogout }: AppProps) {
         addToConsole(result.output || '✅ Code executed successfully', 'output');
         setCodeErrors([]);
       }
-      
+
       // Clear input queue after successful execution
       setInputQueue([]);
     } catch (err) {
@@ -510,20 +570,44 @@ function App({ user, onLogout }: AppProps) {
                   <span className="text-yellow-400 text-[10px] font-semibold">📥 {inputQueue.length} input{inputQueue.length > 1 ? 's' : ''}</span>
                 </div>
               )}
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp')}
-                className={`h-8 text-[11px] px-2 py-1 rounded border transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+              {/* Only show language selector when not in a project */}
+              {!currentProject ? (
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp')}
+                  className={`h-8 text-[11px] px-2 py-1 rounded border transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                    theme === 'dark'
+                      ? 'bg-blue-500/10 text-blue-300 border-blue-500/40 hover:bg-blue-500/20'
+                      : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                  }`}
+                >
+                  <option value="python">Python 🐍</option>
+                  <option value="javascript">JavaScript 📜</option>
+                  <option value="java">Java ☕</option>
+                  <option value="cpp">C++ ⚡</option>
+                </select>
+              ) : (
+                <div className={`h-8 px-2 py-1 flex items-center gap-2 text-[11px] rounded border ${
                   theme === 'dark'
-                    ? 'bg-blue-500/10 text-blue-300 border-blue-500/40 hover:bg-blue-500/20'
-                    : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
-                }`}
-              >
-                <option value="python">Python 🐍</option>
-                <option value="javascript">JavaScript 📜</option>
-                <option value="java">Java ☕</option>
-                <option value="cpp">C++ ⚡</option>
-              </select>
+                    ? 'bg-gray-700/50 text-gray-300 border-gray-600'
+                    : 'bg-gray-100 text-gray-600 border-gray-300'
+                }`}>
+                  <span>📁 {currentProject.name} {currentFile ? `/ ${currentFile.name}` : ''}</span>
+                  <button
+                    onClick={() => {
+                      setCurrentProject(null);
+                      setCurrentFile(null);
+                      setCode(localStorage.getItem('nexusquest-code') || defaultCode);
+                    }}
+                    className={`p-0.5 rounded hover:bg-gray-500/30 ${
+                      theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Close project"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
               <Button
                 onClick={() => runCode()}
                 disabled={isRunning}
@@ -673,40 +757,307 @@ function App({ user, onLogout }: AppProps) {
             </div>
             {isProjectPanelOpen && (
               <div className="flex-1 overflow-auto text-[11px] py-1">
-                <div className="px-2 pb-1 font-semibold text-gray-400 uppercase tracking-wide text-[10px]">
-                  nexusquest
+                {/* Header with New Project button */}
+                <div className="px-2 pb-1 flex items-center justify-between">
+                  <span className="font-semibold text-gray-400 uppercase tracking-wide text-[10px]">
+                    Projects
+                  </span>
+                  {user && (
+                    <button
+                      onClick={() => setShowNewProjectInput(true)}
+                      className="p-0.5 rounded hover:bg-gray-700/50 text-gray-400 hover:text-gray-200"
+                      title="New Project"
+                    >
+                      <FolderPlus className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
-                <div className="space-y-1 px-1">
-                  <div>
-                    <div className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-500/10 cursor-pointer">
-                      <ChevronRight className="w-3 h-3 text-gray-500" />
-                      <span className="text-gray-300">backend</span>
-                    </div>
+
+                {/* New Project Input */}
+                {showNewProjectInput && (
+                  <div className="px-2 py-1">
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (newProjectName.trim()) {
+                          try {
+                            const result = await projectService.createProject(newProjectName.trim(), '', newProjectLanguage);
+                            console.log('Project created:', result);
+                            setNewProjectName('');
+                            setNewProjectLanguage('python');
+                            setShowNewProjectInput(false);
+                            loadProjects();
+                          } catch (err: unknown) {
+                            const error = err as Error;
+                            console.error('Failed to create project:', error);
+                            alert('Failed to create project: ' + error.message);
+                          }
+                        }
+                      }}
+                      className="space-y-1"
+                    >
+                      <input
+                        type="text"
+                        value={newProjectName}
+                        onChange={(e) => setNewProjectName(e.target.value)}
+                        placeholder="Project name..."
+                        className={`w-full px-2 py-1 text-[11px] rounded border ${
+                          theme === 'dark'
+                            ? 'bg-gray-800 border-gray-600 text-white'
+                            : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            setNewProjectName('');
+                            setNewProjectLanguage('python');
+                            setShowNewProjectInput(false);
+                          }
+                        }}
+                      />
+                      <select
+                        value={newProjectLanguage}
+                        onChange={(e) => setNewProjectLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp')}
+                        className={`w-full px-2 py-1 text-[11px] rounded border ${
+                          theme === 'dark'
+                            ? 'bg-gray-800 border-gray-600 text-white'
+                            : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                      >
+                        <option value="python">Python 🐍</option>
+                        <option value="javascript">JavaScript 📜</option>
+                        <option value="java">Java ☕</option>
+                        <option value="cpp">C++ ⚡</option>
+                      </select>
+                      <button
+                        type="submit"
+                        className={`w-full px-2 py-1 text-[11px] rounded ${
+                          theme === 'dark'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                            : 'bg-blue-500 hover:bg-blue-600 text-white'
+                        }`}
+                      >
+                        Create Project
+                      </button>
+                    </form>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-500/10 cursor-pointer">
-                      <ChevronRight className="w-3 h-3 text-gray-500" />
-                      <span className="text-gray-300">frontend</span>
+                )}
+
+                {/* Projects List */}
+                <div className="space-y-0.5 px-1">
+                  {!user ? (
+                    <div className={`px-2 py-4 text-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p>Login to see your projects</p>
                     </div>
-                    <div className="ml-5 space-y-0.5">
-                      <div className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-500/10 cursor-pointer">
-                        <span className="w-3 h-3 rounded bg-blue-500/40" />
-                        <span className="text-gray-400">src</span>
+                  ) : projects.length === 0 ? (
+                    <div className={`px-2 py-4 text-center ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                      <p>No projects yet</p>
+                      <p className="text-[10px] mt-1">Click + to create one</p>
+                    </div>
+                  ) : (
+                    projects.map((project) => (
+                      <div key={project._id}>
+                        {/* Project Header */}
+                        <div
+                          className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group ${
+                            currentProject?._id === project._id
+                              ? theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                              : 'hover:bg-blue-500/10'
+                          }`}
+                        >
+                          <button
+                            onClick={() => {
+                              setExpandedProjects(prev => {
+                                const next = new Set(prev);
+                                if (next.has(project._id)) {
+                                  next.delete(project._id);
+                                } else {
+                                  next.add(project._id);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="p-0.5"
+                          >
+                            {expandedProjects.has(project._id) ? (
+                              <ChevronDown className="w-3 h-3 text-gray-500" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3 text-gray-500" />
+                            )}
+                          </button>
+                          <FolderOpen className="w-3 h-3 text-yellow-500" />
+                          <span
+                            className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}
+                            onClick={() => setCurrentProject(project)}
+                          >
+                            {project.name}
+                          </span>
+                          {/* Project Actions */}
+                          <div className="hidden group-hover:flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowNewFileInput(project._id);
+                                setExpandedProjects(prev => new Set(prev).add(project._id));
+                              }}
+                              className="p-0.5 rounded hover:bg-gray-600/50 text-gray-400"
+                              title="New File"
+                            >
+                              <FilePlus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Delete project "${project.name}"?`)) {
+                                  try {
+                                    await projectService.deleteProject(project._id);
+                                    if (currentProject?._id === project._id) {
+                                      setCurrentProject(null);
+                                      setCurrentFile(null);
+                                    }
+                                    loadProjects();
+                                  } catch (err) {
+                                    console.error('Failed to delete project:', err);
+                                  }
+                                }
+                              }}
+                              className="p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+                              title="Delete Project"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Files List (when expanded) */}
+                        {expandedProjects.has(project._id) && (
+                          <div className="ml-4 space-y-0.5">
+                            {/* New File Input */}
+                            {showNewFileInput === project._id && (
+                              <div className="py-0.5">
+                                <form
+                                  onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    if (newFileName.trim()) {
+                                      try {
+                                        await projectService.addFile(project._id, newFileName.trim(), '', newFileLanguage);
+                                        setNewFileName('');
+                                        setNewFileLanguage('python');
+                                        setShowNewFileInput(null);
+                                        loadProjects();
+                                      } catch (err) {
+                                        console.error('Failed to add file:', err);
+                                        alert('Failed to add file');
+                                      }
+                                    }
+                                  }}
+                                  className="space-y-1"
+                                >
+                                  <input
+                                    type="text"
+                                    value={newFileName}
+                                    onChange={(e) => setNewFileName(e.target.value)}
+                                    placeholder="filename..."
+                                    className={`w-full px-2 py-0.5 text-[11px] rounded border ${
+                                      theme === 'dark'
+                                        ? 'bg-gray-800 border-gray-600 text-white'
+                                        : 'bg-white border-gray-300 text-gray-900'
+                                    }`}
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Escape') {
+                                        setNewFileName('');
+                                        setNewFileLanguage('python');
+                                        setShowNewFileInput(null);
+                                      }
+                                    }}
+                                  />
+                                  <select
+                                    value={newFileLanguage}
+                                    onChange={(e) => setNewFileLanguage(e.target.value as 'python' | 'java' | 'javascript' | 'cpp')}
+                                    className={`w-full px-2 py-0.5 text-[11px] rounded border ${
+                                      theme === 'dark'
+                                        ? 'bg-gray-800 border-gray-600 text-white'
+                                        : 'bg-white border-gray-300 text-gray-900'
+                                    }`}
+                                  >
+                                    <option value="python">Python 🐍</option>
+                                    <option value="javascript">JavaScript 📜</option>
+                                    <option value="java">Java ☕</option>
+                                    <option value="cpp">C++ ⚡</option>
+                                  </select>
+                                  <button
+                                    type="submit"
+                                    className={`w-full px-2 py-0.5 text-[11px] rounded ${
+                                      theme === 'dark'
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                    }`}
+                                  >
+                                    Add File
+                                  </button>
+                                </form>
+                              </div>
+                            )}
+
+                            {/* File Items */}
+                            {project.files.map((file) => (
+                              <div
+                                key={file._id}
+                                className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group ${
+                                  currentFile?._id === file._id
+                                    ? theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                                    : 'hover:bg-blue-500/10'
+                                }`}
+                                onClick={() => {
+                                  setCurrentProject(project);
+                                  setCurrentFile(file);
+                                  setCode(file.content);
+                                  // Set language based on file extension
+                                  const ext = file.name.split('.').pop()?.toLowerCase();
+                                  if (ext === 'py') setLanguage('python');
+                                  else if (ext === 'js') setLanguage('javascript');
+                                  else if (ext === 'java') setLanguage('java');
+                                  else if (ext === 'cpp' || ext === 'cc') setLanguage('cpp');
+                                }}
+                              >
+                                <File className="w-3 h-3 text-blue-400" />
+                                <span className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  {file.name}
+                                </span>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Delete file "${file.name}"?`)) {
+                                      try {
+                                        await projectService.deleteFile(project._id, file._id);
+                                        if (currentFile?._id === file._id) {
+                                          setCurrentFile(null);
+                                        }
+                                        loadProjects();
+                                      } catch (err) {
+                                        console.error('Failed to delete file:', err);
+                                      }
+                                    }
+                                  }}
+                                  className="hidden group-hover:block p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+                                  title="Delete File"
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                            ))}
+
+                            {project.files.length === 0 && !showNewFileInput && (
+                              <div className={`px-2 py-1 text-[10px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                                No files
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-500/10 cursor-pointer">
-                        <span className="w-3 h-3 rounded bg-blue-500/40" />
-                        <span className="text-gray-400">index.html</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-500/10 cursor-pointer">
-                    <span className="w-3 h-3 rounded bg-green-500/50" />
-                    <span className="text-gray-400">docker-compose.yml</span>
-                  </div>
-                  <div className="flex items-center gap-1 px-1 py-0.5 rounded hover:bg-blue-500/10 cursor-pointer">
-                    <span className="w-3 h-3 rounded bg-purple-500/50" />
-                    <span className="text-gray-400">README.md</span>
-                  </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

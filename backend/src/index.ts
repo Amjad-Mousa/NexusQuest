@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { codeExecutionRouter } from './routes/execution.js';
 import aiRouter from './routes/ai.js';
 import authRouter from './routes/auth.js';
+import projectsRouter from './routes/projects.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { logger } from './utils/logger.js';
 import { connectDatabase } from './config/database.js';
@@ -51,6 +52,7 @@ app.get('/health', (req, res) => {
 app.use('/api', codeExecutionRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/projects', projectsRouter);
 
 // Error handling
 app.use(errorHandler);
