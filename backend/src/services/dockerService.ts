@@ -669,11 +669,28 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
   }
 }
 
+// Helper to create directory structure for files with paths
+function createDirectoryCommands(files: ProjectFile[], baseDir: string): string {
+  const dirs = new Set<string>();
+  files.forEach(f => {
+    const parts = f.name.split('/');
+    if (parts.length > 1) {
+      // Build all parent directories
+      for (let i = 1; i < parts.length; i++) {
+        dirs.add(parts.slice(0, i).join('/'));
+      }
+    }
+  });
+  if (dirs.size === 0) return '';
+  return Array.from(dirs).map(d => `mkdir -p ${baseDir}/${d}`).join(' && ') + ' && ';
+}
+
 async function executePythonProject(files: ProjectFile[], mainFile: string, input?: string): Promise<{ output: string; error: string }> {
   const containerName = `nexusquest-python-proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   try {
-    // Create file writing commands
+    // Create directories first, then write files
+    const mkdirCommands = createDirectoryCommands(files, '/app');
     const fileCommands = files.map(f => {
       const escapedContent = f.content.replace(/'/g, "'\\''");
       return `echo '${escapedContent}' > /app/${f.name}`;
@@ -705,7 +722,7 @@ builtins.input = input
       ? `cd /app && python -c "${inputWrapper.replace(/"/g, '\\"')}" && python ${mainFile}`
       : `cd /app && python ${mainFile}`;
 
-    const fullCommand = `${fileCommands} && ${runCommand}`;
+    const fullCommand = `${mkdirCommands}${fileCommands} && ${runCommand}`;
 
     const container = await docker.createContainer({
       Image: languageImages['python'],
@@ -765,6 +782,9 @@ async function executeJavaScriptProject(files: ProjectFile[], mainFile: string, 
   const containerName = `nexusquest-js-proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   try {
+    // Create directories first
+    const mkdirCommands = createDirectoryCommands(files, '/app');
+
     // Create file writing commands using heredoc for safer content handling
     const fileCommands = files.map(f => {
       return `cat << 'FILECONTENT_${f.name.replace(/[^a-zA-Z0-9]/g, '_')}' > /app/${f.name}
@@ -792,7 +812,7 @@ global.input = function(prompt = '') {
       ? `node -e "${inputSetup.replace(/"/g, '\\"').replace(/\n/g, ' ')}" && node ${mainFile}`
       : `node ${mainFile}`;
 
-    const fullCommand = `${fileCommands}
+    const fullCommand = `${mkdirCommands ? mkdirCommands + '\n' : ''}${fileCommands}
 cd /app && ${runCommand}`;
 
     const container = await docker.createContainer({
@@ -853,6 +873,9 @@ async function executeJavaProject(files: ProjectFile[], mainFile: string, input?
   const containerName = `nexusquest-java-proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   try {
+    // Create directories first
+    const mkdirCommands = createDirectoryCommands(files, '/tmp');
+
     // Create file writing commands using heredoc
     const fileCommands = files.map(f => {
       return `cat << 'JAVAFILE_${f.name.replace(/[^a-zA-Z0-9]/g, '_')}' > /tmp/${f.name}
@@ -878,7 +901,7 @@ INPUT`;
       runCommand = `cd /tmp && javac -d . ${javaFiles} && java -cp . ${mainClassName}`;
     }
 
-    const fullCommand = `${fileCommands}
+    const fullCommand = `${mkdirCommands ? mkdirCommands + '\n' : ''}${fileCommands}
 ${runCommand}`;
 
     const container = await docker.createContainer({
@@ -938,6 +961,9 @@ async function executeCppProject(files: ProjectFile[], mainFile: string, input?:
   const containerName = `nexusquest-cpp-proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   try {
+    // Create directories first
+    const mkdirCommands = createDirectoryCommands(files, '/tmp');
+
     // Create file writing commands using heredoc
     const fileCommands = files.map(f => {
       return `cat << 'CPPFILE_${f.name.replace(/[^a-zA-Z0-9]/g, '_')}' > /tmp/${f.name}
@@ -958,7 +984,7 @@ INPUT`;
       runCommand = `cd /tmp && g++ -std=c++20 -O2 ${cppFiles} -o main && ./main`;
     }
 
-    const fullCommand = `${fileCommands}
+    const fullCommand = `${mkdirCommands ? mkdirCommands + '\n' : ''}${fileCommands}
 ${runCommand}`;
 
     const container = await docker.createContainer({

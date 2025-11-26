@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { CodeEditor, CodeErrorMarker } from './components/CodeEditor';
 import { Console } from './components/Console';
 import { Button } from './components/ui/button';
-import { Play, Square, Download, Upload, Sparkles, FolderTree, ChevronRight, ChevronLeft, User, LogIn, LogOut, X, FolderOpen, Trophy, Settings, Moon, Sun, Minus, Plus, FilePlus, FolderPlus, Trash2, ChevronDown, File, Save } from 'lucide-react';
+import { Play, Square, Download, Upload, Sparkles, FolderTree, ChevronRight, ChevronLeft, User, LogIn, LogOut, X, FolderOpen, Trophy, Settings, Moon, Sun, Minus, Plus, FilePlus, FolderPlus, Trash2, ChevronDown, File, Save, Folder } from 'lucide-react';
 import * as aiService from './services/aiService';
 import * as projectService from './services/projectService';
 import type { Project, ProjectFile } from './services/projectService';
@@ -139,11 +139,12 @@ function App({ user, onLogout }: AppProps) {
   const [projects, setProjects] = useState<Project[]>([]); // Used for session restoration
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [currentFile, setCurrentFile] = useState<ProjectFile | null>(null);
-  const [showNewFileInput, setShowNewFileInput] = useState<string | null>(null);
+  const [showNewFileInput, setShowNewFileInput] = useState<string | null>(null); // null, project._id, or "folder:path"
   const [newFileName, setNewFileName] = useState('');
   const [newFileLanguage, setNewFileLanguage] = useState<'python' | 'java' | 'javascript' | 'cpp'>('python');
   const [isSaving, setIsSaving] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [lastSavedCode, setLastSavedCode] = useState<string>('');
 
@@ -974,6 +975,21 @@ function App({ user, onLogout }: AppProps) {
                             <FilePlus className="w-3 h-3" />
                           </button>
                           <button
+                            onClick={() => {
+                              const folderName = prompt('Enter folder name:');
+                              if (folderName && folderName.trim()) {
+                                // Create folder by adding a placeholder file (folder/.gitkeep style)
+                                // Actually, we'll just prompt for folder name and let user add files to it
+                                setShowNewFileInput(`folder:${folderName.trim()}`);
+                                setExpandedFolders(prev => new Set(prev).add(folderName.trim()));
+                              }
+                            }}
+                            className="p-0.5 rounded hover:bg-gray-600/50 text-gray-400"
+                            title="New Folder"
+                          >
+                            <FolderPlus className="w-3 h-3" />
+                          </button>
+                          <button
                             onClick={async () => {
                               if (confirm(`Delete project "${currentProject.name}"?`)) {
                                 try {
@@ -1036,11 +1052,174 @@ function App({ user, onLogout }: AppProps) {
                         </>
                       )}
 
-                      {/* Files List */}
+                      {/* Files Tree */}
                       <div className="ml-4 space-y-0.5 mt-0.5">
-                        {/* New File Input */}
-                        {showNewFileInput === currentProject._id && (
-                          <div className="py-0.5">
+                        {(() => {
+                          // Build tree structure from flat file list
+                          interface TreeNode {
+                            name: string;
+                            path: string;
+                            isFolder: boolean;
+                            file?: ProjectFile;
+                            children: TreeNode[];
+                          }
+
+                          const buildTree = (files: ProjectFile[]): TreeNode[] => {
+                            const root: TreeNode[] = [];
+                            const folders = new Map<string, TreeNode>();
+
+                            // Sort files: folders first, then by name
+                            const sortedFiles = [...files].sort((a, b) => {
+                              const aDepth = a.name.split('/').length;
+                              const bDepth = b.name.split('/').length;
+                              if (aDepth !== bDepth) return aDepth - bDepth;
+                              return a.name.localeCompare(b.name);
+                            });
+
+                            sortedFiles.forEach(file => {
+                              const parts = file.name.split('/');
+                              if (parts.length === 1) {
+                                // Root level file
+                                root.push({ name: file.name, path: file.name, isFolder: false, file, children: [] });
+                              } else {
+                                // File in folder - create folder structure
+                                let currentPath = '';
+                                let currentLevel = root;
+                                for (let i = 0; i < parts.length - 1; i++) {
+                                  const folderName = parts[i];
+                                  currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+
+                                  let folder = folders.get(currentPath);
+                                  if (!folder) {
+                                    folder = { name: folderName, path: currentPath, isFolder: true, children: [] };
+                                    folders.set(currentPath, folder);
+                                    currentLevel.push(folder);
+                                  }
+                                  currentLevel = folder.children;
+                                }
+                                // Add file to deepest folder
+                                currentLevel.push({ name: parts[parts.length - 1], path: file.name, isFolder: false, file, children: [] });
+                              }
+                            });
+
+                            // Sort: folders first, then files alphabetically
+                            const sortNodes = (nodes: TreeNode[]) => {
+                              nodes.sort((a, b) => {
+                                if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+                                return a.name.localeCompare(b.name);
+                              });
+                              nodes.forEach(n => sortNodes(n.children));
+                            };
+                            sortNodes(root);
+                            return root;
+                          };
+
+                          const renderNode = (node: TreeNode, depth: number = 0): JSX.Element => {
+                            if (node.isFolder) {
+                              const isExpanded = expandedFolders.has(node.path);
+                              return (
+                                <div key={node.path}>
+                                  <div
+                                    className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group hover:bg-blue-500/10`}
+                                    style={{ paddingLeft: `${depth * 12}px` }}
+                                    onClick={() => {
+                                      setExpandedFolders(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(node.path)) next.delete(node.path);
+                                        else next.add(node.path);
+                                        return next;
+                                      });
+                                    }}
+                                    onContextMenu={(e) => {
+                                      e.preventDefault();
+                                      // Could add folder context menu here
+                                    }}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-3 h-3 text-gray-500" />
+                                    ) : (
+                                      <ChevronRight className="w-3 h-3 text-gray-500" />
+                                    )}
+                                    {isExpanded ? (
+                                      <FolderOpen className="w-3 h-3 text-yellow-500" />
+                                    ) : (
+                                      <Folder className="w-3 h-3 text-yellow-500" />
+                                    )}
+                                    <span className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                                      {node.name}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowNewFileInput(`folder:${node.path}`);
+                                        setExpandedFolders(prev => new Set(prev).add(node.path));
+                                      }}
+                                      className="hidden group-hover:block p-0.5 rounded hover:bg-gray-600/50 text-gray-400"
+                                      title="New File in Folder"
+                                    >
+                                      <FilePlus className="w-2.5 h-2.5" />
+                                    </button>
+                                  </div>
+                                  {isExpanded && node.children.map(child => renderNode(child, depth + 1))}
+                                </div>
+                              );
+                            } else {
+                              const file = node.file!;
+                              return (
+                                <div
+                                  key={file._id}
+                                  className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group ${
+                                    currentFile?._id === file._id
+                                      ? theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                                      : 'hover:bg-blue-500/10'
+                                  }`}
+                                  style={{ paddingLeft: `${depth * 12 + 16}px` }}
+                                  onClick={() => {
+                                    setCurrentFile(file);
+                                    setCode(file.content);
+                                    const ext = file.name.split('.').pop()?.toLowerCase();
+                                    if (ext === 'py') setLanguage('python');
+                                    else if (ext === 'js') setLanguage('javascript');
+                                    else if (ext === 'java') setLanguage('java');
+                                    else if (ext === 'cpp' || ext === 'cc' || ext === 'h' || ext === 'hpp') setLanguage('cpp');
+                                  }}
+                                >
+                                  <File className="w-3 h-3 text-blue-400" />
+                                  <span className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    {node.name}
+                                  </span>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`Delete file "${file.name}"?`)) {
+                                        try {
+                                          await projectService.deleteFile(currentProject._id, file._id);
+                                          if (currentFile?._id === file._id) {
+                                            setCurrentFile(null);
+                                          }
+                                          loadProjects();
+                                        } catch (err) {
+                                          console.error('Failed to delete file:', err);
+                                        }
+                                      }
+                                    }}
+                                    className="hidden group-hover:block p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400"
+                                    title="Delete File"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              );
+                            }
+                          };
+
+                          const tree = buildTree(currentProject.files);
+                          return tree.map(node => renderNode(node));
+                        })()}
+
+                        {/* New File Input - at root or in folder */}
+                        {(showNewFileInput === currentProject._id || showNewFileInput?.startsWith('folder:')) && (
+                          <div className="py-0.5" style={{ paddingLeft: showNewFileInput?.startsWith('folder:') ? '16px' : '0px' }}>
                             <form
                               onSubmit={async (e) => {
                                 e.preventDefault();
@@ -1057,6 +1236,11 @@ function App({ user, onLogout }: AppProps) {
                                     const hasExtension = ['.py', '.js', '.java', '.cpp', '.h', '.hpp'].some(e => fileName.endsWith(e));
                                     if (!hasExtension && ext) {
                                       fileName += ext;
+                                    }
+                                    // If creating in a folder, prepend the folder path
+                                    if (showNewFileInput?.startsWith('folder:')) {
+                                      const folderPath = showNewFileInput.replace('folder:', '');
+                                      fileName = `${folderPath}/${fileName}`;
                                     }
                                     await projectService.addFile(currentProject._id, fileName, '', newFileLanguage);
                                     setNewFileName('');
@@ -1117,52 +1301,6 @@ function App({ user, onLogout }: AppProps) {
                             </form>
                           </div>
                         )}
-
-                        {/* File Items */}
-                        {currentProject.files.map((file) => (
-                          <div
-                            key={file._id}
-                            className={`flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer group ${
-                              currentFile?._id === file._id
-                                ? theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
-                                : 'hover:bg-blue-500/10'
-                            }`}
-                            onClick={() => {
-                              setCurrentFile(file);
-                              setCode(file.content);
-                              const ext = file.name.split('.').pop()?.toLowerCase();
-                              if (ext === 'py') setLanguage('python');
-                              else if (ext === 'js') setLanguage('javascript');
-                              else if (ext === 'java') setLanguage('java');
-                              else if (ext === 'cpp' || ext === 'cc') setLanguage('cpp');
-                            }}
-                          >
-                            <File className="w-3 h-3 text-blue-400" />
-                            <span className={`flex-1 truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {file.name}
-                            </span>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm(`Delete file "${file.name}"?`)) {
-                                  try {
-                                    await projectService.deleteFile(currentProject._id, file._id);
-                                    if (currentFile?._id === file._id) {
-                                      setCurrentFile(null);
-                                    }
-                                    loadProjects();
-                                  } catch (err) {
-                                    console.error('Failed to delete file:', err);
-                                  }
-                                }
-                              }}
-                              className="hidden group-hover:block p-0.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400"
-                              title="Delete File"
-                            >
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        ))}
 
                         {currentProject.files.length === 0 && !showNewFileInput && (
                           <div className={`px-2 py-1 text-[10px] ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
