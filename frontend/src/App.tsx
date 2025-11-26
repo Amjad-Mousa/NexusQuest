@@ -257,6 +257,13 @@ function App() {
     localStorage.setItem('nexusquest-language', language);
   }, [language]);
 
+  // Reset input state when language changes
+  useEffect(() => {
+    setWaitingForInput(false);
+    setInputQueue([]);
+    setExpectedInputCount(0);
+  }, [language]);
+
   // Initialize suggestions on mount
   useEffect(() => {
     setSuggestions(getCodeSuggestions(code));
@@ -286,9 +293,12 @@ function App() {
     // Use provided inputs or current queue
     const inputs = providedInputs || inputQueue;
 
-    // Check for interactive input (Scanner/input) and show instructions if no inputs provided
+    // Check for interactive input (Scanner/input/cin/stdin) and show instructions if no inputs provided
     const needsInput = (language === 'java' && (/Scanner/.test(code) && (/nextInt|nextLine|next\(|nextDouble|nextFloat/.test(code) || /BufferedReader/.test(code)))) ||
-                       (language === 'python' && /input\s*\(/.test(code));
+                       (language === 'python' && /input\s*\(/.test(code)) ||
+                       (language === 'cpp' && /cin\s*>>/.test(code)) ||
+                       (language === 'javascript' && /readline|stdin/.test(code)) ||
+                       (language === 'go' && /fmt\.Scan|bufio\.NewScanner/.test(code));
     
     if (needsInput && inputs.length === 0) {
       // Extract input prompts from the code to show user what inputs are expected
@@ -307,6 +317,39 @@ function App() {
           if (lines[i].includes('System.out.print') && lines[i].includes('"')) {
             const promptMatch = lines[i].match(/["'](.*?)["']/);
             if (promptMatch && i + 1 < lines.length && /next(Int|Line|Double|Float|\()/.test(lines[i + 1])) {
+              prompts.push(promptMatch[1]);
+            }
+          }
+        }
+      } else if (language === 'cpp') {
+        // Match cout << "prompt" patterns before cin
+        const lines = code.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes('cout') && lines[i].includes('"') && i + 1 < lines.length && lines[i + 1].includes('cin >>')) {
+            const promptMatch = lines[i].match(/["'](.*?)["']/);
+            if (promptMatch) {
+              prompts.push(promptMatch[1]);
+            }
+          }
+        }
+      } else if (language === 'javascript') {
+        // Match console.log("prompt") patterns before readline
+        const lines = code.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes('console.log') && lines[i].includes('"') && i + 1 < lines.length && /readline|stdin/.test(lines[i + 1])) {
+            const promptMatch = lines[i].match(/["'](.*?)["']/);
+            if (promptMatch) {
+              prompts.push(promptMatch[1]);
+            }
+          }
+        }
+      } else if (language === 'go') {
+        // Match fmt.Print patterns before Scan
+        const lines = code.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes('fmt.Print') && lines[i].includes('"') && i + 1 < lines.length && /Scan/.test(lines[i + 1])) {
+            const promptMatch = lines[i].match(/["'](.*?)["']/);
+            if (promptMatch) {
               prompts.push(promptMatch[1]);
             }
           }
