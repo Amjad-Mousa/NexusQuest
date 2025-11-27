@@ -25,7 +25,7 @@ export function Login({ onLogin }: LoginProps) {
 
     if (result.success && result.user) {
       onLogin(result.user);
-      navigate('/');
+      navigate('/projects');
     } else {
       setError(result.error || 'Login failed');
     }

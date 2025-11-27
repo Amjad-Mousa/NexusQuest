@@ -28,9 +28,9 @@ function Root() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/editor" element={user ? <App user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
-        <Route path="/projects" element={user ? <Projects user={user} /> : <Navigate to="/login" />} />
-        <Route path="/project/:projectId" element={user ? <App user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
+        <Route path="/editor" element={user ? <App user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/projects" element={user ? <Projects user={user} /> : <Navigate to="/" />} />
+        <Route path="/project/:projectId" element={user ? <App user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
       </Routes>

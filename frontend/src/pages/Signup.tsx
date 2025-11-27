@@ -40,7 +40,7 @@ export function Signup({ onSignup }: SignupProps) {
 
     if (result.success && result.user) {
       onSignup(result.user);
-      navigate('/');
+      navigate('/projects');
     } else {
       setError(result.error || 'Signup failed');
     }
