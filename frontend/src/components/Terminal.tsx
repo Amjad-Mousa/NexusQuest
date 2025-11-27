@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 
+interface ProjectFileForExecution {
+  name: string;
+  content: string;
+}
+
 interface TerminalProps {
   height?: string;
   theme?: 'dark' | 'light';
   language: 'python' | 'java' | 'javascript' | 'cpp' | 'go';
-  codeToExecute?: { code: string; timestamp: number } | null;
+  codeToExecute?: { code: string; timestamp: number; files?: ProjectFileForExecution[]; mainFile?: string } | null;
 }
 
 interface TerminalLine {
@@ -51,11 +56,11 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
   // Execute code when codeToExecute changes
   useEffect(() => {
     if (codeToExecute && codeToExecute.code) {
-      executeCodeInteractive(codeToExecute.code);
+      executeCodeInteractive(codeToExecute.code, codeToExecute.files, codeToExecute.mainFile);
     }
   }, [codeToExecute]);
 
-  const executeCodeInteractive = async (code: string) => {
+  const executeCodeInteractive = async (code: string, files?: ProjectFileForExecution[], mainFile?: string) => {
     // Close any existing EventSource connection
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
@@ -66,18 +71,27 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
     setCurrentSessionId(sessionId);
     setIsExecutingCode(true);
 
-    setLines(prev => [...prev, { 
-      type: 'output', 
-      content: `\n▶️ Running ${language} program (interactive mode)...`, 
-      timestamp: new Date() 
+    const isMultiFile = files && files.length > 1;
+    setLines(prev => [...prev, {
+      type: 'output',
+      content: `\n▶️ Running ${language} ${isMultiFile ? 'project' : 'program'} (interactive mode)...`,
+      timestamp: new Date()
     }]);
 
     try {
-      // Start execution
+      // Start execution - send files if available for multi-file projects
+      const requestBody: Record<string, unknown> = { language, sessionId };
+      if (files && files.length > 0) {
+        requestBody.files = files;
+        requestBody.mainFile = mainFile;
+      } else {
+        requestBody.code = code;
+      }
+
       const startRes = await fetch('http://localhost:9876/api/stream/stream-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language, sessionId })
+        body: JSON.stringify(requestBody)
       });
 
       if (!startRes.ok) throw new Error('Failed to start execution');
