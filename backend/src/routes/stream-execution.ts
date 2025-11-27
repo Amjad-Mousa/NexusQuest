@@ -86,13 +86,13 @@ streamExecutionRouter.post('/stream-start', async (req, res) => {
     });
     await writeExec.start({});
 
-    // Execute the code with interactive TTY
+    // Execute the code without TTY to prevent input echo
     const exec = await container.exec({
       Cmd: ['sh', '-c', execCommand],
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
-      Tty: true
+      Tty: false // Disable TTY to prevent automatic echo of input
     });
 
     const stream = await exec.start({ hijack: true, stdin: true });
@@ -124,12 +124,34 @@ streamExecutionRouter.get('/stream-output/:sessionId', (req: Request, res: Respo
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  // Buffer for incomplete frames
+  let buffer = Buffer.alloc(0);
+
   const processOutput = (chunk: Buffer) => {
-    // In TTY mode, Docker doesn't use the multiplexed stream format
-    // Just send raw output
-    const data = chunk.toString('utf8');
-    if (data) {
-      res.write(`data: ${JSON.stringify({ type: 'stdout', data })}\n\n`);
+    // Append new chunk to buffer
+    buffer = Buffer.concat([buffer, chunk]);
+
+    // Process complete frames from buffer
+    while (buffer.length >= 8) {
+      const streamType = buffer.readUInt8(0);
+      const payloadSize = buffer.readUInt32BE(4);
+
+      // Check if we have complete frame
+      if (buffer.length < 8 + payloadSize) {
+        break; // Wait for more data
+      }
+
+      // Extract and send payload
+      if (streamType === 1 || streamType === 2) {
+        const payload = buffer.toString('utf8', 8, 8 + payloadSize);
+        // Only send non-empty payloads
+        if (payload.length > 0) {
+          res.write(`data: ${JSON.stringify({ type: streamType === 1 ? 'stdout' : 'stderr', data: payload })}\n\n`);
+        }
+      }
+
+      // Remove processed frame from buffer
+      buffer = buffer.slice(8 + payloadSize);
     }
   };
 

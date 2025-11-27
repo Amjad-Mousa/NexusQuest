@@ -56,6 +56,12 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
   }, [codeToExecute]);
 
   const executeCodeInteractive = async (code: string) => {
+    // Close any existing EventSource connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
     const sessionId = `session-${Date.now()}`;
     setCurrentSessionId(sessionId);
     setIsExecutingCode(true);
@@ -201,7 +207,8 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
     if (e.key === 'Enter') {
       // If executing code interactively, send as input
       if (isExecutingCode && currentSessionId) {
-        setLines(prev => [...prev, { type: 'command', content: currentCommand, timestamp: new Date() }]);
+        // Echo input as plain output (no prompt prefix)
+        setLines(prev => [...prev, { type: 'output', content: currentCommand, timestamp: new Date() }]);
         sendInput(currentCommand);
         setCurrentCommand('');
       } else {
