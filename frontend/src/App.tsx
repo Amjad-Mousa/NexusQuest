@@ -46,7 +46,7 @@ function App({ user, onLogout }: AppProps) {
   // UI state
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(true);
   const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal'>('console');
-  const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number } | null>(null);
+  const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number; files?: { name: string; content: string }[]; mainFile?: string } | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [fontSize, setFontSize] = useState<number>(() => {
     const saved = localStorage.getItem('nexusquest-fontsize');
@@ -298,11 +298,31 @@ function App({ user, onLogout }: AppProps) {
 
     // Switch to Terminal for interactive execution
     setActiveBottomTab('terminal');
-    
-    // Send code to Terminal for interactive execution
-    setCodeToExecute({ code: code.trim(), timestamp: Date.now() });
-    
-    addToConsole('⏳ Code sent to Terminal for interactive execution', 'info');
+
+    // If we have a project with multiple files, send all files for proper imports
+    if (currentProject && currentProject.files.length > 0) {
+      // Update the current file's content with the latest code before sending
+      const filesForExecution = currentProject.files.map(f => ({
+        name: f.name,
+        content: f._id === currentFile?._id ? code.trim() : f.content
+      }));
+
+      const mainFileName = currentFile?.name || currentProject.files[0].name;
+
+      setCodeToExecute({
+        code: code.trim(),
+        timestamp: Date.now(),
+        files: filesForExecution,
+        mainFile: mainFileName
+      });
+
+      addToConsole(`⏳ Running project with ${filesForExecution.length} file(s)...`, 'info');
+    } else {
+      // Single file mode (no project)
+      setCodeToExecute({ code: code.trim(), timestamp: Date.now() });
+      addToConsole('⏳ Code sent to Terminal for interactive execution', 'info');
+    }
+
     addToConsole('💡 Switch to Terminal tab to see output and provide inputs in real-time', 'info');
   };
 

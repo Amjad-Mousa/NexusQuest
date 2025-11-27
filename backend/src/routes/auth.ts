@@ -167,46 +167,6 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 /**
- * PUT /api/auth/profile
- * Update user profile
- */
-router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
-  try {
-    const { name } = req.body;
-    const userId = req.userId;
-
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { name },
-      { new: true, runValidators: true }
-    );
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found',
-      });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (error) {
-    logger.error('Update profile error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update profile',
-    });
-  }
-});
-
-/**
  * PUT /api/auth/profile/images
  * Update user avatar and cover images
  */

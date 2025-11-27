@@ -16,18 +16,39 @@ const languageImages: Record<string, string> = {
 // Store active sessions with their streams and temp directories
 const activeSessions = new Map<string, { container: Docker.Container; stdin: any; tempDir?: string }>();
 
+// Interface for project files
+interface ProjectFile {
+  name: string;
+  content: string;
+}
+
+// Helper to create directory structure commands
+function createDirectories(files: ProjectFile[], baseDir: string): string[] {
+  const dirs = new Set<string>();
+  files.forEach(f => {
+    const parts = f.name.split('/');
+    if (parts.length > 1) {
+      for (let i = 1; i < parts.length; i++) {
+        dirs.add(parts.slice(0, i).join('/'));
+      }
+    }
+  });
+  return Array.from(dirs).map(d => `mkdir -p ${baseDir}/${d}`);
+}
+
 // Start streaming execution
 streamExecutionRouter.post('/stream-start', async (req, res) => {
-  const { code, language, sessionId } = req.body;
+  const { code, language, sessionId, files, mainFile } = req.body;
 
-  if (!code || !language || !sessionId) {
+  // Support both single file (code) and multi-file (files array) modes
+  if ((!code && !files) || !language || !sessionId) {
     res.status(400).json({ success: false, error: 'Missing required fields' });
     return;
   }
 
   try {
     const containerName = `nexusquest-stream-${sessionId}`;
-    
+
     // Create container with interactive shell that stays alive
     const command = ['sh', '-c', 'while true; do sleep 1; done'];
 
@@ -43,7 +64,7 @@ streamExecutionRouter.post('/stream-start', async (req, res) => {
       AttachStderr: true,
       HostConfig: {
         Memory: 256 * 1024 * 1024,
-        AutoRemove: false, // Don't auto-remove so we can get logs even after exit
+        AutoRemove: false,
         NetworkMode: 'none',
         Tmpfs: {
           '/tmp': 'rw,exec,nosuid,size=100m'
@@ -53,38 +74,74 @@ streamExecutionRouter.post('/stream-start', async (req, res) => {
 
     await container.start();
 
-    // Prepare code file and execution command
-    let fileName: string;
+    // Base directory for project files
+    const baseDir = '/tmp/project';
+
+    // Determine if this is a multi-file project
+    const isMultiFile = files && Array.isArray(files) && files.length > 0;
+    const projectFiles: ProjectFile[] = isMultiFile
+      ? files
+      : [{ name: getDefaultFileName(language, code), content: code }];
+
+    // The file to run (either specified mainFile or the single file)
+    const fileToRun = isMultiFile ? (mainFile || projectFiles[0].name) : projectFiles[0].name;
+
+    // Create base directory
+    const mkdirExec = await container.exec({
+      Cmd: ['sh', '-c', `mkdir -p ${baseDir}`],
+      AttachStdout: true,
+      AttachStderr: true
+    });
+    await mkdirExec.start({});
+
+    // Create subdirectories if needed
+    const dirCommands = createDirectories(projectFiles, baseDir);
+    for (const dirCmd of dirCommands) {
+      const dirExec = await container.exec({
+        Cmd: ['sh', '-c', dirCmd],
+        AttachStdout: true,
+        AttachStderr: true
+      });
+      await dirExec.start({});
+    }
+
+    // Write all files
+    for (const file of projectFiles) {
+      const fileBase64 = Buffer.from(file.content).toString('base64');
+      const filePath = `${baseDir}/${file.name}`;
+      const writeExec = await container.exec({
+        Cmd: ['sh', '-c', `echo '${fileBase64}' | base64 -d > ${filePath}`],
+        AttachStdout: true,
+        AttachStderr: true
+      });
+      await writeExec.start({});
+    }
+
+    // Prepare execution command based on language
     let execCommand: string;
-    
+
     if (language === 'python') {
-      fileName = '/tmp/code.py';
-      execCommand = 'python3 -u /tmp/code.py';
+      // Set PYTHONPATH so imports work from project root
+      execCommand = `cd ${baseDir} && PYTHONPATH=${baseDir} python3 -u ${fileToRun}`;
     } else if (language === 'javascript') {
-      fileName = '/tmp/code.js';
-      execCommand = 'node /tmp/code.js';
+      // Node.js can require relative paths from the working directory
+      execCommand = `cd ${baseDir} && node ${fileToRun}`;
     } else if (language === 'cpp') {
-      fileName = '/tmp/main.cpp';
-      execCommand = 'g++ -std=c++20 /tmp/main.cpp -o /tmp/a.out && /tmp/a.out';
+      // Compile all .cpp files together
+      const cppFiles = projectFiles.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
+      execCommand = `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
     } else if (language === 'java') {
-      const classMatch = code.match(/public\s+class\s+(\w+)/);
+      // Find the main class from the main file
+      const mainFileContent = projectFiles.find(f => f.name === fileToRun)?.content || code;
+      const classMatch = mainFileContent.match(/public\s+class\s+(\w+)/);
       const className = classMatch ? classMatch[1] : 'Main';
-      fileName = `/tmp/${className}.java`;
-      execCommand = `javac /tmp/${className}.java -d /tmp && java -cp /tmp ${className}`;
+      const javaFiles = projectFiles.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
+      execCommand = `cd ${baseDir} && javac ${javaFiles} -d . && java -cp . ${className}`;
     } else {
       await container.remove({ force: true });
       res.status(400).json({ success: false, error: 'Unsupported language' });
       return;
     }
-
-    // Write code to file using base64 encoding to avoid shell escaping issues
-    const codeBase64 = Buffer.from(code).toString('base64');
-    const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `echo '${codeBase64}' | base64 -d > ${fileName}`],
-      AttachStdout: true,
-      AttachStderr: true
-    });
-    await writeExec.start({});
 
     // Execute the code without TTY to prevent input echo
     const exec = await container.exec({
@@ -92,22 +149,34 @@ streamExecutionRouter.post('/stream-start', async (req, res) => {
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
-      Tty: false // Disable TTY to prevent automatic echo of input
+      Tty: false
     });
 
     const stream = await exec.start({ hijack: true, stdin: true });
 
-    activeSessions.set(sessionId, { container, stdin: stream, tempDir: undefined });
+    activeSessions.set(sessionId, { container, stdin: stream, tempDir: baseDir });
 
     res.json({ success: true, sessionId });
   } catch (error) {
     logger.error('Stream execution failed:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
+
+// Helper to get default file name based on language
+function getDefaultFileName(language: string, code: string): string {
+  if (language === 'python') return 'main.py';
+  if (language === 'javascript') return 'main.js';
+  if (language === 'cpp') return 'main.cpp';
+  if (language === 'java') {
+    const classMatch = code.match(/public\s+class\s+(\w+)/);
+    return classMatch ? `${classMatch[1]}.java` : 'Main.java';
+  }
+  return 'code.txt';
+}
 
 // Get output stream (SSE)
 streamExecutionRouter.get('/stream-output/:sessionId', (req: Request, res: Response) => {
@@ -160,14 +229,14 @@ streamExecutionRouter.get('/stream-output/:sessionId', (req: Request, res: Respo
   session.stdin.on('end', async () => {
     res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
     res.end();
-    
+
     // Cleanup container
     try {
       await session.container.remove({ force: true });
     } catch (err) {
       logger.error('Failed to remove container:', err);
     }
-    
+
     activeSessions.delete(sessionId);
   });
 
@@ -195,9 +264,9 @@ streamExecutionRouter.post('/stream-input', async (req, res) => {
     session.stdin.write(input + '\n');
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to send input' 
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to send input'
     });
   }
 });
