@@ -152,12 +152,24 @@ export function Profile({ user, onLogout }: ProfileProps) {
       const data = await response.json();
       
       if (data.success) {
+        console.log('Profile updated successfully:', data.user);
+        
+        // Update localStorage with new user data
+        const storedUser = localStorage.getItem('nexusquest-user');
+        if (storedUser) {
+          const userObj = JSON.parse(storedUser);
+          if (data.user.name) userObj.name = data.user.name;
+          localStorage.setItem('nexusquest-user', JSON.stringify(userObj));
+        }
+        
         setShowEditModal(false);
         setEditName('');
         setEditPassword('');
         setEditConfirmPassword('');
-        alert('Profile updated successfully!');
-        console.log('Profile updated:', data.user);
+        // Reload immediately to show updated name
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
       } else {
         console.error('Update failed:', data.error);
         alert(data.error || 'Failed to update profile. Please try again.');
