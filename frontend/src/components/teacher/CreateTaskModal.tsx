@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Task, TaskDifficulty, TaskLanguage, createTask, updateTask } from '../../services/taskService';
 
@@ -17,6 +17,8 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
   const [difficulty, setDifficulty] = useState<TaskDifficulty>('easy');
   const [language, setLanguage] = useState<TaskLanguage>('python');
   const [starterCode, setStarterCode] = useState('');
+  const [solution, setSolution] = useState('');
+  const [showSolution, setShowSolution] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,6 +30,7 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
       setDifficulty(task.difficulty);
       setLanguage(task.language);
       setStarterCode(task.starterCode || '');
+      setSolution(task.solution || '');
     }
   }, [task]);
 
@@ -38,9 +41,9 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
 
     try {
       if (task) {
-        await updateTask(task._id, { title, description, points, difficulty, language, starterCode });
+        await updateTask(task._id, { title, description, points, difficulty, language, starterCode, solution });
       } else {
-        await createTask({ title, description, points, difficulty, language, starterCode });
+        await createTask({ title, description, points, difficulty, language, starterCode, solution });
       }
       onSave();
     } catch (err) {
@@ -104,6 +107,37 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
           <div>
             <label className="block text-sm font-medium mb-1">Starter Code (optional)</label>
             <textarea value={starterCode} onChange={e => setStarterCode(e.target.value)} className={`${inputClass} font-mono text-sm min-h-[120px]`} placeholder="# Starter code for the task..." />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium">
+                Correct Solution <span className="text-gray-500">(hidden from students)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowSolution(!showSolution)}
+                className={`flex items-center gap-1 text-xs px-2 py-1 rounded ${
+                  theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-400' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                }`}
+              >
+                {showSolution ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                {showSolution ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showSolution && (
+              <textarea
+                value={solution}
+                onChange={e => setSolution(e.target.value)}
+                className={`${inputClass} font-mono text-sm min-h-[150px]`}
+                placeholder="# Write the correct solution here..."
+              />
+            )}
+            {!showSolution && solution && (
+              <div className={`px-3 py-2 rounded-lg text-sm ${theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                ✓ Solution saved ({solution.split('\n').length} lines)
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

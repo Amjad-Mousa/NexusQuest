@@ -12,6 +12,7 @@ export interface ITask extends Document {
   language: TaskLanguage;
   createdBy: mongoose.Types.ObjectId;
   starterCode?: string;
+  solution?: string; // Correct answer - only visible to the teacher who created the task
   testCases?: {
     input: string;
     expectedOutput: string;
@@ -62,6 +63,11 @@ const taskSchema = new Schema<ITask>(
     starterCode: {
       type: String,
       default: '',
+    },
+    solution: {
+      type: String,
+      default: '',
+      select: false, // Don't include in queries by default for security
     },
     testCases: [
       {

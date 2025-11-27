@@ -47,10 +47,11 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Get tasks created by the current teacher
+// Get tasks created by the current teacher (includes solution)
 router.get('/my-tasks', teacherMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const tasks = await Task.find({ createdBy: req.userId })
+      .select('+solution') // Include solution for teacher's own tasks
       .sort({ createdAt: -1 });
 
     res.json({
@@ -81,7 +82,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 // Create a new task (teachers only)
 router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, points, difficulty, language, starterCode, testCases } = req.body;
+    const { title, description, points, difficulty, language, starterCode, solution, testCases } = req.body;
 
     const task = await Task.create({
       title,
@@ -91,6 +92,7 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
       language: language || 'python',
       createdBy: req.userId,
       starterCode,
+      solution,
       testCases,
     });
 
@@ -104,13 +106,14 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
 // Update a task (teachers only, own tasks)
 router.put('/:id', teacherMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const task = await Task.findOne({ _id: req.params.id, createdBy: req.userId });
+    const task = await Task.findOne({ _id: req.params.id, createdBy: req.userId })
+      .select('+solution'); // Include solution for updating
 
     if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found or not authorized' });
     }
 
-    const { title, description, points, difficulty, language, starterCode, testCases } = req.body;
+    const { title, description, points, difficulty, language, starterCode, solution, testCases } = req.body;
 
     if (title) task.title = title;
     if (description) task.description = description;
@@ -118,6 +121,7 @@ router.put('/:id', teacherMiddleware, async (req: AuthRequest, res: Response) =>
     if (difficulty) task.difficulty = difficulty;
     if (language) task.language = language;
     if (starterCode !== undefined) task.starterCode = starterCode;
+    if (solution !== undefined) task.solution = solution;
     if (testCases) task.testCases = testCases;
 
     await task.save();

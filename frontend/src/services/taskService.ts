@@ -24,6 +24,7 @@ export interface Task {
     email: string;
   };
   starterCode?: string;
+  solution?: string; // Only visible to the teacher who created the task
   testCases?: TestCase[];
   createdAt: string;
   updatedAt: string;
@@ -36,6 +37,7 @@ export interface CreateTaskInput {
   difficulty: TaskDifficulty;
   language?: TaskLanguage;
   starterCode?: string;
+  solution?: string;
   testCases?: TestCase[];
 }
 
