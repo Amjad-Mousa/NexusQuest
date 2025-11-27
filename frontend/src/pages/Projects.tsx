@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { UserSidebar } from '../components/UserSidebar';
 
 interface ProjectsProps {
-  user: { name: string; email: string } | null;
+  user: { name: string; email: string; avatarImage?: string } | null;
   onLogout: () => void;
 }
 
@@ -142,9 +142,17 @@ export function Projects({ user, onLogout }: ProjectsProps) {
             </Button>
             <Button
               onClick={() => setShowSidePanel(true)}
-              className={`h-9 px-3 ${theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'}`}
+              className={`h-9 px-3 flex items-center gap-2 ${theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'}`}
             >
-              <User className="w-4 h-4 mr-2" />
+              {user?.avatarImage ? (
+                <img 
+                  src={user.avatarImage} 
+                  alt="Avatar" 
+                  className="w-6 h-6 rounded-full object-cover" 
+                />
+              ) : (
+                <User className="w-4 h-4" />
+              )}
               {user?.name}
             </Button>
           </div>

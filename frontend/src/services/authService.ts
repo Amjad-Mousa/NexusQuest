@@ -7,6 +7,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  avatarImage?: string;
+  coverImage?: string;
 }
 
 export interface AuthResponse {

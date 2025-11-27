@@ -606,11 +606,19 @@ function App({ user, onLogout }: AppProps) {
                   onClick={() => setShowSidePanel(true)}
                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}>
-                    <User className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
-                  </div>
+                  {avatarImage ? (
+                    <img 
+                      src={avatarImage} 
+                      alt="Avatar" 
+                      className="w-8 h-8 rounded-full object-cover" 
+                    />
+                  ) : (
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
+                    }`}>
+                      <User className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
+                    </div>
+                  )}
                   <span className={`text-xs hidden sm:block ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                     {user.name}
                   </span>

@@ -12,13 +12,13 @@ import { ThemeProvider } from './context/ThemeContext.tsx'
 import './index.css'
 
 function Root() {
-  const [user, setUser] = React.useState<{ name: string; email: string } | null>(() => {
+  const [user, setUser] = React.useState<{ name: string; email: string; avatarImage?: string } | null>(() => {
     const stored = localStorage.getItem('nexusquest-user');
     return stored ? JSON.parse(stored) : null;
   });
 
-  const handleAuth = (userData: { id: string; name: string; email: string }) => {
-    setUser({ name: userData.name, email: userData.email });
+  const handleAuth = (userData: { id: string; name: string; email: string; avatarImage?: string }) => {
+    setUser({ name: userData.name, email: userData.email, avatarImage: userData.avatarImage });
   };
 
   const handleLogout = () => {

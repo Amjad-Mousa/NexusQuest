@@ -64,6 +64,8 @@ router.post('/signup', async (req: AuthRequest, res: Response) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        avatarImage: user.avatarImage,
+        coverImage: user.coverImage,
       },
     });
   } catch (error) {
@@ -122,6 +124,8 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        avatarImage: user.avatarImage,
+        coverImage: user.coverImage,
       },
     });
   } catch (error) {

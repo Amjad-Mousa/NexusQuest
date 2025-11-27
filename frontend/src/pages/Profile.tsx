@@ -262,13 +262,21 @@ export function Profile({ user, onLogout }: ProfileProps) {
           <Button
             onClick={() => setShowSidePanel(true)}
             variant="outline"
-            className={`${
+            className={`flex items-center gap-2 ${
               theme === 'dark'
                 ? 'border-gray-700 text-gray-300 hover:bg-gray-800'
                 : 'border-gray-300 text-gray-700 hover:bg-gray-100'
             }`}
           >
-            <User className="w-4 h-4 mr-2" />
+            {avatarImage ? (
+              <img 
+                src={avatarImage} 
+                alt="Avatar" 
+                className="w-6 h-6 rounded-full object-cover" 
+              />
+            ) : (
+              <User className="w-4 h-4" />
+            )}
             {user?.name}
           </Button>
         </div>
