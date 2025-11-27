@@ -32,7 +32,7 @@ function Root() {
         <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Home />} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/editor" element={user ? <App user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/projects" element={user ? <Projects user={user} /> : <Navigate to="/" />} />
+        <Route path="/projects" element={user ? <Projects user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/project/:projectId" element={user ? <App user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
