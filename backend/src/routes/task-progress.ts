@@ -13,7 +13,7 @@ router.get('/my-progress', async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.query;
     const filter: Record<string, unknown> = { userId: req.userId };
-    
+
     if (status) filter.status = status;
 
     const progress = await UserTaskProgress.find(filter)
@@ -51,20 +51,20 @@ router.post('/:taskId/start', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
-    // Check if already started
-    let progress = await UserTaskProgress.findOne({
-      userId: req.userId,
-      taskId: req.params.taskId,
-    });
-
-    if (!progress) {
-      progress = await UserTaskProgress.create({
-        userId: req.userId,
-        taskId: req.params.taskId,
-        status: 'started',
-        code: task.starterCode || '',
-      });
-    }
+    // Use findOneAndUpdate with upsert to handle race conditions atomically
+    const progress = await UserTaskProgress.findOneAndUpdate(
+      { userId: req.userId, taskId: req.params.taskId },
+      {
+        $setOnInsert: {
+          userId: req.userId,
+          taskId: req.params.taskId,
+          status: 'started',
+          code: task.starterCode || '',
+          startedAt: new Date(),
+        }
+      },
+      { upsert: true, new: true }
+    );
 
     res.json({ success: true, data: progress });
   } catch (error: unknown) {
@@ -101,7 +101,7 @@ router.put('/:taskId/complete', async (req: AuthRequest, res: Response) => {
 
     const progress = await UserTaskProgress.findOneAndUpdate(
       { userId: req.userId, taskId: req.params.taskId },
-      { 
+      {
         status: 'completed',
         code,
         completedAt: new Date(),
