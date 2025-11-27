@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { 
@@ -19,7 +19,80 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'achievements' | 'settings'>('overview');
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
+
+  // Load user images on mount
+  useEffect(() => {
+    const loadUserImages = async () => {
+      try {
+        const token = localStorage.getItem('nexusquest-token');
+        const response = await fetch('http://localhost:9876/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (data.success && data.user) {
+          setAvatarImage(data.user.avatarImage || null);
+          setCoverImage(data.user.coverImage || null);
+        }
+      } catch (error) {
+        console.error('Failed to load user images:', error);
+      }
+    };
+    loadUserImages();
+  }, []);
+
+  const updateImages = async (avatarData?: string, coverData?: string) => {
+    try {
+      const token = localStorage.getItem('nexusquest-token');
+      const response = await fetch('http://localhost:9876/api/auth/profile/images', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          avatarImage: avatarData,
+          coverImage: coverData
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        if (avatarData !== undefined) setAvatarImage(avatarData);
+        if (coverData !== undefined) setCoverImage(coverData);
+      }
+    } catch (error) {
+      console.error('Failed to update images:', error);
+    }
+  };
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageData = reader.result as string;
+        updateImages(imageData, undefined);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCoverChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageData = reader.result as string;
+        updateImages(undefined, imageData);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Mock data
   const profileData = {
@@ -126,11 +199,19 @@ export function Profile({ user, onLogout }: ProfileProps) {
             <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}>
-                    <User className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
-                  </div>
+                  {avatarImage ? (
+                    <img
+                      src={avatarImage}
+                      alt="Avatar"
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {user?.name}
@@ -270,22 +351,55 @@ export function Profile({ user, onLogout }: ProfileProps) {
         {/* Profile Header Card */}
         <div className={`${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200 shadow-lg'} border rounded-2xl overflow-hidden mb-8`}>
           {/* Cover Image */}
-          <div className="h-32 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 relative">
-            <button className={`absolute bottom-4 right-4 ${theme === 'dark' ? 'bg-gray-900 hover:bg-gray-800' : 'bg-white hover:bg-gray-100'} rounded-lg p-2 shadow-lg transition-colors`}>
+          <div className="h-32 relative overflow-hidden">
+            {coverImage ? (
+              <img src={coverImage} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600" />
+            )}
+            <input
+              type="file"
+              id="cover-upload"
+              accept="image/*"
+              onChange={handleCoverChange}
+              className="hidden"
+            />
+            <label
+              htmlFor="cover-upload"
+              className={`absolute bottom-4 right-4 ${theme === 'dark' ? 'bg-gray-900 hover:bg-gray-800' : 'bg-white hover:bg-gray-100'} rounded-lg p-2 shadow-lg transition-colors cursor-pointer`}
+            >
               <Camera className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
-            </button>
+            </label>
           </div>
 
           <div className="px-8 pb-6">
             {/* Avatar */}
             <div className="flex items-end justify-between -mt-12 mb-4">
               <div className="relative">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-4xl font-bold text-white shadow-xl border-4 border-gray-900">
-                  {user?.name?.charAt(0).toUpperCase()}
-                </div>
-                <button className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 rounded-full p-2 shadow-lg transition-colors">
+                {avatarImage ? (
+                  <img
+                    src={avatarImage}
+                    alt="Avatar"
+                    className={`w-24 h-24 rounded-2xl object-cover shadow-xl border-4 ${theme === 'dark' ? 'border-gray-900' : 'border-white'}`}
+                  />
+                ) : (
+                  <div className={`w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-4xl font-bold text-white shadow-xl border-4 ${theme === 'dark' ? 'border-gray-900' : 'border-white'}`}>
+                    {user?.name?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <input
+                  type="file"
+                  id="avatar-upload"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="avatar-upload"
+                  className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 rounded-full p-2 shadow-lg transition-colors cursor-pointer"
+                >
                   <Camera className="w-3 h-3 text-white" />
-                </button>
+                </label>
               </div>
               <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
                 <Edit className="w-4 h-4 mr-2" />

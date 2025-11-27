@@ -148,6 +148,8 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
         name: user?.name,
         email: user?.email,
         role: user?.role,
+        avatarImage: user?.avatarImage,
+        coverImage: user?.coverImage,
         createdAt: user?.createdAt,
       },
     });
@@ -196,6 +198,60 @@ router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
     res.status(500).json({
       success: false,
       error: 'Failed to update profile',
+    });
+  }
+});
+
+/**
+ * PUT /api/auth/profile/images
+ * Update user avatar and cover images
+ */
+router.put('/profile/images', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { avatarImage, coverImage } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    // Update images if provided
+    if (avatarImage !== undefined) {
+      user.avatarImage = avatarImage;
+    }
+    if (coverImage !== undefined) {
+      user.coverImage = coverImage;
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatarImage: user.avatarImage,
+        coverImage: user.coverImage,
+      },
+    });
+  } catch (error) {
+    logger.error('Update images error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update images',
     });
   }
 });

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Code2, Trophy, Target, BookOpen, Play, CheckCircle2, Clock, Star, TrendingUp, Award, FolderOpen, User, X, Settings, ChevronRight, Moon, Sun, LogOut } from 'lucide-react';
+import { Code2, Trophy, Target, BookOpen, Play, CheckCircle2, Clock, Star, TrendingUp, Award, FolderOpen, User, X, Settings, ChevronRight, Moon, Sun, LogOut, Camera, Upload } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 interface DashboardProps {
@@ -13,7 +13,84 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const navigate = useNavigate();
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [tempAvatar, setTempAvatar] = useState<string | null>(null);
+  const [tempCover, setTempCover] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
+
+  // Load user avatar
+  useEffect(() => {
+    const loadUserAvatar = async () => {
+      try {
+        const token = localStorage.getItem('nexusquest-token');
+        const response = await fetch('http://localhost:9876/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (data.success && data.user) {
+          setAvatarImage(data.user.avatarImage || null);
+          setCoverImage(data.user.coverImage || null);
+        }
+      } catch (error) {
+        console.error('Failed to load user avatar:', error);
+      }
+    };
+    loadUserAvatar();
+  }, []);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTempAvatar(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTempCover(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const updateImages = async () => {
+    try {
+      const token = localStorage.getItem('nexusquest-token');
+      const response = await fetch('http://localhost:9876/api/auth/profile/images', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          avatarImage: tempAvatar || avatarImage,
+          coverImage: tempCover || coverImage
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setAvatarImage(tempAvatar || avatarImage);
+        setCoverImage(tempCover || coverImage);
+        setShowEditProfile(false);
+        setTempAvatar(null);
+        setTempCover(null);
+      }
+    } catch (error) {
+      console.error('Failed to update images:', error);
+    }
+  };
 
   // Mock data - replace with real API calls
   const stats = {
@@ -93,11 +170,19 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}>
-                    <User className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
-                  </div>
+                  {avatarImage ? (
+                    <img
+                      src={avatarImage}
+                      alt="Avatar"
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {user?.name}

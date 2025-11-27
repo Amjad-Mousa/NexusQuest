@@ -9,6 +9,8 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  avatarImage?: string;
+  coverImage?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -41,6 +43,14 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ['user', 'teacher'],
       default: 'user',
+    },
+    avatarImage: {
+      type: String,
+      default: null,
+    },
+    coverImage: {
+      type: String,
+      default: null,
     },
   },
   {

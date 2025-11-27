@@ -142,6 +142,28 @@ function App({ user, onLogout }: AppProps) {
     const saved = localStorage.getItem('nexusquest-fontsize');
     return saved ? parseInt(saved) : 14;
   });
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+
+  // Load user avatar
+  useEffect(() => {
+    const loadUserAvatar = async () => {
+      try {
+        const token = localStorage.getItem('nexusquest-token');
+        const response = await fetch('http://localhost:9876/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (data.success && data.user) {
+          setAvatarImage(data.user.avatarImage || null);
+        }
+      } catch (error) {
+        console.error('Failed to load user avatar:', error);
+      }
+    };
+    loadUserAvatar();
+  }, []);
 
   // Project state
   const [projects, setProjects] = useState<Project[]>([]); // Used for session restoration
@@ -1157,11 +1179,19 @@ function App({ user, onLogout }: AppProps) {
             <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'
-                  }`}>
-                    <User className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`} />
-                  </div>
+                  {avatarImage ? (
+                    <img 
+                      src={avatarImage} 
+                      alt="Avatar" 
+                      className="w-10 h-10 rounded-full object-cover" 
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {user?.name}

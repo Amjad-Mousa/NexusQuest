@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, FolderOpen, Settings, Moon, Sun, LogOut, X } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
@@ -12,6 +13,29 @@ interface UserSidebarProps {
 export function UserSidebar({ user, onLogout, isOpen, onClose }: UserSidebarProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUserAvatar = async () => {
+      try {
+        const token = localStorage.getItem('nexusquest-token');
+        const response = await fetch('http://localhost:9876/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const data = await response.json();
+        if (data.success && data.user) {
+          setAvatarImage(data.user.avatarImage || null);
+        }
+      } catch (error) {
+        console.error('Failed to load user avatar:', error);
+      }
+    };
+    if (isOpen) {
+      loadUserAvatar();
+    }
+  }, [isOpen]);
 
   const handleLogout = () => {
     onClose();
@@ -55,11 +79,19 @@ export function UserSidebar({ user, onLogout, isOpen, onClose }: UserSidebarProp
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-lg">
-                  {user?.name?.charAt(0).toUpperCase()}
-                </span>
-              </div>
+              {avatarImage ? (
+                <img
+                  src={avatarImage}
+                  alt="Avatar"
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">
+                    {user?.name?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
               <div>
                 <div className={`font-semibold ${
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
