@@ -5,6 +5,8 @@ import { Code2, Trophy, Target, BookOpen, Play, Clock, Star, TrendingUp, Award, 
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress } from '../services/taskService';
+import { UserSidePanel } from '@/components/UserSidePanel';
+import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -14,11 +16,13 @@ interface DashboardProps {
 export function Dashboard({ user, onLogout }: DashboardProps) {
   const navigate = useNavigate();
   const [showSidePanel, setShowSidePanel] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
+  const [fontSize, setFontSize] = useState(14);
   const storedUser = getStoredUser();
   const isTeacher = storedUser?.role === 'teacher';
+ 
+  
 
   // Load user avatar
   useEffect(() => {
@@ -69,17 +73,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     streak: 5
   };
 
-  const myProjects = [
-    { id: 1, name: 'Todo App', language: 'JavaScript', lastModified: '2 hours ago' },
-    { id: 2, name: 'Calculator', language: 'Python', lastModified: '1 day ago' },
-    { id: 3, name: 'Sorting Algorithms', language: 'C++', lastModified: '3 days ago' }
-  ];
+
+
+  
 
   const learningPaths = [
     { id: 1, title: 'Python Basics', progress: 75, total: 20 },
     { id: 2, title: 'Data Structures', progress: 40, total: 30 },
     { id: 3, title: 'Algorithms', progress: 20, total: 25 }
   ];
+
+
+   
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100'}`}>
@@ -125,190 +130,20 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
       {/* User Side Panel */}
       {showSidePanel && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => setShowSidePanel(false)}
-          />
-          {/* Panel */}
-          <div className={`fixed top-0 right-0 h-full w-80 z-50 shadow-2xl transform transition-transform duration-300 ${
-            theme === 'dark' ? 'bg-gray-900 border-l border-gray-800' : 'bg-white border-l border-gray-200'
-          }`}>
-            {/* Header */}
-            <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {avatarImage ? (
-                    <img
-                      src={avatarImage}
-                      alt="Avatar"
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                      <span className="text-white font-semibold text-sm">
-                        {user?.name?.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <div>
-                    <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {user?.name}
-                    </p>
-                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {user?.email}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowSidePanel(false)}
-                  className={`p-1 rounded-lg transition-colors ${
-                    theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Menu Items */}
-            <nav className="p-2">
-              <button
-                onClick={() => {
-                  setShowSidePanel(false);
-                  navigate('/profile');
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  theme === 'dark'
-                    ? 'hover:bg-gray-800 text-gray-300'
-                    : 'hover:bg-gray-100 text-gray-700'
-                }`}
-              >
-                <User className="w-5 h-5" />
-                <span>Profile</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowSidePanel(false);
-                  navigate('/dashboard');
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  theme === 'dark'
-                    ? 'hover:bg-gray-800 text-gray-300'
-                    : 'hover:bg-gray-100 text-gray-700'
-                }`}
-              >
-                <Trophy className="w-5 h-5" />
-                <span>Dashboard</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowSidePanel(false);
-                  navigate('/projects');
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  theme === 'dark'
-                    ? 'hover:bg-gray-800 text-gray-300'
-                    : 'hover:bg-gray-100 text-gray-700'
-                }`}
-              >
-                <FolderOpen className="w-5 h-5" />
-                <span>Projects</span>
-              </button>
-
-              {/* Teacher Dashboard - only visible for teachers */}
-              {isTeacher && (
-                <button
-                  onClick={() => {
-                    setShowSidePanel(false);
-                    navigate('/teacher');
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    theme === 'dark'
-                      ? 'hover:bg-gray-800 text-gray-300'
-                      : 'hover:bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  <GraduationCap className="w-5 h-5 text-purple-400" />
-                  <span>Teacher Dashboard</span>
-                </button>
-              )}
-
-              {/* Settings Section */}
-              <div className="mt-2">
-                <button
-                  onClick={() => setShowSettings(!showSettings)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                    theme === 'dark'
-                      ? 'hover:bg-gray-800 text-gray-300'
-                      : 'hover:bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-5 h-5" />
-                    <span>Settings</span>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${showSettings ? 'rotate-90' : ''}`} />
-                </button>
-
-                {showSettings && (
-                  <div className={`mt-1 ml-4 mr-2 p-3 rounded-lg ${
-                    theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-100'
-                  }`}>
-                    {/* Dark Mode Toggle */}
-                    <div className="flex items-center justify-between py-2">
-                      <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Dark Mode
-                      </span>
-                      <button
-                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                        className={`relative w-11 h-6 rounded-full transition-colors ${
-                          theme === 'dark' ? 'bg-blue-600' : 'bg-gray-300'
-                        }`}
-                      >
-                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform flex items-center justify-center ${
-                          theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
-                        }`}>
-                          {theme === 'dark' ? (
-                            <Moon className="w-2.5 h-2.5 text-blue-600" />
-                          ) : (
-                            <Sun className="w-2.5 h-2.5 text-yellow-500" />
-                          )}
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </nav>
-
-            {/* Logout at bottom */}
-            <div className={`absolute bottom-0 left-0 right-0 p-4 border-t ${
-              theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
-            }`}>
-              <button
-                onClick={() => {
-                  setShowSidePanel(false);
-                  onLogout();
-                  navigate('/');
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  theme === 'dark'
-                    ? 'hover:bg-red-500/10 text-red-400'
-                    : 'hover:bg-red-50 text-red-600'
-                }`}
-              >
-                <LogOut className="w-5 h-5" />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          </div>
-        </>
+          <UserSidePanel
+          theme={theme}
+          setTheme={setTheme}
+          user={user}
+          avatarImage={avatarImage}
+          fontSize={fontSize}
+          setFontSize={setFontSize}
+          isOpen={showSidePanel}
+          onClose={() => setShowSidePanel(false)}
+          onLogout={onLogout}
+        />
       )}
-
+   
+      
       <div className="container mx-auto px-4 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
@@ -523,66 +358,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
 
           {/* My Projects Sidebar */}
-          <div>
-            <div className={`${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200 shadow-sm'} border rounded-xl p-6 mb-6`}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} flex items-center gap-2`}>
-                  <FolderOpen className="w-5 h-5 text-blue-400" />
-                  My Projects
-                </h2>
-                <Button
-                  onClick={() => navigate('/projects')}
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  View All
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                {myProjects.map((project) => (
-                  <div
-                    key={project.id}
-                    onClick={() => navigate(`/project/${project.id}`)}
-                    className={`${theme === 'dark' ? 'bg-gray-800/50 border-gray-700 hover:border-blue-500/30' : 'bg-gray-50 border-gray-200 hover:border-blue-400'} border rounded-lg p-4 transition-all cursor-pointer`}
-                  >
-                    <h3 className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-1`}>{project.name}</h3>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        project.language === 'Python' ? 'bg-blue-500/20 text-blue-400' :
-                        project.language === 'JavaScript' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-purple-500/20 text-purple-400'
-                      }`}>
-                        {project.language}
-                      </span>
-                      <span className="text-xs text-gray-400">{project.lastModified}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <Button
-                onClick={() => navigate('/projects')}
-                className="w-full mt-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Create New Project
-              </Button>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl p-6 text-white">
-              <h3 className="text-lg font-bold mb-2">🎯 Daily Challenge</h3>
-              <p className="text-blue-50 text-sm mb-4">
-                Complete today's challenge and earn bonus points!
-              </p>
-              <Button
-                className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold"
-              >
-                Start Challenge
-              </Button>
-            </div>
-          </div>
+          <ProjectsSidebar
+            theme={theme}
+            setTheme={setTheme}
+          />
         </div>
       </div>
     </div>

@@ -72,8 +72,8 @@ export function UserSidePanel({
             <FolderOpen className="w-5 h-5" /><span>Projects</span>
           </button>
 
-          <button onClick={() => { onClose(); navigate('/tournaments'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
-            <Trophy className="w-5 h-5" /><span>Tournaments</span>
+          <button onClick={() => { onClose(); navigate('/tasks'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
+            <Trophy className="w-5 h-5" /><span>Tasks</span>
           </button>
 
           {/* Settings Section */}
