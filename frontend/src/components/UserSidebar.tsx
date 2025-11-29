@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, FolderOpen, Settings, Moon, Sun, LogOut, X } from 'lucide-react';
+import { Trophy, FolderOpen, Settings, Moon, Sun, LogOut, X, User as UserIcon } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 interface UserSidebarProps {
-  user: { name: string; email: string } | null;
+  user: { name: string; email: string; role?: string } | null;
   onLogout: () => void;
   isOpen: boolean;
   onClose: () => void;
@@ -109,7 +109,7 @@ export function UserSidebar({ user, onLogout, isOpen, onClose }: UserSidebarProp
               <button
                 onClick={() => {
                   onClose();
-                  navigate('/dashboard');
+                  navigate(user?.role === 'teacher' ? '/teacher' : '/dashboard');
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                   theme === 'dark'
@@ -119,6 +119,21 @@ export function UserSidebar({ user, onLogout, isOpen, onClose }: UserSidebarProp
               >
                 <Trophy className="w-5 h-5" />
                 <span>Dashboard</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate(user?.role === 'teacher' ? '/teacher-profile' : '/profile');
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  theme === 'dark'
+                    ? 'hover:bg-gray-800 text-white'
+                    : 'hover:bg-gray-100 text-gray-900'
+                }`}
+              >
+                <UserIcon className="w-5 h-5" />
+                <span>Profile</span>
               </button>
 
               <button
