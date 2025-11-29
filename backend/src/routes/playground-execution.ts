@@ -5,6 +5,9 @@ import { logger } from '../utils/logger.js';
 const router = express.Router();
 const docker = new Docker();
 
+// Store active streams for input handling
+const activeStreams = new Map<string, any>();
+
 interface PlaygroundRequest extends Request {
   body: {
     code: string;
@@ -88,16 +91,44 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
     logger.info(`Container started: ${containerName}`);
 
     // Write code to file
-    const fileName = getDefaultFileName(language);
-    const filePath = `/tmp/${fileName}`;
-    const codeBase64 = Buffer.from(code).toString('base64');
+    let fileName: string;
+    let filePath: string;
+    let className: string | undefined;
+    
+    // For Java, extract class name and use it as filename
+    if (language === 'java') {
+      const classMatch = code.match(/public\s+class\s+(\w+)/);
+      className = classMatch ? classMatch[1] : 'Main';
+      fileName = `${className}.java`;
+      filePath = `/tmp/${fileName}`;
+      logger.info(`Java class name: ${className}, file: ${fileName}`);
+    } else {
+      fileName = getDefaultFileName(language);
+      filePath = `/tmp/${fileName}`;
+    }
+    
+    // Write code using cat with heredoc to avoid issues with special characters
+    const escapedCode = code.replace(/'/g, "'\\''");
     
     const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `echo '${codeBase64}' | base64 -d > ${filePath}`],
+      Cmd: ['sh', '-c', `cat > ${filePath} << 'EOFCODE'\n${escapedCode}\nEOFCODE`],
       AttachStdout: true,
       AttachStderr: true
     });
     await writeExec.start({});
+
+    // Verify file was created (for Java debugging)
+    if (language === 'java') {
+      const verifyExec = await container.exec({
+        Cmd: ['sh', '-c', `ls -la /tmp/${fileName} && head -5 /tmp/${fileName}`],
+        AttachStdout: true,
+        AttachStderr: true
+      });
+      const verifyStream = await verifyExec.start({});
+      verifyStream.on('data', (chunk: Buffer) => {
+        logger.info(`Java file verification: ${chunk.toString()}`);
+      });
+    }
 
     // Prepare execution command
     let execCommand: string;
@@ -109,9 +140,10 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
     } else if (language === 'cpp') {
       execCommand = `g++ -std=c++20 ${filePath} -o /tmp/a.out && /tmp/a.out`;
     } else if (language === 'java') {
-      const classMatch = code.match(/public\s+class\s+(\w+)/);
-      const className = classMatch ? classMatch[1] : 'Main';
-      execCommand = `cd /tmp && javac ${fileName} && java ${className}`;
+      // Use the className from above
+      const finalClassName = className || 'Main';
+      execCommand = `cd /tmp && javac ${fileName} && java -cp /tmp ${finalClassName}`;
+      logger.info(`Java execution command: ${execCommand}`);
     } else {
       await container.remove({ force: true });
       res.write(`data: ${JSON.stringify({ type: 'error', content: 'Unsupported language' })}\n\n`);
@@ -133,9 +165,13 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
       stdin: true
     });
 
+    // Store stream for input handling
+    activeStreams.set(sessionId, stream);
+
     // Handle client disconnect
     req.on('close', async () => {
       try {
+        activeStreams.delete(sessionId);
         stream.end();
         await container.remove({ force: true });
         logger.info(`Container removed after client disconnect: ${containerName}`);
@@ -156,6 +192,9 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
       res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
       res.end();
       
+      // Clean up
+      activeStreams.delete(sessionId);
+      
       try {
         await container.remove({ force: true });
         logger.info(`Container removed after execution: ${containerName}`);
@@ -168,6 +207,9 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
       logger.error(`Stream error: ${error.message}`);
       res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
       res.end();
+      
+      // Clean up
+      activeStreams.delete(sessionId);
       
       try {
         await container.remove({ force: true });
@@ -197,20 +239,20 @@ router.post('/input', async (req: Request, res: Response) => {
     });
   }
 
-  const containerName = `nexusquest-playground-${sessionId}`;
-
   try {
-    const container = docker.getContainer(containerName);
-    const attach = await container.attach({
-      stream: true,
-      stdin: true,
-      stdout: false,
-      stderr: false
-    });
+    const stream = activeStreams.get(sessionId);
+    
+    if (!stream) {
+      return res.status(404).json({
+        success: false,
+        error: 'No active execution found for this session',
+      });
+    }
 
-    attach.write(input + '\n');
-    attach.end();
-
+    // Write input to the stream
+    stream.write(input + '\n');
+    
+    logger.info(`Input sent to session ${sessionId}: ${input}`);
     res.json({ success: true });
   } catch (error: any) {
     logger.error('Failed to send input:', error);
