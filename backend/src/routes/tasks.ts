@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { Task } from '../models/Task.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { User } from '../models/User.js';
+import { executeCode } from '../services/dockerService.js';
 
 const router = Router();
 
@@ -148,5 +149,93 @@ router.delete('/:id', teacherMiddleware, async (req: AuthRequest, res: Response)
   }
 });
 
-export default router;
+// Run all test cases for a task against submitted code
+router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.body as { code?: string };
 
+    if (!code || !code.trim()) {
+      return res.status(400).json({ success: false, error: 'Code is required' });
+    }
+
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
+
+    const testCases = task.testCases || [];
+
+    if (testCases.length === 0) {
+      return res.status(400).json({ success: false, error: 'No test cases defined for this task' });
+    }
+
+    const normalize = (value: string): string => {
+      return value.replace(/\r\n/g, '\n').trim();
+    };
+
+    const results = [] as Array<{
+      index: number;
+      passed: boolean;
+      input: string;
+      actualOutput: string;
+      error?: string;
+    }>;
+
+    for (let i = 0; i < testCases.length; i++) {
+      const test = testCases[i];
+
+      try {
+        // Hard timeout per test so a hanging container doesn't block all results
+        const execResult = await Promise.race([
+          executeCode(code, task.language, test.input),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Test execution timeout (10 seconds)')), 10000);
+          }),
+        ]);
+
+        const actual = (execResult as any).error
+          ? (execResult as any).error
+          : (execResult as any).output;
+
+        const passed = !(execResult as any).error && normalize(actual) === normalize(test.expectedOutput);
+
+        results.push({
+          index: i,
+          passed,
+          // Show input only if not hidden
+          input: test.isHidden ? '(hidden)' : test.input,
+          // Never show expected output to students
+          actualOutput: test.isHidden ? (passed ? '(correct)' : '(incorrect)') : actual,
+          error: (execResult as any).error || undefined,
+        });
+      } catch (error: any) {
+        results.push({
+          index: i,
+          passed: false,
+          input: test.isHidden ? '(hidden)' : test.input,
+          actualOutput: '',
+          error: error?.message || 'Execution failed',
+        });
+      }
+    }
+
+    const passed = results.filter(r => r.passed).length;
+
+    res.json({
+      success: true,
+      data: {
+        total: results.length,
+        passed,
+        results,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error?.message || 'Failed to run tests',
+    });
+  }
+});
+
+export default router;

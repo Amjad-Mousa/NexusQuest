@@ -52,8 +52,18 @@ function demuxStream(stream: any): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
+    let dataReceived = false;
+
+    const timeout = setTimeout(() => {
+      if (!dataReceived) {
+        logger.warn('No data received from stream after 2 seconds');
+      }
+    }, 2000);
 
     stream.on('data', (chunk: Buffer) => {
+      dataReceived = true;
+      clearTimeout(timeout);
+
       // Docker uses 8-byte headers for multiplexed streams
       let offset = 0;
       while (offset < chunk.length) {
@@ -75,10 +85,12 @@ function demuxStream(stream: any): Promise<{ stdout: string; stderr: string }> {
     });
 
     stream.on('end', () => {
+      clearTimeout(timeout);
       resolve({ stdout, stderr });
     });
 
     stream.on('error', (err: Error) => {
+      clearTimeout(timeout);
       reject(err);
     });
   });
@@ -88,20 +100,24 @@ function demuxStream(stream: any): Promise<{ stdout: string; stderr: string }> {
 function getExecutionCommand(language: string, mainFile: string): string {
   switch (language.toLowerCase()) {
     case 'python':
-      return `python3 -u /app/${mainFile}`;
+      return `python3 -u ${mainFile}`;
 
     case 'javascript':
-      return `node /app/${mainFile}`;
+      return `node ${mainFile}`;
 
     case 'java': {
-      const className = mainFile.replace('.java', '');
-      return `cd /app && javac ${mainFile} && java ${className}`;
+      const baseName = mainFile.substring(mainFile.lastIndexOf('/') + 1);
+      const className = baseName.replace('.java', '');
+      const dir = mainFile.substring(0, mainFile.lastIndexOf('/'));
+      return `cd ${dir} && javac ${baseName} && java ${className}`;
     }
 
     case 'cpp':
     case 'c++': {
-      const outputName = mainFile.replace('.cpp', '');
-      return `cd /app && g++ -std=c++20 -o ${outputName} ${mainFile} && ./${outputName}`;
+      const baseName = mainFile.substring(mainFile.lastIndexOf('/') + 1);
+      const outputName = baseName.replace('.cpp', '');
+      const dir = mainFile.substring(0, mainFile.lastIndexOf('/'));
+      return `cd ${dir} && g++ -std=c++20 -o ${outputName} ${baseName} && ./${outputName}`;
     }
 
     default:
@@ -114,7 +130,10 @@ export async function executeCode(code: string, language: string, input?: string
   const startTime = Date.now();
   const containerName = persistentContainers[language.toLowerCase()];
 
+  logger.info(`[executeCode] Starting execution for language: ${language}, input: ${input ? 'yes' : 'no'}`);
+
   if (!containerName) {
+    logger.error(`[executeCode] Unsupported language: ${language}`);
     return {
       output: '',
       error: `Unsupported language: ${language}`,
@@ -124,23 +143,28 @@ export async function executeCode(code: string, language: string, input?: string
 
   try {
     const container = docker.getContainer(containerName);
+    logger.info(`[executeCode] Got container reference: ${containerName}`);
 
     // Check if container exists and is running
     try {
       const info = await container.inspect();
+      logger.info(`[executeCode] Container state: ${info.State.Status}, Running: ${info.State.Running}`);
+
       if (!info.State.Running) {
-        logger.info(`Starting container: ${containerName}`);
+        logger.info(`[executeCode] Starting container: ${containerName}`);
         await container.start();
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (err: any) {
       if (err.statusCode === 404) {
+        logger.error(`[executeCode] Container not found: ${containerName}`);
         return {
           output: '',
           error: `Container ${containerName} not found. Please run: docker-compose up -d`,
           executionTime: Date.now() - startTime,
         };
       }
+      logger.error(`[executeCode] Container inspect error:`, err);
       throw err;
     }
 
@@ -165,23 +189,52 @@ export async function executeCode(code: string, language: string, input?: string
         fileName = 'main.txt';
     }
 
-    // Write code to file using heredoc for safety
+    // Use a unique temp directory for each execution
+    const tempDir = `/tmp/nexusquest-exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    logger.info(`[executeCode] Using temp directory: ${tempDir}`);
+
+    // Create temp directory
+    logger.info(`[executeCode] Creating directory...`);
+    const mkdirExec = await container.exec({
+      Cmd: ['sh', '-c', `mkdir -p ${tempDir}`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const mkdirStream = await mkdirExec.start({ hijack: true });
+    await new Promise((resolve) => {
+      mkdirStream.on('end', resolve);
+      mkdirStream.on('error', (err: any) => {
+        logger.error('[executeCode] mkdir error:', err);
+        resolve(null);
+      });
+    });
+
+    // Write code to file
+    logger.info(`[executeCode] Writing code to file: ${fileName}`);
+    const escapedCode = code.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
     const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `cat > /app/${fileName} << 'EOFCODE'\n${code}\nEOFCODE`],
+      Cmd: ['sh', '-c', `echo "${escapedCode}" > ${tempDir}/${fileName}`],
       AttachStdout: true,
       AttachStderr: true,
     });
 
     const writeStream = await writeExec.start({ hijack: true });
-    await new Promise((resolve) => writeStream.on('end', resolve));
+    await new Promise((resolve) => {
+      writeStream.on('end', resolve);
+      writeStream.on('error', (err: any) => {
+        logger.error('[executeCode] write error:', err);
+        resolve(null);
+      });
+    });
 
     // Execute the code
-    const execCommand = getExecutionCommand(language, fileName);
-    logger.info(`Executing: ${execCommand}`);
+    const execCommand = getExecutionCommand(language, `${tempDir}/${fileName}`);
+    logger.info(`[executeCode] Executing command: ${execCommand}`);
+    logger.info(`[executeCode] With input: "${input}"`);
 
     const exec = await container.exec({
       Cmd: ['sh', '-c', execCommand],
-      AttachStdin: !!input,
+      AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
@@ -189,41 +242,61 @@ export async function executeCode(code: string, language: string, input?: string
 
     const stream = await exec.start({
       hijack: true,
-      stdin: !!input,
+      stdin: true,
     });
+
+    logger.info(`[executeCode] Stream started`);
 
     // Send input if provided
     if (input) {
-      stream.write(input + '\n');
+      logger.info(`[executeCode] Writing input to stream...`);
+
+      // Simple approach: write and immediately end
+      stream.write(input);
+      stream.write('\n');
+
+      // Give it a moment to flush
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       stream.end();
+      logger.info(`[executeCode] Input sent and stream ended`);
+    } else {
+      // No input - close stdin immediately
+      stream.end();
+      logger.info(`[executeCode] No input - stdin closed`);
     }
 
     // Set timeout
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
+        logger.error('[executeCode] TIMEOUT - destroying stream');
         stream.destroy();
         reject(new Error('Execution timeout (10 seconds)'));
       }, 10000);
     });
 
     // Get output
+    logger.info(`[executeCode] Waiting for output...`);
     const outputPromise = demuxStream(stream);
     const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
+
+    logger.info(`[executeCode] Got output - stdout: "${stdout}", stderr: "${stderr}"`);
 
     // Cleanup files
     try {
       const cleanupExec = await container.exec({
-        Cmd: ['sh', '-c', `cd /app && rm -f ${fileName} *.class ${fileName.replace('.cpp', '')}`],
+        Cmd: ['sh', '-c', `rm -rf ${tempDir}`],
         AttachStdout: false,
         AttachStderr: false,
       });
       const cleanStream = await cleanupExec.start({});
-      cleanStream.resume(); // Drain stream
+      cleanStream.resume();
     } catch (cleanupErr) {
-      logger.warn('Cleanup warning:', cleanupErr);
+      logger.warn('[executeCode] Cleanup warning:', cleanupErr);
     }
 
     const executionTime = Date.now() - startTime;
+    logger.info(`[executeCode] Execution completed in ${executionTime}ms`);
 
     return {
       output: stdout.trim() || 'Code executed successfully (no output)',
@@ -231,7 +304,7 @@ export async function executeCode(code: string, language: string, input?: string
       executionTime,
     };
   } catch (error: any) {
-    logger.error('Code execution error:', error);
+    logger.error('[executeCode] Code execution error:', error);
 
     if (error.message?.includes('timeout')) {
       return {
@@ -285,7 +358,22 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
       throw err;
     }
 
-    // Create directories if needed
+    // Use a unique temp directory
+    const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Create base directory
+    const mkdirExec = await container.exec({
+      Cmd: ['sh', '-c', `mkdir -p ${baseDir}`],
+      AttachStdout: false,
+      AttachStderr: false,
+    });
+    const mkdirStream = await mkdirExec.start({});
+    await new Promise((resolve) => {
+      mkdirStream.on('end', resolve);
+      mkdirStream.on('error', resolve);
+    });
+
+    // Create subdirectories if needed
     const dirs = new Set<string>();
     files.forEach(f => {
       const parts = f.name.split('/');
@@ -297,35 +385,41 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
     });
 
     if (dirs.size > 0) {
-      const mkdirCmd = Array.from(dirs).map(d => `mkdir -p /app/${d}`).join(' && ');
+      const mkdirCmd = Array.from(dirs).map(d => `mkdir -p ${baseDir}/${d}`).join(' && ');
       const mkdirExec = await container.exec({
         Cmd: ['sh', '-c', mkdirCmd],
         AttachStdout: false,
         AttachStderr: false,
       });
       const mkdirStream = await mkdirExec.start({});
-      mkdirStream.resume();
-      await new Promise(resolve => mkdirStream.on('end', resolve));
+      await new Promise((resolve) => {
+        mkdirStream.on('end', resolve);
+        mkdirStream.on('error', resolve);
+      });
     }
 
     // Write all files to container
     for (const file of files) {
+      const escapedContent = file.content.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
       const writeExec = await container.exec({
-        Cmd: ['sh', '-c', `cat > /app/${file.name} << 'EOFFILE'\n${file.content}\nEOFFILE`],
-        AttachStdout: true,
-        AttachStderr: true,
+        Cmd: ['sh', '-c', `echo "${escapedContent}" > ${baseDir}/${file.name}`],
+        AttachStdout: false,
+        AttachStderr: false,
       });
       const writeStream = await writeExec.start({ hijack: true });
-      await new Promise(resolve => writeStream.on('end', resolve));
+      await new Promise((resolve) => {
+        writeStream.on('end', resolve);
+        writeStream.on('error', resolve);
+      });
     }
 
     // Execute the main file
-    const execCommand = getExecutionCommand(language, mainFile);
+    const execCommand = getExecutionCommand(language, `${baseDir}/${mainFile}`);
     logger.info(`Executing project: ${execCommand}`);
 
     const exec = await container.exec({
       Cmd: ['sh', '-c', execCommand],
-      AttachStdin: !!input,
+      AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
@@ -333,12 +427,16 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
 
     const stream = await exec.start({
       hijack: true,
-      stdin: !!input,
+      stdin: true,
     });
 
     // Send input if provided
     if (input) {
-      stream.write(input + '\n');
+      stream.write(input);
+      stream.write('\n');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      stream.end();
+    } else {
       stream.end();
     }
 
@@ -356,14 +454,16 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
 
     // Cleanup files
     try {
-      const fileList = files.map(f => f.name).join(' ');
       const cleanupExec = await container.exec({
-        Cmd: ['sh', '-c', `cd /app && rm -rf ${fileList} *.class ${mainFile.replace('.cpp', '')}`],
+        Cmd: ['sh', '-c', `rm -rf ${baseDir}`],
         AttachStdout: false,
         AttachStderr: false,
       });
       const cleanStream = await cleanupExec.start({});
-      cleanStream.resume();
+      await new Promise((resolve) => {
+        cleanStream.on('end', resolve);
+        cleanStream.on('error', resolve);
+      });
     } catch (cleanupErr) {
       logger.warn('Cleanup warning:', cleanupErr);
     }

@@ -54,29 +54,39 @@ export function PlaygroundTerminal({ language, code, executeFlag, theme = 'dark'
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.statusText}`);
+      }
+
       if (!response.body) {
         throw new Error('No response body');
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        
+        // Keep the last part in buffer as it might be incomplete
+        buffer = parts[parts.length - 1];
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
+        // Process all complete messages
+        for (let i = 0; i < parts.length - 1; i++) {
+          const message = parts[i];
+          if (message.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.substring(6));
+              const data = JSON.parse(message.substring(6));
               
-              if (data.type === 'output') {
-                setLines(prev => [...prev, { type: 'output', content: data.content }]);
-              } else if (data.type === 'error') {
-                setLines(prev => [...prev, { type: 'error', content: data.content }]);
+              if (data.type === 'stdout' || data.type === 'output') {
+                setLines(prev => [...prev, { type: 'output', content: data.data || data.content }]);
+              } else if (data.type === 'stderr' || data.type === 'error') {
+                setLines(prev => [...prev, { type: 'error', content: data.data || data.content }]);
               } else if (data.type === 'end') {
                 setLines(prev => [...prev, { type: 'output', content: '\n✓ Program finished\n' }]);
                 setIsRunning(false);
@@ -86,6 +96,27 @@ export function PlaygroundTerminal({ language, code, executeFlag, theme = 'dark'
             }
           }
         }
+      }
+
+      // Process any remaining buffer content
+      if (buffer.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.substring(6));
+          if (data.type === 'stdout' || data.type === 'output') {
+            setLines(prev => [...prev, { type: 'output', content: data.data || data.content }]);
+          } else if (data.type === 'stderr' || data.type === 'error') {
+            setLines(prev => [...prev, { type: 'error', content: data.data || data.content }]);
+          } else if (data.type === 'end') {
+            setLines(prev => [...prev, { type: 'output', content: '\n✓ Program finished\n' }]);
+            setIsRunning(false);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+
+      if (isRunning) {
+        setIsRunning(false);
       }
     } catch (error: any) {
       setLines(prev => [...prev, { type: 'error', content: `Error: ${error.message}\n` }]);

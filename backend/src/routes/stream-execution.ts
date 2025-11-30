@@ -13,163 +13,18 @@ const languageImages: Record<string, string> = {
   go: 'nexusquest-go'
 };
 
-// Store active sessions with their streams and temp directories
-const activeSessions = new Map<string, { container: Docker.Container; stdin: any; tempDir?: string }>();
+// Store active sessions
+const activeSessions = new Map<string, {
+  outputBuffer: string[];
+  errorBuffer: string[];
+  finished: boolean;
+}>();
 
 // Interface for project files
 interface ProjectFile {
   name: string;
   content: string;
 }
-
-// Helper to create directory structure commands
-function createDirectories(files: ProjectFile[], baseDir: string): string[] {
-  const dirs = new Set<string>();
-  files.forEach(f => {
-    const parts = f.name.split('/');
-    if (parts.length > 1) {
-      for (let i = 1; i < parts.length; i++) {
-        dirs.add(parts.slice(0, i).join('/'));
-      }
-    }
-  });
-  return Array.from(dirs).map(d => `mkdir -p ${baseDir}/${d}`);
-}
-
-// Start streaming execution
-streamExecutionRouter.post('/stream-start', async (req, res) => {
-  const { code, language, sessionId, files, mainFile } = req.body;
-
-  // Support both single file (code) and multi-file (files array) modes
-  if ((!code && !files) || !language || !sessionId) {
-    res.status(400).json({ success: false, error: 'Missing required fields' });
-    return;
-  }
-
-  try {
-    const containerName = `nexusquest-stream-${sessionId}`;
-
-    // Create container with interactive shell that stays alive
-    const command = ['sh', '-c', 'while true; do sleep 1; done'];
-
-    const container = await docker.createContainer({
-      Image: languageImages[language],
-      name: containerName,
-      Cmd: command,
-      Tty: true, // Enable pseudo-TTY for interactive I/O
-      OpenStdin: true,
-      StdinOnce: false,
-      AttachStdin: true,
-      AttachStdout: true,
-      AttachStderr: true,
-      HostConfig: {
-        Memory: 256 * 1024 * 1024,
-        AutoRemove: false,
-        NetworkMode: 'none',
-        Tmpfs: {
-          '/tmp': 'rw,exec,nosuid,size=100m'
-        }
-      }
-    });
-
-    await container.start();
-
-    // Base directory for project files
-    const baseDir = '/tmp/project';
-
-    // Determine if this is a multi-file project
-    const isMultiFile = files && Array.isArray(files) && files.length > 0;
-    const projectFiles: ProjectFile[] = isMultiFile
-      ? files
-      : [{ name: getDefaultFileName(language, code), content: code }];
-
-    // The file to run (either specified mainFile or the single file)
-    const fileToRun = isMultiFile ? (mainFile || projectFiles[0].name) : projectFiles[0].name;
-
-    // Create base directory
-    const mkdirExec = await container.exec({
-      Cmd: ['sh', '-c', `mkdir -p ${baseDir} && echo "Directory created successfully"`],
-      AttachStdout: true,
-      AttachStderr: true
-    });
-    const mkdirStream = await mkdirExec.start({});
-    
-    // Wait for mkdir to complete
-    await new Promise<void>((resolve) => {
-      mkdirStream.on('end', () => resolve());
-    });
-
-    // Create subdirectories if needed
-    const dirCommands = createDirectories(projectFiles, baseDir);
-    for (const dirCmd of dirCommands) {
-      const dirExec = await container.exec({
-        Cmd: ['sh', '-c', dirCmd],
-        AttachStdout: true,
-        AttachStderr: true
-      });
-      await dirExec.start({});
-    }
-
-    // Write all files
-    for (const file of projectFiles) {
-      const fileBase64 = Buffer.from(file.content).toString('base64');
-      const filePath = `${baseDir}/${file.name}`;
-      const writeExec = await container.exec({
-        Cmd: ['sh', '-c', `echo '${fileBase64}' | base64 -d > ${filePath}`],
-        AttachStdout: true,
-        AttachStderr: true
-      });
-      await writeExec.start({});
-    }
-
-    // Prepare execution command based on language
-    let execCommand: string;
-
-    if (language === 'python') {
-      // Set PYTHONPATH so imports work from project root
-      execCommand = `cd ${baseDir} && PYTHONPATH=${baseDir} python3 -u ${fileToRun}`;
-    } else if (language === 'javascript') {
-      // Node.js can require relative paths from the working directory
-      execCommand = `cd ${baseDir} && node ${fileToRun}`;
-    } else if (language === 'cpp') {
-      // Compile all .cpp files together
-      const cppFiles = projectFiles.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
-      execCommand = `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
-    } else if (language === 'java') {
-      // Find the main class from the main file
-      const mainFileContent = projectFiles.find(f => f.name === fileToRun)?.content || code;
-      const classMatch = mainFileContent.match(/public\s+class\s+(\w+)/);
-      const className = classMatch ? classMatch[1] : 'Main';
-      const javaFiles = projectFiles.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
-      execCommand = `cd ${baseDir} && javac ${javaFiles} -d . && java -cp . ${className}`;
-    } else {
-      await container.remove({ force: true });
-      res.status(400).json({ success: false, error: 'Unsupported language' });
-      return;
-    }
-
-    // Execute the code without TTY to prevent input echo
-    const exec = await container.exec({
-      Cmd: ['sh', '-c', execCommand],
-      AttachStdin: true,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: false
-    });
-
-    const stream = await exec.start({ hijack: true, stdin: true });
-
-    activeSessions.set(sessionId, { container, stdin: stream, tempDir: baseDir });
-
-    res.json({ success: true, sessionId });
-  } catch (error) {
-    logger.error('Stream execution failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
 
 // Helper to get default file name based on language
 function getDefaultFileName(language: string, code: string): string {
@@ -183,8 +38,223 @@ function getDefaultFileName(language: string, code: string): string {
   return 'code.txt';
 }
 
+// Get execution command based on language and file path
+function getExecutionCommand(language: string, baseDir: string, files: ProjectFile[], mainFile: string): string {
+  switch (language.toLowerCase()) {
+    case 'python':
+      return `cd ${baseDir} && PYTHONPATH=${baseDir} python3 -u ${mainFile}`;
+
+    case 'javascript':
+      return `cd ${baseDir} && node ${mainFile}`;
+
+    case 'java': {
+      const mainFileContent = files.find(f => f.name === mainFile)?.content || '';
+      const classMatch = mainFileContent.match(/public\s+class\s+(\w+)/);
+      const className = classMatch ? classMatch[1] : 'Main';
+      const javaFiles = files.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
+      return `cd ${baseDir} && javac ${javaFiles} -d . && java -cp . ${className}`;
+    }
+
+    case 'cpp': {
+      const cppFiles = files.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
+      return `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
+    }
+
+    default:
+      throw new Error(`Unsupported language: ${language}`);
+  }
+}
+
+// Demultiplex Docker stream
+function demuxStream(stream: any): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    let dataReceived = false;
+
+    stream.on('data', (chunk: Buffer) => {
+      dataReceived = true;
+      logger.info(`demuxStream: received ${chunk.length} bytes`);
+      // Docker multiplexed stream format: [streamType:1][reserved:3][payloadSize:4][payload:N]
+      let offset = 0;
+      while (offset < chunk.length) {
+        if (chunk.length - offset < 8) break;
+
+        const streamType = chunk.readUInt8(offset);
+        const payloadSize = chunk.readUInt32BE(offset + 4);
+
+        if (payloadSize > 0 && offset + 8 + payloadSize <= chunk.length) {
+          const payload = chunk.toString('utf8', offset + 8, offset + 8 + payloadSize);
+          if (streamType === 1) {
+            logger.info(`demuxStream: stdout: ${payload.substring(0, 50)}`);
+            stdout += payload;
+          } else if (streamType === 2) {
+            logger.info(`demuxStream: stderr: ${payload.substring(0, 50)}`);
+            stderr += payload;
+          }
+        }
+        offset += 8 + payloadSize;
+      }
+    });
+
+    stream.on('end', () => {
+      logger.info(`demuxStream: stream ended. Received data: ${dataReceived}. stdout length: ${stdout.length}, stderr length: ${stderr.length}`);
+      resolve({ stdout, stderr });
+    });
+
+    stream.on('error', (err: Error) => {
+      logger.error('demuxStream: error', err);
+      reject(err);
+    });
+  });
+}
+
+// Start streaming execution
+streamExecutionRouter.post('/stream-start', async (req, res) => {
+  const { code, language, sessionId, files, mainFile } = req.body;
+
+  // Support both single file (code) and multi-file (files array) modes
+  if ((!code && !files) || !language || !sessionId) {
+    res.status(400).json({ success: false, error: 'Missing required fields' });
+    return;
+  }
+
+  try {
+    // Determine if this is a multi-file project
+    const isMultiFile = files && Array.isArray(files) && files.length > 0;
+    const projectFiles: ProjectFile[] = isMultiFile
+      ? files
+      : [{ name: getDefaultFileName(language, code), content: code }];
+
+    // The file to run
+    const fileToRun = isMultiFile ? (mainFile || projectFiles[0].name) : projectFiles[0].name;
+
+    // Base directory for files
+    const baseDir = '/tmp/stream-exec';
+
+    // Build setup commands
+    const setupCommands: string[] = [
+      `rm -rf ${baseDir}`,
+      `mkdir -p ${baseDir}`
+    ];
+
+    // Add directory creation commands for nested files
+    const dirs = new Set<string>();
+    projectFiles.forEach(f => {
+      const parts = f.name.split('/');
+      if (parts.length > 1) {
+        for (let i = 1; i < parts.length; i++) {
+          dirs.add(parts.slice(0, i).join('/'));
+        }
+      }
+    });
+    dirs.forEach(d => {
+      setupCommands.push(`mkdir -p ${baseDir}/${d}`);
+    });
+
+    // Add file write commands
+    projectFiles.forEach(file => {
+      const filePath = `${baseDir}/${file.name}`;
+      const escapedContent = file.content.replace(/'/g, "'\\''");
+      setupCommands.push(
+        `cat > ${filePath} << 'EOFFILE'\n${escapedContent}\nEOFFILE`
+      );
+    });
+
+    // Get execution command
+    const execCommand = getExecutionCommand(language, baseDir, projectFiles, fileToRun);
+    setupCommands.push(execCommand);
+
+    // Combine all commands
+    const fullCommand = setupCommands.join(';');
+
+    // Initialize session
+    activeSessions.set(sessionId, {
+      outputBuffer: [],
+      errorBuffer: [],
+      finished: false
+    });
+
+    // Execute asynchronously (don't wait for completion)
+    (async () => {
+      let attempts = 0;
+      let stdout = '';
+      let stderr = '';
+
+      while (attempts < 3) {
+        try {
+          // Use the persistent container from docker-compose
+          const containerName = languageImages[language];
+          const container = docker.getContainer(containerName);
+
+          logger.info(`Starting execution for ${sessionId} using container ${containerName} (attempt ${attempts + 1})`);
+
+          // Create execution
+          const exec = await container.exec({
+            Cmd: ['sh', '-c', fullCommand],
+            AttachStdout: true,
+            AttachStderr: true,
+            Tty: false
+          });
+
+          // Start stream and immediately attach listeners
+          const stream = await exec.start({ hijack: true });
+
+          // Attach listeners BEFORE doing anything else
+          const outputPromise = demuxStream(stream);
+
+          // Set timeout
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+              stream.destroy();
+              reject(new Error('Execution timeout (10 seconds)'));
+            }, 10000);
+          });
+
+          // Wait for completion
+          const result = await Promise.race([outputPromise, timeoutPromise]);
+          stdout = result.stdout;
+          stderr = result.stderr;
+
+          const session = activeSessions.get(sessionId);
+          if (session) {
+            if (stdout) session.outputBuffer.push(stdout);
+            if (stderr) session.errorBuffer.push(stderr);
+            session.finished = true;
+          }
+
+          logger.info(`Execution completed for ${sessionId}, output: ${stdout.length} chars, errors: ${stderr.length} chars`);
+          break; // Success, exit retry loop
+        } catch (error) {
+          attempts++;
+          logger.error(`Execution error for ${sessionId} (attempt ${attempts}):`, error);
+
+          if (attempts >= 3) {
+            const session = activeSessions.get(sessionId);
+            if (session) {
+              session.errorBuffer.push(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              session.finished = true;
+            }
+          } else {
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+      }
+    })();
+
+    res.json({ success: true, sessionId });
+  } catch (error) {
+    logger.error('Stream execution failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Get output stream (SSE)
-streamExecutionRouter.get('/stream-output/:sessionId', (req: Request, res: Response) => {
+streamExecutionRouter.get('/stream-output/:sessionId', async (req: Request, res: Response) => {
   const { sessionId } = req.params;
   const session = activeSessions.get(sessionId);
 
@@ -198,82 +268,53 @@ streamExecutionRouter.get('/stream-output/:sessionId', (req: Request, res: Respo
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // Buffer for incomplete frames
-  let buffer = Buffer.alloc(0);
-
-  const processOutput = (chunk: Buffer) => {
-    // Append new chunk to buffer
-    buffer = Buffer.concat([buffer, chunk]);
-
-    // Process complete frames from buffer
-    while (buffer.length >= 8) {
-      const streamType = buffer.readUInt8(0);
-      const payloadSize = buffer.readUInt32BE(4);
-
-      // Check if we have complete frame
-      if (buffer.length < 8 + payloadSize) {
-        break; // Wait for more data
-      }
-
-      // Extract and send payload
-      if (streamType === 1 || streamType === 2) {
-        const payload = buffer.toString('utf8', 8, 8 + payloadSize);
-        // Only send non-empty payloads
-        if (payload.length > 0) {
-          res.write(`data: ${JSON.stringify({ type: streamType === 1 ? 'stdout' : 'stderr', data: payload })}\n\n`);
-        }
-      }
-
-      // Remove processed frame from buffer
-      buffer = buffer.slice(8 + payloadSize);
+  try {
+    // Wait for execution to finish with timeout
+    let attempts = 0;
+    while (!session.finished && attempts < 300) { // 30 second timeout
+      await new Promise(r => setTimeout(r, 100));
+      attempts++;
     }
-  };
 
-  session.stdin.on('data', processOutput);
+    logger.info(`Execution finished for ${sessionId}. Output: ${session.outputBuffer.length} items, Errors: ${session.errorBuffer.length} items`);
 
-  session.stdin.on('end', async () => {
+    // Send buffered stdout
+    for (const output of session.outputBuffer) {
+      if (output.length > 0) {
+        res.write(`data: ${JSON.stringify({ type: 'stdout', data: output })}\n\n`);
+      }
+    }
+
+    // Send buffered stderr
+    for (const error of session.errorBuffer) {
+      if (error.length > 0) {
+        res.write(`data: ${JSON.stringify({ type: 'stderr', data: error })}\n\n`);
+      }
+    }
+
+    // Send end signal
     res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
     res.end();
 
-    // Cleanup container
-    try {
-      await session.container.remove({ force: true });
-    } catch (err) {
-      logger.error('Failed to remove container:', err);
-    }
-
+    // Cleanup
     activeSessions.delete(sessionId);
-  });
 
-  req.on('close', () => {
-    session.stdin.removeListener('data', processOutput);
-  });
+  } catch (error) {
+    logger.error('Stream output error:', error);
+    res.write(`data: ${JSON.stringify({ type: 'error', data: error instanceof Error ? error.message : 'Unknown error' })}\n\n`);
+    res.end();
+
+    // Cleanup
+    activeSessions.delete(sessionId);
+  }
 });
 
-// Send input to stream
+// Send input to stream (not supported in new implementation)
 streamExecutionRouter.post('/stream-input', async (req, res) => {
-  const { sessionId, input } = req.body;
-
-  if (!sessionId) {
-    res.status(400).json({ success: false, error: 'Missing sessionId' });
-    return;
-  }
-
-  const session = activeSessions.get(sessionId);
-  if (!session) {
-    res.status(404).json({ success: false, error: 'Session not found' });
-    return;
-  }
-
-  try {
-    session.stdin.write(input + '\n');
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to send input'
-    });
-  }
+  res.status(501).json({
+    success: false,
+    error: 'Interactive input not supported in stream execution'
+  });
 });
 
 // Stop stream
@@ -287,14 +328,13 @@ streamExecutionRouter.post('/stream-stop', async (req, res) => {
 
   const session = activeSessions.get(sessionId);
   if (session) {
-    try {
-      await session.container.stop();
-      await session.container.remove({ force: true });
-      activeSessions.delete(sessionId);
-    } catch (err) {
-      logger.error('Failed to stop/remove container:', err);
-    }
+    session.finished = true;
+    activeSessions.delete(sessionId);
+    logger.info(`Stream stopped: ${sessionId}`);
   }
 
   res.json({ success: true });
 });
+
+
+

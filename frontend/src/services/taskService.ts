@@ -162,3 +162,29 @@ export async function completeTask(taskId: string, code: string): Promise<TaskPr
   if (!data.success) throw new Error(data.error);
   return data.data;
 }
+
+// Run all test cases for a task against submitted code
+export interface TaskTestResultItem {
+  index: number;
+  passed: boolean;
+  input: string;
+  expectedOutput: string;
+  actualOutput: string;
+  error?: string;
+}
+
+export interface TaskTestResultsSummary {
+  total: number;
+  passed: number;
+  results: TaskTestResultItem[];
+}
+
+export async function runTaskTests(taskId: string, code: string): Promise<TaskTestResultsSummary> {
+  const res = await authFetch(`${API_URL}/api/tasks/${taskId}/run-tests`, {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error);
+  return data.data as TaskTestResultsSummary;
+}

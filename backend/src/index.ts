@@ -12,6 +12,8 @@ import taskProgressRouter from './routes/task-progress.js';
 import terminalRouter from './routes/terminal.js';
 import { streamExecutionRouter } from './routes/stream-execution.js';
 import { playgroundExecutionRouter } from './routes/playground-execution.js';
+import { projectExecutionRouter } from './routes/project-execution.js';
+import { taskExecutionRouter } from './routes/task-execution.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { logger } from './utils/logger.js';
 import { connectDatabase } from './config/database.js';
@@ -58,11 +60,13 @@ app.use('/api', codeExecutionRouter);
 app.use('/api', terminalRouter);
 app.use('/api/stream', streamExecutionRouter);
 app.use('/api/playground', playgroundExecutionRouter);
-app.use('/api/ai', aiRouter);
-app.use('/api/auth', authRouter);
+app.use('/api/projects', projectExecutionRouter);
 app.use('/api/projects', projectsRouter);
+app.use('/api/tasks', taskExecutionRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/task-progress', taskProgressRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/auth', authRouter);
 
 // Error handling
 app.use(errorHandler);

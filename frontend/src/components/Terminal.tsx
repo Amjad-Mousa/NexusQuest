@@ -63,7 +63,7 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
   }, [codeToExecute]);
 
   const executeCodeInteractive = async (code: string, files?: ProjectFileForExecution[], mainFile?: string) => {
-    // Close any existing EventSource connection
+    // Close any existing connections (cleanup from previous implementation)
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -81,16 +81,22 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
     }]);
 
     try {
-      // Start execution - send files if available for multi-file projects
-      const requestBody: Record<string, unknown> = { language, sessionId };
+      // Determine which endpoint to use based on execution type
+      let endpoint: string;
+      let requestBody: Record<string, unknown> = { language, sessionId };
+
+      // If we have files (project execution), use projects endpoint
       if (files && files.length > 0) {
+        endpoint = 'http://localhost:9876/api/projects/execute';
         requestBody.files = files;
-        requestBody.mainFile = mainFile;
+        requestBody.mainFile = mainFile || files[0].name;
       } else {
+        // Single code execution (task or playground) - use task endpoint which supports streaming
+        endpoint = 'http://localhost:9876/api/tasks/execute';
         requestBody.code = code;
       }
 
-      const startRes = await fetch('http://localhost:9876/api/stream/stream-start', {
+      const startRes = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
@@ -98,44 +104,99 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
 
       if (!startRes.ok) throw new Error('Failed to start execution');
 
-      // Listen to output stream
-      const eventSource = new EventSource(`http://localhost:9876/api/stream/stream-output/${sessionId}`);
-      eventSourceRef.current = eventSource;
+      // Handle the response stream directly
+      if (!startRes.body) throw new Error('No response body');
 
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      const reader = startRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
         
-        if (data.type === 'end') {
-          setLines(prev => [...prev, { 
-            type: 'output', 
-            content: '\n✓ Program finished', 
-            timestamp: new Date() 
-          }]);
-          setIsExecutingCode(false);
-          setCurrentSessionId(null);
-          eventSource.close();
-        } else {
-          const content = data.data;
-          if (content) {
-            setLines(prev => [...prev, { 
-              type: data.type === 'stderr' ? 'error' : 'output', 
-              content: content.trimEnd(), 
-              timestamp: new Date() 
-            }]);
+        // Keep the last part in buffer as it might be incomplete
+        buffer = parts[parts.length - 1];
+
+        // Process all complete messages
+        for (let i = 0; i < parts.length - 1; i++) {
+          const message = parts[i];
+          if (message.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(message.substring(6));
+              
+              if (data.type === 'end') {
+                setLines(prev => [...prev, { 
+                  type: 'output', 
+                  content: '\n✓ Program finished', 
+                  timestamp: new Date() 
+                }]);
+                setIsExecutingCode(false);
+                setCurrentSessionId(null);
+              } else if (data.type === 'stdout' || data.type === 'output') {
+                const content = data.data || data.content;
+                if (content) {
+                  setLines(prev => [...prev, { 
+                    type: 'output', 
+                    content: content.trimEnd(), 
+                    timestamp: new Date() 
+                  }]);
+                }
+              } else if (data.type === 'stderr' || data.type === 'error') {
+                const content = data.data || data.content;
+                if (content) {
+                  setLines(prev => [...prev, { 
+                    type: 'error', 
+                    content: content.trimEnd(), 
+                    timestamp: new Date() 
+                  }]);
+                }
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
           }
         }
-      };
+      }
 
-      eventSource.onerror = () => {
-        setLines(prev => [...prev, { 
-          type: 'error', 
-          content: 'Connection error', 
-          timestamp: new Date() 
-        }]);
-        setIsExecutingCode(false);
-        setCurrentSessionId(null);
-        eventSource.close();
-      };
+      // Process any remaining buffer content
+      if (buffer.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.substring(6));
+          if (data.type === 'end') {
+            setLines(prev => [...prev, { 
+              type: 'output', 
+              content: '\n✓ Program finished', 
+              timestamp: new Date() 
+            }]);
+            setIsExecutingCode(false);
+            setCurrentSessionId(null);
+          } else if (data.type === 'stdout' || data.type === 'output') {
+            const content = data.data || data.content;
+            if (content) {
+              setLines(prev => [...prev, { 
+                type: 'output', 
+                content: content.trimEnd(), 
+                timestamp: new Date() 
+              }]);
+            }
+          } else if (data.type === 'stderr' || data.type === 'error') {
+            const content = data.data || data.content;
+            if (content) {
+              setLines(prev => [...prev, { 
+                type: 'error', 
+                content: content.trimEnd(), 
+                timestamp: new Date() 
+              }]);
+            }
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
 
     } catch (error) {
       setLines(prev => [...prev, { 

@@ -16,20 +16,14 @@ export function validateCode(req, res, next) {
             output: ''
         });
     }
-    // Check for potentially dangerous operations
+    // Check for extremely dangerous operations only
+    // Note: Docker isolation provides the main security layer
     const dangerousPatterns = [
-        /import\s+os/i,
         /import\s+subprocess/i,
-        /import\s+sys/i,
         /import\s+socket/i,
-        /import\s+urllib/i,
-        /import\s+requests/i,
         /exec\s*\(/i,
         /eval\s*\(/i,
-        /open\s*\(/i,
         /__import__/i,
-        /\bfile\b/i,
-        /\bdir\b/i,
     ];
     for (const pattern of dangerousPatterns) {
         if (pattern.test(code)) {
@@ -41,13 +35,21 @@ export function validateCode(req, res, next) {
         }
     }
     // Validate language
-    const supportedLanguages = ['python'];
+    const supportedLanguages = ['python', 'java', 'javascript', 'js', 'cpp', 'c++'];
     if (language && !supportedLanguages.includes(language.toLowerCase())) {
         return res.status(400).json({
             success: false,
             error: `Language '${language}' is not supported. Supported languages: ${supportedLanguages.join(', ')}`,
             output: ''
         });
+    }
+    // Check for interactive input (Scanner, input()) - warn user
+    if (language === 'java' && /Scanner.*nextInt|nextDouble|nextLine|next\(\)/.test(code)) {
+        // Just a warning, don't block execution
+        console.warn('⚠️ Code uses Scanner for input. This may cause issues in non-interactive environment.');
+    }
+    if (language === 'python' && /input\s*\(/.test(code)) {
+        console.warn('⚠️ Code uses input() function. This may cause issues in non-interactive environment.');
     }
     next();
 }

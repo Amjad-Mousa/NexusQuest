@@ -94,7 +94,7 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
     let fileName: string;
     let filePath: string;
     let className: string | undefined;
-    
+
     // For Java, extract class name and use it as filename
     if (language === 'java') {
       const classMatch = code.match(/public\s+class\s+(\w+)/);
@@ -106,12 +106,17 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
       fileName = getDefaultFileName(language);
       filePath = `/tmp/${fileName}`;
     }
-    
+
     // Write code using cat with heredoc to avoid issues with special characters
     const escapedCode = code.replace(/'/g, "'\\''");
-    
+
+    const writeCmd = [
+      `cat > ${filePath} << 'EOFCODE'`,
+      escapedCode,
+      'EOFCODE'
+    ].join('\n');
     const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `cat > ${filePath} << 'EOFCODE'\n${escapedCode}\nEOFCODE`],
+      Cmd: ['sh', '-c', writeCmd],
       AttachStdout: true,
       AttachStderr: true
     });
@@ -184,17 +189,17 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
     stream.on('data', (chunk: Buffer) => {
       const output = chunk.toString('utf8').replace(/[\x00-\x08]/g, '');
       if (output.trim()) {
-        res.write(`data: ${JSON.stringify({ type: 'output', content: output })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'stdout', data: output })}\n\n`);
       }
     });
 
     stream.on('end', async () => {
-      res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
       res.end();
-      
+
       // Clean up
       activeStreams.delete(sessionId);
-      
+
       try {
         await container.remove({ force: true });
         logger.info(`Container removed after execution: ${containerName}`);
@@ -205,12 +210,12 @@ router.post('/execute', async (req: PlaygroundRequest, res: Response) => {
 
     stream.on('error', async (error: Error) => {
       logger.error(`Stream error: ${error.message}`);
-      res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'stderr', data: error.message })}\n\n`);
       res.end();
-      
+
       // Clean up
       activeStreams.delete(sessionId);
-      
+
       try {
         await container.remove({ force: true });
       } catch (err) {
@@ -241,7 +246,7 @@ router.post('/input', async (req: Request, res: Response) => {
 
   try {
     const stream = activeStreams.get(sessionId);
-    
+
     if (!stream) {
       return res.status(404).json({
         success: false,
@@ -251,7 +256,7 @@ router.post('/input', async (req: Request, res: Response) => {
 
     // Write input to the stream
     stream.write(input + '\n');
-    
+
     logger.info(`Input sent to session ${sessionId}: ${input}`);
     res.json({ success: true });
   } catch (error: any) {

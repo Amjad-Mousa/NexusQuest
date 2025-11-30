@@ -172,7 +172,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
  */
 router.put('/profile/images', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
     const { avatarImage, coverImage } = req.body;
 
     if (!userId) {

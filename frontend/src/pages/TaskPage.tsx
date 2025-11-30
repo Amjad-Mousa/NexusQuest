@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Play, BookOpen, Award, BarChart3, Code2, Moon, Sun, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Play, BookOpen, Award, BarChart3, Code2, Moon, Sun, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { CodeEditor } from '../components/CodeEditor';
 import { Console } from '../components/Console';
 import { Terminal } from '../components/Terminal';
 import { Button } from '../components/ui/button';
-import { Task, getTask, startTask, saveTaskCode } from '../services/taskService';
+import { Task, getTask, startTask, saveTaskCode, runTaskTests, TaskTestResultItem } from '../services/taskService';
 import type { Language, Theme, ConsoleOutput } from '../types';
 
 interface TaskPageProps {
@@ -110,6 +110,36 @@ export default function TaskPage({ user }: TaskPageProps) {
     addToConsole('⏳ Running code...', 'info');
   }, [code, task]);
 
+  const runTests = useCallback(async () => {
+    if (!code.trim() || !task || !taskId) return;
+    try {
+      setActiveBottomTab('console');
+      addToConsole('⏳ Running tests...', 'info');
+      const summary = await runTaskTests(taskId, code.trim());
+      addToConsole(`✅ Passed ${summary.passed}/${summary.total} tests`, 'info');
+
+      summary.results.forEach((r: TaskTestResultItem) => {
+        const label = r.input === '' && r.expectedOutput === '' ? `Hidden test #${r.index + 1}` : `Test #${r.index + 1}`;
+        const parts: string[] = [r.passed ? `${label}: PASSED` : `${label}: FAILED`];
+
+        if (r.actualOutput) {
+          parts.push(`actual: ${r.actualOutput.trim()}`);
+        }
+        if (r.expectedOutput) {
+          parts.push(`expected: ${r.expectedOutput.trim()}`);
+        }
+        if (r.error) {
+          parts.push(`error: ${r.error}`);
+        }
+
+        addToConsole(parts.join(' | '), r.passed ? 'info' : 'error');
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to run tests';
+      addToConsole(`❌ ${msg}`, 'error');
+    }
+  }, [code, task, taskId]);
+
   const addToConsole = (message: string, type: ConsoleOutput['type'] = 'output') => {
     setOutput(prev => [...prev, { type, message, timestamp: new Date() }]);
   };
@@ -177,6 +207,9 @@ export default function TaskPage({ user }: TaskPageProps) {
         <div className="flex items-center gap-2">
           <Button onClick={runCode} className="bg-green-600 hover:bg-green-700 text-white">
             <Play className="w-4 h-4 mr-2" /> Run
+          </Button>
+          <Button onClick={runTests} variant="outline" className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10">
+            <CheckCircle2 className="w-4 h-4 mr-2" /> Run Tests
           </Button>
           <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className={`p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}>
             {theme === 'dark' ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-600" />}
