@@ -10,6 +10,7 @@ import projectsRouter from './routes/projects.js';
 import tasksRouter from './routes/tasks.js';
 import taskProgressRouter from './routes/task-progress.js';
 import terminalRouter from './routes/terminal.js';
+import versionsRouter from './routes/versions.js';
 import { streamExecutionRouter } from './routes/stream-execution.js';
 import { playgroundExecutionRouter } from './routes/playground-execution.js';
 import { projectExecutionRouter } from './routes/project-execution.js';
@@ -67,6 +68,7 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/task-progress', taskProgressRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/versions', versionsRouter);
 
 // Error handling
 app.use(errorHandler);

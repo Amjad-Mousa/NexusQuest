@@ -7,8 +7,10 @@ import { Header } from './components/Header';
 import { ProjectExplorer } from './components/ProjectExplorer';
 import { UserSidePanel } from './components/UserSidePanel';
 import { AiAgent } from './components/AiAgent';
+import { VersionControl } from './components/VersionControl';
 import * as aiService from './services/aiService';
 import * as projectService from './services/projectService';
+import { createSnapshot } from './services/versionService';
 import {
   defaultCode,
   defaultPythonCode,
@@ -46,7 +48,7 @@ function App({ user, onLogout }: AppProps) {
 
   // UI state
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(true);
-  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal'>('console');
+  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal' | 'versions'>('console');
   const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number; files?: { name: string; content: string }[]; mainFile?: string } | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
@@ -220,6 +222,16 @@ function App({ user, onLogout }: AppProps) {
       setLastSavedCode(code);
       setHasUnsavedChanges(false);
       addToConsole(`💾 Saved: ${currentFile.name}`, 'info');
+
+      // Create a version snapshot
+      try {
+        const result = await createSnapshot(currentProject._id, currentFile._id, currentFile.name, code);
+        if (!result.unchanged) {
+          addToConsole(`📸 Snapshot created`, 'info');
+        }
+      } catch (snapshotErr) {
+        console.warn('Failed to create snapshot:', snapshotErr);
+      }
 
       // Update the file in the projects list
       setProjects(prev => prev.map(p =>
@@ -559,7 +571,7 @@ function App({ user, onLogout }: AppProps) {
           />
         </div>
 
-        {/* Bottom area: tabs (Console / Terminal) */}
+        {/* Bottom area: tabs (Console / Terminal / Versions) */}
         <div className="h-[30vh] min-h-[170px] px-4 pb-3">
           <div className="h-full flex flex-col">
             <div className="mb-1 flex items-center justify-between">
@@ -586,6 +598,17 @@ function App({ user, onLogout }: AppProps) {
                 >
                   Terminal
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBottomTab('versions')}
+                  className={`px-2 py-0.5 rounded-t-md border-b-2 ${
+                    activeBottomTab === 'versions'
+                      ? 'border-purple-400 text-purple-300'
+                      : 'border-transparent text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  Versions
+                </button>
               </div>
               {activeBottomTab === 'console' && (
                 <span className={`text-[10px] px-2 py-0.5 rounded border ${
@@ -606,12 +629,30 @@ function App({ user, onLogout }: AppProps) {
                   waitingForInput={waitingForInput}
                   theme={theme}
                 />
-              ) : (
+              ) : activeBottomTab === 'terminal' ? (
                 <Terminal
                   height="100%"
                   theme={theme}
                   language={language}
                   codeToExecute={codeToExecute}
+                />
+              ) : (
+                <VersionControl
+                  theme={theme}
+                  projectId={currentProject?._id || null}
+                  currentFileId={currentFile?._id || null}
+                  currentFileName={currentFile?.name || null}
+                  onRestore={(content, fileId, fileName) => {
+                    // Find the file in the project and update it
+                    if (currentProject) {
+                      const file = currentProject.files.find(f => f._id === fileId);
+                      if (file) {
+                        setCurrentFile({ ...file, content });
+                        setCode(content);
+                        addToConsole(`🔄 Restored: ${fileName}`, 'info');
+                      }
+                    }
+                  }}
                 />
               )}
             </div>
