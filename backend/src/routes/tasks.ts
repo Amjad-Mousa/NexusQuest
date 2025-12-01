@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { Task } from '../models/Task.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { User } from '../models/User.js';
+import { UserTaskProgress } from '../models/UserTaskProgress.js';
 import { executeCode } from '../services/dockerService.js';
 
 const router = Router();
@@ -85,6 +86,10 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { title, description, points, difficulty, language, starterCode, solution, testCases } = req.body;
 
+    if (!Array.isArray(testCases) || testCases.length === 0) {
+      return res.status(400).json({ success: false, error: 'At least one test case is required' });
+    }
+
     const task = await Task.create({
       title,
       description,
@@ -123,7 +128,12 @@ router.put('/:id', teacherMiddleware, async (req: AuthRequest, res: Response) =>
     if (language) task.language = language;
     if (starterCode !== undefined) task.starterCode = starterCode;
     if (solution !== undefined) task.solution = solution;
-    if (testCases) task.testCases = testCases;
+    if (testCases !== undefined) {
+      if (!Array.isArray(testCases) || testCases.length === 0) {
+        return res.status(400).json({ success: false, error: 'At least one test case is required' });
+      }
+      task.testCases = testCases;
+    }
 
     await task.save();
 
@@ -222,12 +232,42 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
 
     const passed = results.filter(r => r.passed).length;
 
+    let completionUpdated = false;
+
+    if (passed === results.length) {
+      const userId = req.userId;
+      const taskId = req.params.id;
+
+      const existingProgress = await UserTaskProgress.findOne({ userId, taskId });
+
+      const isFirstCompletion = !existingProgress || existingProgress.status !== 'completed';
+
+      await UserTaskProgress.findOneAndUpdate(
+        { userId, taskId },
+        {
+          userId,
+          taskId,
+          status: 'completed',
+          code,
+          completedAt: new Date(),
+        },
+        { new: true, upsert: true }
+      );
+
+      if (isFirstCompletion && typeof task.points === 'number') {
+        await User.findByIdAndUpdate(userId, { $inc: { totalPoints: task.points } });
+      }
+
+      completionUpdated = true;
+    }
+
     res.json({
       success: true,
       data: {
         total: results.length,
         passed,
         results,
+        completed: completionUpdated,
       },
     });
   } catch (error: any) {

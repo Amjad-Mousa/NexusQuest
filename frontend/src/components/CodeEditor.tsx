@@ -16,6 +16,7 @@ interface CodeEditorProps {
   theme?: string;
   errors?: CodeErrorMarker[];
   fontSize?: number;
+  onSave?: () => void;
 }
 
 export function CodeEditor({
@@ -26,6 +27,7 @@ export function CodeEditor({
   theme = 'vs-dark',
   errors = [],
   fontSize = 14,
+  onSave,
 }: CodeEditorProps) {
   const editorRef = useRef<MonacoNamespace.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof MonacoNamespace | null>(null);
@@ -45,9 +47,21 @@ export function CodeEditor({
     onChange(value);
   };
 
+  // Store onSave in a ref so the keybinding always has the latest version
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
   const handleEditorDidMount: OnMount = (_editor, monaco) => {
     editorRef.current = _editor as MonacoNamespace.editor.IStandaloneCodeEditor;
     monacoRef.current = monaco as unknown as typeof MonacoNamespace;
+    
+    // Add Ctrl+S keybinding for save
+    _editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      if (onSaveRef.current) {
+        onSaveRef.current();
+      }
+    });
+    
     // Configure autocomplete like Visual Studio IntelliSense
     _editor.updateOptions({
       quickSuggestions: {

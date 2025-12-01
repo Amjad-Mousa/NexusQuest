@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Star, CheckCircle, Trophy, Zap } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useProfileImages } from '../hooks/useProfileImages';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { ProfileHeader, ProfileCard, StatsGrid, ProfileTabs, EditProfileModal } from '../components/profile';
+import { getUserStats, getMyProgress, TaskProgress } from '../services/taskService';
 
 interface ProfileProps {
   user: { name: string; email: string } | null;
@@ -21,6 +22,27 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const [editPassword, setEditPassword] = useState('');
   const [editConfirmPassword, setEditConfirmPassword] = useState('');
   const [fontSize, setFontSize] = useState(14);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [completedTasks, setCompletedTasks] = useState<TaskProgress[]>([]);
+
+  // Load real stats from API
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const [stats, completed] = await Promise.all([
+          getUserStats(),
+          getMyProgress('completed')
+        ]);
+        setTotalPoints(stats.totalPoints);
+        setCompletedCount(stats.completedTasks);
+        setCompletedTasks(completed);
+      } catch (err) {
+        console.error('Failed to load profile stats:', err);
+      }
+    };
+    loadStats();
+  }, []);
 
   const saveProfileChanges = async () => {
     if (editPassword && editPassword !== editConfirmPassword) {
@@ -86,8 +108,8 @@ export function Profile({ user, onLogout }: ProfileProps) {
   };
 
   const stats = [
-    { label: 'Total Points', value: '2,450', icon: Star, color: 'yellow' },
-    { label: 'Problems Solved', value: '47', icon: CheckCircle, color: 'green' },
+    { label: 'Total Points', value: totalPoints.toLocaleString(), icon: Star, color: 'yellow' },
+    { label: 'Problems Solved', value: completedCount.toString(), icon: CheckCircle, color: 'green' },
     { label: 'Global Rank', value: '#156', icon: Trophy, color: 'purple' },
     { label: 'Current Streak', value: '7 days', icon: Zap, color: 'blue' }
   ];
@@ -100,12 +122,25 @@ export function Profile({ user, onLogout }: ProfileProps) {
     { name: 'Algorithms', level: 65, color: 'red' }
   ];
 
-  const recentActivity = [
-    { id: 1, type: 'solved', title: 'Two Sum Problem', time: '2 hours ago', points: 10 },
-    { id: 2, type: 'achievement', title: 'Earned "Speed Demon" badge', time: '5 hours ago', points: 50 },
-    { id: 3, type: 'project', title: 'Created new project "Todo App"', time: '1 day ago', points: 0 },
-    { id: 4, type: 'solved', title: 'Binary Search Implementation', time: '2 days ago', points: 25 }
-  ];
+  // Generate recent activity from completed tasks
+  const recentActivity = completedTasks.slice(0, 4).map((progress, index) => {
+    const task = progress.taskId;
+    const completedDate = progress.completedAt ? new Date(progress.completedAt) : new Date();
+    const now = new Date();
+    const diffMs = now.getTime() - completedDate.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    const timeAgo = diffDays > 0 ? `${diffDays} day${diffDays > 1 ? 's' : ''} ago` : 
+                   diffHours > 0 ? `${diffHours} hour${diffHours > 1 ? 's' : ''} ago` : 'Just now';
+    
+    return {
+      id: index + 1,
+      type: 'solved' as const,
+      title: typeof task === 'object' ? task.title : 'Completed Task',
+      time: timeAgo,
+      points: typeof task === 'object' ? task.points : 0
+    };
+  });
 
   const achievements = [
     { id: 1, title: 'First Steps', description: 'Solve your first problem', earned: true, icon: '🎯' },

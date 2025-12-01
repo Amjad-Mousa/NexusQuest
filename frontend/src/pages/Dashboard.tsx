@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
-import { getMyProgress, TaskProgress } from '../services/taskService';
+import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
 import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 
@@ -52,14 +52,22 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
   // User's task progress (started/completed tasks)
   const [myTaskProgress, setMyTaskProgress] = useState<TaskProgress[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<TaskProgress[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const [userStats, setUserStats] = useState<UserStats>({ totalPoints: 0, completedTasks: 0, startedTasks: 0 });
 
-  // Load user's task progress
+  // Load user's task progress and stats
   useEffect(() => {
     const loadProgress = async () => {
       try {
-        const progress = await getMyProgress();
-        setMyTaskProgress(progress.slice(0, 4)); // Show first 4
+        const [progress, completed, stats] = await Promise.all([
+          getMyProgress('started'),
+          getMyProgress('completed'),
+          getUserStats()
+        ]);
+        setMyTaskProgress(progress.slice(0, 4)); // Show first 4 in-progress
+        setCompletedTasks(completed.slice(0, 4)); // Show first 4 completed
+        setUserStats(stats);
       } catch (err) {
         console.error('Failed to load task progress:', err);
       } finally {
@@ -69,13 +77,13 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     loadProgress();
   }, []);
 
-  // Mock data - replace with real API calls
+  // Stats derived from real data
   const stats = {
-    completedChallenges: 12,
-    totalChallenges: 50,
-    points: 450,
-    rank: 156,
-    streak: 5
+    completedChallenges: userStats.completedTasks,
+    inProgressChallenges: userStats.startedTasks,
+    points: userStats.totalPoints,
+    rank: 156, // TODO: implement leaderboard
+    streak: 5  // TODO: implement streak tracking
   };
 
 
@@ -202,10 +210,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             <Target className="w-8 h-8 text-purple-400 mb-2" />
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>{stats.completedChallenges}/{stats.totalChallenges}</div>
+            }`}>{stats.completedChallenges}</div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-            }`}>Challenges</div>
+            }`}>Completed</div>
           </div>
 
           <div className={`rounded-xl p-6 border ${
@@ -342,6 +350,85 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                               : 'bg-blue-500/20 text-blue-400'
                           }`}>
                             {progress.status === 'completed' ? 'Completed' : 'In Progress'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Completed Tasks Section */}
+            <div className={`rounded-xl p-6 mb-6 border ${
+              theme === 'dark'
+                ? 'bg-gray-900/50 border-gray-800'
+                : 'bg-white border-gray-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className={`text-2xl font-bold flex items-center gap-2 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                }`}>
+                  <Award className="w-6 h-6 text-green-400" />
+                  Completed Tasks
+                </h2>
+                <span className={`text-sm px-3 py-1 rounded-full ${
+                  theme === 'dark' ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-600'
+                }`}>
+                  {userStats.completedTasks} completed
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {tasksLoading ? (
+                  <div className="text-center py-4 text-gray-400">Loading completed tasks...</div>
+                ) : completedTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Trophy className="w-12 h-12 mx-auto mb-3 text-gray-500" />
+                    <p className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      No completed tasks yet. Keep solving!
+                    </p>
+                  </div>
+                ) : (
+                  completedTasks.map((progress) => {
+                    const task = progress.taskId;
+                    if (!task || typeof task !== 'object') return null;
+                    return (
+                      <div
+                        key={progress._id}
+                        onClick={() => navigate(`/task/${task._id}`)}
+                        className={`rounded-lg p-4 transition-all cursor-pointer border ${
+                          theme === 'dark'
+                            ? 'bg-green-900/20 border-green-700/30 hover:border-green-500/50'
+                            : 'bg-green-50 border-green-200 hover:border-green-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Award className="w-5 h-5 text-green-400" />
+                            <div>
+                              <h3 className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                                {task.title}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  task.difficulty === 'easy' ? 'bg-green-500/20 text-green-400' :
+                                  task.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {task.difficulty}
+                                </span>
+                                <span className={`text-xs ${theme === 'dark' ? 'text-green-400' : 'text-green-600'}`}>
+                                  +{task.points} points earned
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${theme === 'dark' ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'}`}>
+                                  {task.language}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400">
+                            ✓ Completed
                           </span>
                         </div>
                       </div>

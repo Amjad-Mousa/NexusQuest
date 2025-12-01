@@ -7,6 +7,7 @@ import { Header } from './components/Header';
 import { ProjectExplorer } from './components/ProjectExplorer';
 import { UserSidePanel } from './components/UserSidePanel';
 import { AiAgent } from './components/AiAgent';
+import { VersionControl } from './components/VersionControl';
 import * as aiService from './services/aiService';
 import * as projectService from './services/projectService';
 import {
@@ -46,7 +47,7 @@ function App({ user, onLogout }: AppProps) {
 
   // UI state
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(true);
-  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal'>('console');
+  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal' | 'versions'>('console');
   const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number; files?: { name: string; content: string }[]; mainFile?: string } | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
@@ -205,6 +206,15 @@ function App({ user, onLogout }: AppProps) {
     }
   }, [currentFile]);
 
+  // Console helper - defined early so saveFile can use it
+  const addToConsole = useCallback((message: string, type: ConsoleOutput['type'] = 'output') => {
+    setOutput(prev => [...prev, {
+      type,
+      message,
+      timestamp: new Date()
+    }]);
+  }, []);
+
   // Manual save function
   const saveFile = useCallback(async () => {
     if (!currentProject || !currentFile) {
@@ -238,12 +248,12 @@ function App({ user, onLogout }: AppProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [currentProject, currentFile, code]);
+  }, [currentProject, currentFile, code, addToConsole]);
 
-  // Keyboard shortcut: Shift+S to save
+  // Keyboard shortcut: Ctrl+S to save
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key.toLowerCase() === 's') {
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         saveFile();
       }
@@ -325,21 +335,13 @@ function App({ user, onLogout }: AppProps) {
       addToConsole('⏳ Code sent to Terminal for interactive execution', 'info');
     }
 
-    addToConsole('💡 Switch to Terminal tab to see output and provide inputs in real-time', 'info');
+    addToConsole(' Switch to Terminal tab to see output and provide inputs in real-time', 'info');
   };
 
   const clearConsole = () => {
     setOutput([]);
     setInputQueue([]);
     setWaitingForInput(false);
-  };
-
-  const addToConsole = (message: string, type: ConsoleOutput['type'] = 'output') => {
-    setOutput(prev => [...prev, {
-      type,
-      message,
-      timestamp: new Date()
-    }]);
   };
 
   const downloadCode = () => {
@@ -530,6 +532,7 @@ function App({ user, onLogout }: AppProps) {
                 language={language}
                 height="100%"
                 theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                onSave={saveFile}
               />
             </div>
           </div>
@@ -558,7 +561,7 @@ function App({ user, onLogout }: AppProps) {
           />
         </div>
 
-        {/* Bottom area: tabs (Console / Terminal) */}
+        {/* Bottom area: tabs (Console / Terminal / Versions) */}
         <div className="h-[30vh] min-h-[170px] px-4 pb-3">
           <div className="h-full flex flex-col">
             <div className="mb-1 flex items-center justify-between">
@@ -585,6 +588,17 @@ function App({ user, onLogout }: AppProps) {
                 >
                   Terminal
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveBottomTab('versions')}
+                  className={`px-2 py-0.5 rounded-t-md border-b-2 ${
+                    activeBottomTab === 'versions'
+                      ? 'border-purple-400 text-purple-300'
+                      : 'border-transparent text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  Versions
+                </button>
               </div>
               {activeBottomTab === 'console' && (
                 <span className={`text-[10px] px-2 py-0.5 rounded border ${
@@ -605,12 +619,32 @@ function App({ user, onLogout }: AppProps) {
                   waitingForInput={waitingForInput}
                   theme={theme}
                 />
-              ) : (
+              ) : activeBottomTab === 'terminal' ? (
                 <Terminal
                   height="100%"
                   theme={theme}
                   language={language}
                   codeToExecute={codeToExecute}
+                />
+              ) : (
+                <VersionControl
+                  theme={theme}
+                  projectId={currentProject?._id || null}
+                  currentFileId={currentFile?._id || null}
+                  currentFileName={currentFile?.name || null}
+                  currentCode={code}
+                  projectFiles={currentProject?.files || []}
+                  onSnapshotCreated={(msg) => addToConsole(msg, 'info')}
+                  onRestore={(content, fileId, fileName) => {
+                    if (currentProject) {
+                      const file = currentProject.files.find(f => f._id === fileId);
+                      if (file) {
+                        setCurrentFile({ ...file, content });
+                        setCode(content);
+                        addToConsole(`🔄 Restored: ${fileName}`, 'info');
+                      }
+                    }
+                  }}
                 />
               )}
             </div>

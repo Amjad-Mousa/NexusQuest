@@ -2,6 +2,8 @@ import { Router, Response } from 'express';
 import { User, UserRole } from '../models/User.js';
 import { generateToken, authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
+import { UserTaskProgress } from '../models/UserTaskProgress.js';
+import { Task } from '../models/Task.js';
 
 const router = Router();
 
@@ -143,18 +145,27 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
  */
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
+    // Fetch fresh user data to get totalPoints
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
 
     res.json({
       success: true,
       user: {
-        id: user?._id,
-        name: user?.name,
-        email: user?.email,
-        role: user?.role,
-        avatarImage: user?.avatarImage,
-        coverImage: user?.coverImage,
-        createdAt: user?.createdAt,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatarImage: user.avatarImage,
+        coverImage: user.coverImage,
+        totalPoints: user.totalPoints,
+        createdAt: user.createdAt,
       },
     });
   } catch (error) {
@@ -278,6 +289,64 @@ router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
     res.status(500).json({
       success: false,
       error: 'Failed to update profile',
+    });
+  }
+});
+
+/**
+ * POST /api/auth/sync-points
+ * Recalculate totalPoints based on completed tasks (for migration)
+ */
+router.post('/sync-points', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    // Get all completed tasks for this user
+    const completedProgress = await UserTaskProgress.find({
+      userId,
+      status: 'completed',
+    });
+
+    // Calculate total points from completed tasks
+    let totalPoints = 0;
+    for (const progress of completedProgress) {
+      const task = await Task.findById(progress.taskId);
+      if (task) {
+        totalPoints += task.points;
+      }
+    }
+
+    // Update user's totalPoints
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { totalPoints },
+      { new: true }
+    );
+
+    logger.info(`Synced points for user ${userId}: ${totalPoints} points from ${completedProgress.length} tasks`);
+
+    res.json({
+      success: true,
+      totalPoints,
+      completedTasks: completedProgress.length,
+      user: {
+        id: user?._id,
+        name: user?.name,
+        totalPoints: user?.totalPoints,
+      },
+    });
+  } catch (error) {
+    logger.error('Sync points error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync points',
     });
   }
 });

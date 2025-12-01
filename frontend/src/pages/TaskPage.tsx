@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Play, BookOpen, Award, BarChart3, Code2, Moon, Sun, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Play, BookOpen, Award, BarChart3, Code2, Moon, Sun, ChevronLeft, ChevronRight, CheckCircle2, Trophy, X } from 'lucide-react';
 import { CodeEditor } from '../components/CodeEditor';
 import { Console } from '../components/Console';
 import { Terminal } from '../components/Terminal';
@@ -37,6 +37,8 @@ export default function TaskPage({ user }: TaskPageProps) {
   const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal'>('terminal');
   const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number } | null>(null);
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const [showSuccessNotification, setShowSuccessNotification] = useState(false);
+  const [earnedPoints, setEarnedPoints] = useState(0);
 
   // Load task and start progress tracking
   useEffect(() => {
@@ -134,6 +136,13 @@ export default function TaskPage({ user }: TaskPageProps) {
 
         addToConsole(parts.join(' | '), r.passed ? 'info' : 'error');
       });
+
+      // Show success notification if all tests passed
+      if (summary.completed) {
+        setEarnedPoints(task.points);
+        setShowSuccessNotification(true);
+        addToConsole(`🎉 Task completed! You earned ${task.points} points!`, 'info');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to run tests';
       addToConsole(`❌ ${msg}`, 'error');
@@ -187,6 +196,50 @@ export default function TaskPage({ user }: TaskPageProps) {
 
   return (
     <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      {/* Success Notification */}
+      {showSuccessNotification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className={`relative mx-4 max-w-md w-full rounded-2xl p-8 shadow-2xl ${theme === 'dark' ? 'bg-gray-900 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+            <button
+              onClick={() => setShowSuccessNotification(false)}
+              className={`absolute top-4 right-4 p-1 rounded-full ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center animate-bounce">
+                <Trophy className="w-10 h-10 text-white" />
+              </div>
+              <h2 className={`text-2xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                🎉 Task Completed!
+              </h2>
+              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                Congratulations! You've passed all test cases.
+              </p>
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${theme === 'dark' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
+                <Award className="w-5 h-5" />
+                <span className="font-bold">+{earnedPoints} Points Earned!</span>
+              </div>
+              <div className="mt-6 flex gap-3 justify-center">
+                <Button
+                  onClick={() => setShowSuccessNotification(false)}
+                  variant="outline"
+                  className={theme === 'dark' ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : ''}
+                >
+                  Continue Coding
+                </Button>
+                <Button
+                  onClick={() => navigate('/dashboard')}
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
+                >
+                  Back to Dashboard
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className={`h-14 border-b ${theme === 'dark' ? 'bg-gray-900/80 border-gray-700' : 'bg-white/90 border-gray-200'} backdrop-blur-sm flex items-center justify-between px-4`}>
         <div className="flex items-center gap-4">

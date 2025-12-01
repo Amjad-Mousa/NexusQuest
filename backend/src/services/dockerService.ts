@@ -109,7 +109,7 @@ function getExecutionCommand(language: string, mainFile: string): string {
       const baseName = mainFile.substring(mainFile.lastIndexOf('/') + 1);
       const className = baseName.replace('.java', '');
       const dir = mainFile.substring(0, mainFile.lastIndexOf('/'));
-      return `cd ${dir} && javac ${baseName} && java ${className}`;
+      return `cd ${dir} && javac ${baseName} && java -cp . ${className}`;
     }
 
     case 'cpp':
@@ -209,11 +209,11 @@ export async function executeCode(code: string, language: string, input?: string
       });
     });
 
-    // Write code to file
+    // Write code to file using base64 to preserve all characters and newlines
     logger.info(`[executeCode] Writing code to file: ${fileName}`);
-    const escapedCode = code.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+    const base64Code = Buffer.from(code).toString('base64');
     const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `echo "${escapedCode}" > ${tempDir}/${fileName}`],
+      Cmd: ['sh', '-c', `echo "${base64Code}" | base64 -d > ${tempDir}/${fileName}`],
       AttachStdout: true,
       AttachStderr: true,
     });
@@ -398,11 +398,11 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
       });
     }
 
-    // Write all files to container
+    // Write all files to container using base64 to preserve newlines
     for (const file of files) {
-      const escapedContent = file.content.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+      const base64Content = Buffer.from(file.content).toString('base64');
       const writeExec = await container.exec({
-        Cmd: ['sh', '-c', `echo "${escapedContent}" > ${baseDir}/${file.name}`],
+        Cmd: ['sh', '-c', `echo "${base64Content}" | base64 -d > ${baseDir}/${file.name}`],
         AttachStdout: false,
         AttachStderr: false,
       });
