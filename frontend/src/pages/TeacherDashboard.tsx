@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, BookOpen, Award, BarChart3, User, Moon, Sun, LogOut } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Award, BarChart3, User, Moon, Sun, Clock, Calendar, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Task, getMyTasks, deleteTask } from '../services/taskService';
-import { getStoredUser } from '../services/authService';
+import { Quiz, getMyQuizzes, deleteQuiz } from '../services/quizService';
 import CreateTaskModal from '../components/teacher/CreateTaskModal';
+import CreateQuizModal from '../components/teacher/CreateQuizModal';
 import { UserSidebar } from '../components/UserSidebar';
 import { useTheme } from '../context/ThemeContext';
 
@@ -16,20 +17,17 @@ interface TeacherDashboardProps {
 export default function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showQuizModal, setShowQuizModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
-  const { theme, setTheme } = useTheme();
+    const { theme, setTheme } = useTheme();
 
-  // Check if user is a teacher
-  useEffect(() => {
-    if (!user || user.role !== 'teacher') {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
-
+  
   const loadTasks = async () => {
     try {
       setLoading(true);
@@ -42,8 +40,18 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
     }
   };
 
+  const loadQuizzes = async () => {
+    try {
+      const data = await getMyQuizzes();
+      setQuizzes(data);
+    } catch (err) {
+      console.error('Failed to load quizzes:', err);
+    }
+  };
+
   useEffect(() => {
     loadTasks();
+    loadQuizzes();
   }, []);
 
   // Load user avatar
@@ -79,6 +87,36 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
     }
   };
 
+  const handleDeleteQuiz = async (quizId: string, quizTitle: string) => {
+    if (confirm(`Delete quiz "${quizTitle}"?`)) {
+      try {
+        await deleteQuiz(quizId);
+        setQuizzes(quizzes.filter(q => q._id !== quizId));
+      } catch (err) {
+        console.error('Failed to delete quiz:', err);
+        alert('Failed to delete quiz');
+      }
+    }
+  };
+
+  const getQuizStatusColor = (status: string) => {
+    switch (status) {
+      case 'scheduled': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'active': return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'ended': return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+    }
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'easy': return 'bg-green-500/20 text-green-400 border-green-500/30';
@@ -110,6 +148,9 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
           <div className="flex items-center gap-3">
             <Button onClick={() => setShowCreateModal(true)} className="bg-blue-600 hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" /> Create Task
+            </Button>
+            <Button onClick={() => setShowQuizModal(true)} className="bg-purple-600 hover:bg-purple-700">
+              <Plus className="w-4 h-4 mr-2" /> Create Quiz
             </Button>
 
             {/* Theme Toggle */}
@@ -218,6 +259,75 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
             </div>
           )}
         </div>
+
+        {/* Quizzes List */}
+        <div className={`rounded-xl border mt-6 ${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200'}`}>
+          <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Clock className="w-5 h-5 text-purple-400" />
+                Your Quizzes
+              </h2>
+              <span className={`text-sm px-2 py-1 rounded ${theme === 'dark' ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
+                {quizzes.length} quizzes
+              </span>
+            </div>
+          </div>
+          {quizzes.length === 0 ? (
+            <div className="p-8 text-center">
+              <Calendar className="w-12 h-12 mx-auto text-gray-600 mb-4" />
+              <p className="text-gray-400 mb-4">No quizzes created yet</p>
+              <Button onClick={() => setShowQuizModal(true)} className="bg-purple-600 hover:bg-purple-700">
+                <Plus className="w-4 h-4 mr-2" /> Create Your First Quiz
+              </Button>
+            </div>
+          ) : (
+            <div className={`divide-y ${theme === 'dark' ? 'divide-gray-800' : 'divide-gray-200'}`}>
+              {quizzes.map(quiz => (
+                <div key={quiz._id} className={`p-4 flex items-center justify-between ${theme === 'dark' ? 'hover:bg-gray-800/30' : 'hover:bg-gray-50'} transition-colors`}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="font-semibold">{quiz.title}</h3>
+                      <span className={`px-2 py-0.5 rounded-full text-xs border ${getQuizStatusColor(quiz.status)}`}>
+                        {quiz.status}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs border ${getDifficultyColor(quiz.difficulty)}`}>
+                        {quiz.difficulty}
+                      </span>
+                      <span className="text-sm text-gray-400">{quiz.points} pts</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {formatDateTime(quiz.startTime)} - {formatDateTime(quiz.endTime)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {quiz.duration} min
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate(`/quiz/${quiz._id}/results`)}
+                      className="text-blue-400 hover:text-blue-300"
+                    >
+                      <Users className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setEditingQuiz(quiz); setShowQuizModal(true); }}>
+                      <Edit2 className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => handleDeleteQuiz(quiz._id, quiz.title)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Create/Edit Task Modal */}
@@ -226,6 +336,16 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
           task={editingTask}
           onClose={() => { setShowCreateModal(false); setEditingTask(null); }}
           onSave={() => { loadTasks(); setShowCreateModal(false); setEditingTask(null); }}
+          theme={theme}
+        />
+      )}
+
+      {/* Create/Edit Quiz Modal */}
+      {showQuizModal && (
+        <CreateQuizModal
+          quiz={editingQuiz}
+          onClose={() => { setShowQuizModal(false); setEditingQuiz(null); }}
+          onSave={() => { loadQuizzes(); setShowQuizModal(false); setEditingQuiz(null); }}
           theme={theme}
         />
       )}
