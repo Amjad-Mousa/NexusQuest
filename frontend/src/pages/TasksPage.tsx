@@ -18,6 +18,7 @@ export default function TasksPage(_props: TasksPageProps) {
   const [difficultyFilter, setDifficultyFilter] = useState<TaskDifficulty | ''>('');
   const [languageFilter, setLanguageFilter] = useState<TaskLanguage | ''>('');
   const [myProgress, setMyProgress] = useState<Map<string, TaskProgress>>(new Map());
+  const [hideCompleted, setHideCompleted] = useState(false);
 
   useEffect(() => {
     loadTasks();
@@ -54,10 +55,13 @@ export default function TasksPage(_props: TasksPageProps) {
     }
   };
 
-  const filteredTasks = tasks.filter(task =>
-    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    task.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const isCompleted = myProgress.get(task._id)?.status === 'completed';
+    if (hideCompleted && isCompleted) return false;
+    return matchesSearch;
+  });
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -148,6 +152,15 @@ export default function TasksPage(_props: TasksPageProps) {
                 <option value="java">Java</option>
                 <option value="cpp">C++</option>
               </select>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hideCompleted}
+                  onChange={e => setHideCompleted(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-600 text-blue-500 focus:ring-blue-500/50"
+                />
+                <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Hide completed</span>
+              </label>
             </div>
           </div>
         </div>
