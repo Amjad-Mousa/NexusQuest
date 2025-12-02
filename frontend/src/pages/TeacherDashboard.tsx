@@ -305,6 +305,12 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
                         <Clock className="w-3 h-3" />
                         {quiz.duration} min
                       </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {quiz.assignedTo && quiz.assignedTo.length > 0 
+                          ? `${quiz.assignedTo.length} student${quiz.assignedTo.length > 1 ? 's' : ''}`
+                          : 'All students'}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

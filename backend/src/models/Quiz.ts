@@ -22,6 +22,7 @@ export interface IQuiz extends Document {
     startTime: Date;
     endTime: Date;
     duration: number; // Duration in minutes (for display purposes)
+    assignedTo: mongoose.Types.ObjectId[]; // Array of student IDs, empty means all students
     createdAt: Date;
     updatedAt: Date;
 }
@@ -112,6 +113,10 @@ const quizSchema = new Schema<IQuiz>(
             required: [true, 'Duration is required'],
             min: [1, 'Duration must be at least 1 minute'],
         },
+        assignedTo: [{
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+        }],
     },
     {
         timestamps: true,

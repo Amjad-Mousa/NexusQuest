@@ -12,6 +12,12 @@ export interface TestCase {
     isHidden: boolean;
 }
 
+export interface StudentInfo {
+    _id: string;
+    name: string;
+    email: string;
+}
+
 export interface Quiz {
     _id: string;
     title: string;
@@ -30,6 +36,7 @@ export interface Quiz {
     startTime: string;
     endTime: string;
     duration: number;
+    assignedTo?: StudentInfo[]; // Empty array = all students
     status: QuizStatus;
     submission?: QuizSubmissionInfo | null;
     createdAt: string;
@@ -60,6 +67,7 @@ export interface CreateQuizInput {
     startTime: string;
     endTime: string;
     duration: number;
+    assignedTo?: string[]; // Array of student IDs
 }
 
 export interface QuizTestResult {
@@ -99,6 +107,13 @@ export async function getQuizzes(): Promise<Quiz[]> {
 
 export async function getMyQuizzes(): Promise<Quiz[]> {
     const res = await authFetch(`${API_URL}/api/quizzes/my-quizzes`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+}
+
+export async function getStudentsList(): Promise<StudentInfo[]> {
+    const res = await authFetch(`${API_URL}/api/quizzes/students/list`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;

@@ -33,20 +33,29 @@ function getQuizStatus(quiz: { startTime: Date; endTime: Date }): 'scheduled' | 
     return 'active';
 }
 
-// Get all quizzes (students see only scheduled/active/ended, teachers see all)
+// Get all quizzes (students see only assigned quizzes, teachers see all)
 router.get('/', async (req: AuthRequest, res: Response) => {
     try {
         const user = await User.findById(req.userId);
         const isTeacher = user?.role === 'teacher';
 
-        let query = {};
+        let query: any = {};
         if (!isTeacher) {
-            // Students only see quizzes that have started or will start
-            query = { startTime: { $lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } }; // Within next 7 days
+            // Students only see quizzes assigned to them (or with empty/missing assignedTo = all students)
+            query = {
+                startTime: { $lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }, // Within next 7 days
+                $or: [
+                    { assignedTo: { $exists: false } }, // Field doesn't exist (old quizzes)
+                    { assignedTo: { $size: 0 } }, // Empty array = assigned to all
+                    { assignedTo: null }, // Null value
+                    { assignedTo: req.userId }, // Or specifically assigned to this student
+                ],
+            };
         }
 
         const quizzes = await Quiz.find(query)
             .populate('createdBy', 'name email')
+            .populate('assignedTo', 'name email')
             .sort({ startTime: -1 });
 
         // Get user's submissions for all quizzes
@@ -91,6 +100,7 @@ router.get('/my-quizzes', teacherMiddleware, async (req: AuthRequest, res: Respo
     try {
         const quizzes = await Quiz.find({ createdBy: req.userId })
             .select('+solution')
+            .populate('assignedTo', 'name email')
             .sort({ createdAt: -1 });
 
         const quizzesWithStatus = quizzes.map(quiz => ({
@@ -104,6 +114,23 @@ router.get('/my-quizzes', teacherMiddleware, async (req: AuthRequest, res: Respo
         });
     } catch {
         res.status(500).json({ success: false, error: 'Failed to fetch quizzes' });
+    }
+});
+
+// Get all students (for assignment selection)
+router.get('/students/list', teacherMiddleware, async (_req: AuthRequest, res: Response) => {
+    try {
+        // 'user' role = students (non-teachers)
+        const students = await User.find({ role: 'user' })
+            .select('name email')
+            .sort({ name: 1 });
+
+        res.json({
+            success: true,
+            data: students,
+        });
+    } catch {
+        res.status(500).json({ success: false, error: 'Failed to fetch students' });
     }
 });
 
@@ -182,7 +209,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 // Create a new quiz (teachers only)
 router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const { title, description, points, difficulty, language, starterCode, solution, testCases, startTime, endTime, duration } = req.body;
+        const { title, description, points, difficulty, language, starterCode, solution, testCases, startTime, endTime, duration, assignedTo } = req.body;
 
         if (!Array.isArray(testCases) || testCases.length === 0) {
             return res.status(400).json({ success: false, error: 'At least one test case is required' });
@@ -208,6 +235,7 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
             startTime: start,
             endTime: end,
             duration,
+            assignedTo: assignedTo || [],
         });
 
         res.status(201).json({ success: true, data: quiz });
@@ -227,7 +255,7 @@ router.put('/:id', teacherMiddleware, async (req: AuthRequest, res: Response) =>
             return res.status(404).json({ success: false, error: 'Quiz not found or not authorized' });
         }
 
-        const { title, description, points, difficulty, language, starterCode, solution, testCases, startTime, endTime, duration } = req.body;
+        const { title, description, points, difficulty, language, starterCode, solution, testCases, startTime, endTime, duration, assignedTo } = req.body;
 
         if (title) quiz.title = title;
         if (description) quiz.description = description;
@@ -245,6 +273,7 @@ router.put('/:id', teacherMiddleware, async (req: AuthRequest, res: Response) =>
         if (startTime) quiz.startTime = new Date(startTime);
         if (endTime) quiz.endTime = new Date(endTime);
         if (duration) quiz.duration = duration;
+        if (assignedTo !== undefined) quiz.assignedTo = assignedTo;
 
         if (quiz.startTime >= quiz.endTime) {
             return res.status(400).json({ success: false, error: 'End time must be after start time' });
