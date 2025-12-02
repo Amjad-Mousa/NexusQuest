@@ -82,19 +82,6 @@ export function ProjectsSidebar({
           Create New Project
         </Button>
       </div>
-
-      {/* Quick Actions */}
-      <div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl p-6 text-white">
-        <h3 className="text-lg font-bold mb-2">🎯 Daily Challenge</h3>
-        <p className="text-blue-50 text-sm mb-4">
-          Complete today's challenge and earn bonus points!
-        </p>
-        <Button
-          className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold"
-        >
-          Start Challenge
-        </Button>
-      </div>
     </div>
   );
 }

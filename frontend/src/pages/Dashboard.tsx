@@ -7,6 +7,7 @@ import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
 import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
+import { DailyChallenge } from '@/components/DailyChallenge';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -465,11 +466,25 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
           </div>
 
-          {/* My Projects Sidebar */}
-          <ProjectsSidebar
-            theme={theme}
-            setTheme={setTheme}
-          />
+          {/* Sidebar with Daily Challenge and Projects */}
+          <div className="space-y-6">
+            {/* Daily Challenge */}
+            <DailyChallenge
+              theme={theme}
+              onPointsEarned={(points) => {
+                setUserStats(prev => ({
+                  ...prev,
+                  totalPoints: prev.totalPoints + points
+                }));
+              }}
+            />
+
+            {/* My Projects */}
+            <ProjectsSidebar
+              theme={theme}
+              setTheme={setTheme}
+            />
+          </div>
         </div>
       </div>
     </div>
