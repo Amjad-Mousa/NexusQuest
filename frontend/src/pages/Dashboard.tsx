@@ -7,6 +7,7 @@ import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
 import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
+import { DailyChallenge } from '@/components/DailyChallenge';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -171,6 +172,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             }`}>Here's what's happening with your learning journey</p>
           </div>
           <div className="flex gap-3">
+            <Button
+              onClick={() => navigate('/quizzes')}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 text-lg"
+            >
+              📝 Quizzes
+            </Button>
             <Button
               onClick={() => navigate('/playground')}
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 text-lg"
@@ -465,11 +472,25 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
           </div>
 
-          {/* My Projects Sidebar */}
-          <ProjectsSidebar
-            theme={theme}
-            setTheme={setTheme}
-          />
+          {/* Sidebar with Daily Challenge and Projects */}
+          <div className="space-y-6">
+            {/* Daily Challenge */}
+            <DailyChallenge
+              theme={theme}
+              onPointsEarned={(points) => {
+                setUserStats(prev => ({
+                  ...prev,
+                  totalPoints: prev.totalPoints + points
+                }));
+              }}
+            />
+
+            {/* My Projects */}
+            <ProjectsSidebar
+              theme={theme}
+              setTheme={setTheme}
+            />
+          </div>
         </div>
       </div>
     </div>
