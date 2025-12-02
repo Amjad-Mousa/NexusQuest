@@ -37,12 +37,15 @@ export interface Quiz {
 }
 
 export interface QuizSubmissionInfo {
-    status: 'started' | 'submitted' | 'passed' | 'failed';
+    status: 'started' | 'submitted' | 'passed';
     score: number;
     totalTests: number;
     pointsAwarded: number;
     startedAt: string;
     submittedAt?: string;
+    teacherGrade?: number;
+    teacherFeedback?: string;
+    gradedAt?: string;
 }
 
 export interface CreateQuizInput {
@@ -73,6 +76,7 @@ export interface QuizSubmitResponse {
     results: QuizTestResult[];
     allPassed: boolean;
     pointsAwarded: number;
+    canRetry?: boolean;
     submission: QuizSubmissionInfo;
 }
 
@@ -154,19 +158,62 @@ export async function submitQuiz(id: string, code: string): Promise<QuizSubmitRe
     return data.data;
 }
 
-export async function getQuizResults(id: string): Promise<{
-    quiz: { _id: string; title: string; totalTests: number; points: number };
-    submissions: Array<{
-        user: { _id: string; name: string; email: string };
-        status: string;
-        score: number;
+export interface QuizSubmissionDetail {
+    _id: string;
+    user: { _id: string; name: string; email: string };
+    code: string;
+    status: string;
+    score: number;
+    totalTests: number;
+    pointsAwarded: number;
+    startedAt: string;
+    submittedAt?: string;
+    teacherGrade?: number;
+    teacherFeedback?: string;
+    gradedAt?: string;
+    gradedBy?: { _id: string; name: string };
+}
+
+export interface QuizResultsResponse {
+    quiz: {
+        _id: string;
+        title: string;
+        description: string;
+        language: string;
         totalTests: number;
-        pointsAwarded: number;
-        startedAt: string;
-        submittedAt?: string;
-    }>;
-}> {
+        points: number;
+    };
+    submissions: QuizSubmissionDetail[];
+}
+
+export async function getQuizResults(id: string): Promise<QuizResultsResponse> {
     const res = await authFetch(`${API_URL}/api/quizzes/${id}/results`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+}
+
+export async function gradeSubmission(
+    quizId: string,
+    submissionId: string,
+    grade: number,
+    feedback: string
+): Promise<{
+    submission: {
+        _id: string;
+        teacherGrade: number;
+        teacherFeedback: string;
+        gradedAt: string;
+        pointsAwarded: number;
+        previousPoints: number;
+        pointsDiff: number;
+    };
+    message: string;
+}> {
+    const res = await authFetch(`${API_URL}/api/quizzes/${quizId}/submission/${submissionId}/grade`, {
+        method: 'POST',
+        body: JSON.stringify({ grade, feedback }),
+    });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;

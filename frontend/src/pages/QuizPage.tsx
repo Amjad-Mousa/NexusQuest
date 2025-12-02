@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Play, CheckCircle2, XCircle, Loader2, AlertTriangle, Trophy } from 'lucide-react';
+import { ArrowLeft, Clock, Play, CheckCircle2, XCircle, Loader2, AlertTriangle, Trophy, RefreshCw, MessageSquare } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { Quiz, getQuiz, startQuiz, submitQuiz, QuizSubmitResponse } from '../services/quizService';
@@ -31,7 +31,9 @@ export default function QuizPage() {
       // Check if already started
       if (data.submission) {
         setStarted(true);
-        if (data.submission.status === 'passed' || data.submission.status === 'failed') {
+        // Only show final result if passed OR quiz has ended
+        const quizEnded = new Date(data.endTime) < new Date();
+        if (data.submission.status === 'passed' || quizEnded) {
           setResult({
             total: data.submission.totalTests,
             passed: data.submission.score,
@@ -95,7 +97,18 @@ export default function QuizPage() {
     try {
       setSubmitting(true);
       const submitResult = await submitQuiz(id, code);
-      setResult(submitResult);
+      
+      // If all passed or canRetry is false, show final result
+      if (submitResult.allPassed || !submitResult.canRetry) {
+        setResult(submitResult);
+      } else {
+        // Show temporary result but allow retry
+        setResult(submitResult);
+        // Clear result after showing feedback so they can retry
+        setTimeout(() => {
+          setResult(null);
+        }, 3000);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to submit quiz');
     } finally {
@@ -219,14 +232,57 @@ export default function QuizPage() {
               <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-orange-400" />
             )}
             <h2 className="text-2xl font-bold mb-2">
-              {result.allPassed ? 'Perfect Score! 🎉' : 'Quiz Submitted'}
+              {result.allPassed ? 'Perfect Score! 🎉' : result.canRetry ? 'Keep Trying!' : 'Quiz Submitted'}
             </h2>
             <p className="text-lg mb-4">
               You passed {result.passed} out of {result.total} test cases
             </p>
-            <p className={`text-xl font-bold ${result.pointsAwarded > 0 ? 'text-green-400' : 'text-gray-400'}`}>
-              +{result.pointsAwarded} points earned
-            </p>
+            
+            {/* Show retry message if can retry */}
+            {result.canRetry && isActive && (
+              <div className={`mb-4 p-3 rounded-lg ${theme === 'dark' ? 'bg-blue-900/30 border border-blue-500/30' : 'bg-blue-50 border border-blue-200'}`}>
+                <p className="text-blue-400 flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  You can try again! Fix your code and resubmit.
+                </p>
+              </div>
+            )}
+
+            {/* Show grade status for ended quizzes */}
+            {isEnded && (
+              <div className={`mb-4 p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-800/50' : 'bg-gray-100'}`}>
+                {quiz?.submission?.teacherGrade !== undefined ? (
+                  <div>
+                    <p className="text-xl font-bold text-green-400 mb-2">
+                      Teacher Grade: {quiz.submission.teacherGrade}%
+                    </p>
+                    <p className={`text-lg ${result.pointsAwarded > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                      +{quiz.submission.pointsAwarded} points earned
+                    </p>
+                    {quiz.submission.teacherFeedback && (
+                      <div className="mt-3 text-left">
+                        <p className="text-sm text-gray-400 flex items-start gap-2">
+                          <MessageSquare className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span>{quiz.submission.teacherFeedback}</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-lg text-yellow-400 mb-1">⏳ Pending Teacher Review</p>
+                    <p className="text-sm text-gray-400">Your submission is being reviewed by the teacher.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Points for active quiz with all passed */}
+            {!isEnded && result.allPassed && (
+              <p className={`text-xl font-bold ${result.pointsAwarded > 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                +{result.pointsAwarded} points earned
+              </p>
+            )}
 
             {/* Test Results */}
             {result.results.length > 0 && (

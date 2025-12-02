@@ -15,6 +15,7 @@ import TaskPage from './pages/TaskPage.tsx'
 import TasksPage from './pages/TasksPage.tsx'
 import QuizPage from './pages/QuizPage.tsx'
 import QuizzesPage from './pages/QuizzesPage.tsx'
+import QuizResultsPage from './pages/QuizResultsPage.tsx'
 import { ThemeProvider } from './context/ThemeContext.tsx'
 import './index.css'
 
@@ -55,6 +56,7 @@ function Root() {
         <Route path="/task/:taskId" element={user ? <TaskPage user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/quizzes" element={user ? <QuizzesPage /> : <Navigate to="/" />} />
         <Route path="/quiz/:id" element={user ? <QuizPage /> : <Navigate to="/" />} />
+        <Route path="/quiz/:id/results" element={user ? <QuizResultsPage /> : <Navigate to="/" />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
       </Routes>

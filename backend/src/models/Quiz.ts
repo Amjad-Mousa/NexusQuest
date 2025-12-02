@@ -32,12 +32,17 @@ export interface IQuizSubmission extends Document {
     quizId: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
     code: string;
-    status: 'started' | 'submitted' | 'passed' | 'failed';
+    status: 'started' | 'submitted' | 'passed';
     score: number; // Number of test cases passed
     totalTests: number;
     pointsAwarded: number;
     startedAt: Date;
     submittedAt?: Date;
+    // Teacher grading
+    teacherGrade?: number; // 0-100 grade from teacher
+    teacherFeedback?: string;
+    gradedAt?: Date;
+    gradedBy?: mongoose.Types.ObjectId;
 }
 
 const quizSchema = new Schema<IQuiz>(
@@ -133,7 +138,7 @@ const quizSubmissionSchema = new Schema<IQuizSubmission>(
         },
         status: {
             type: String,
-            enum: ['started', 'submitted', 'passed', 'failed'],
+            enum: ['started', 'submitted', 'passed'],
             default: 'started',
         },
         score: {
@@ -154,6 +159,23 @@ const quizSubmissionSchema = new Schema<IQuizSubmission>(
         },
         submittedAt: {
             type: Date,
+        },
+        // Teacher grading fields
+        teacherGrade: {
+            type: Number,
+            min: 0,
+            max: 100,
+        },
+        teacherFeedback: {
+            type: String,
+            maxlength: 2000,
+        },
+        gradedAt: {
+            type: Date,
+        },
+        gradedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
         },
     },
     {

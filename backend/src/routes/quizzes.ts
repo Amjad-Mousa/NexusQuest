@@ -49,11 +49,33 @@ router.get('/', async (req: AuthRequest, res: Response) => {
             .populate('createdBy', 'name email')
             .sort({ startTime: -1 });
 
-        // Add status to each quiz
-        const quizzesWithStatus = quizzes.map(quiz => ({
-            ...quiz.toObject(),
-            status: getQuizStatus(quiz),
-        }));
+        // Get user's submissions for all quizzes
+        const submissions = await QuizSubmission.find({
+            userId: req.userId,
+            quizId: { $in: quizzes.map(q => q._id) },
+        });
+
+        const submissionMap = new Map(submissions.map(s => [s.quizId.toString(), s]));
+
+        // Add status and submission to each quiz
+        const quizzesWithStatus = quizzes.map(quiz => {
+            const submission = submissionMap.get(quiz._id.toString());
+            return {
+                ...quiz.toObject(),
+                status: getQuizStatus(quiz),
+                submission: submission ? {
+                    status: submission.status,
+                    score: submission.score,
+                    totalTests: submission.totalTests,
+                    pointsAwarded: submission.pointsAwarded,
+                    startedAt: submission.startedAt,
+                    submittedAt: submission.submittedAt,
+                    teacherGrade: submission.teacherGrade,
+                    teacherFeedback: submission.teacherFeedback,
+                    gradedAt: submission.gradedAt,
+                } : null,
+            };
+        });
 
         res.json({
             success: true,
@@ -146,6 +168,9 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
                     pointsAwarded: submission.pointsAwarded,
                     startedAt: submission.startedAt,
                     submittedAt: submission.submittedAt,
+                    teacherGrade: submission.teacherGrade,
+                    teacherFeedback: submission.teacherFeedback,
+                    gradedAt: submission.gradedAt,
                 } : null,
             },
         });
@@ -340,8 +365,10 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ success: false, error: 'You must start the quiz first' });
         }
 
-        if (submission.status === 'passed' || submission.status === 'failed') {
-            return res.status(400).json({ success: false, error: 'You have already submitted this quiz' });
+        // Allow resubmission if not all tests passed (until timer ends)
+        // Only block if already passed all tests
+        if (submission.status === 'passed') {
+            return res.status(400).json({ success: false, error: 'You have already passed this quiz!' });
         }
 
         const testCases = quiz.testCases || [];
@@ -396,21 +423,27 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
         const allPassed = passed === results.length;
 
         // Calculate points (proportional to tests passed)
-        const pointsAwarded = allPassed ? quiz.points : Math.floor((passed / results.length) * quiz.points * 0.5);
+        // Only award points automatically if all tests pass
+        const newPointsAwarded = allPassed ? quiz.points : 0;
+
+        // Track previous points to handle point adjustments
+        const previousPoints = submission.pointsAwarded || 0;
+        const pointsDiff = newPointsAwarded - previousPoints;
 
         // Update submission
         submission.code = code;
-        submission.status = allPassed ? 'passed' : 'failed';
+        submission.status = allPassed ? 'passed' : 'submitted';
         submission.score = passed;
         submission.totalTests = results.length;
-        submission.pointsAwarded = pointsAwarded;
         submission.submittedAt = new Date();
-        await submission.save();
 
-        // Award points to user
-        if (pointsAwarded > 0) {
-            await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: pointsAwarded } });
+        // Only update points if score improved (all passed)
+        if (allPassed && pointsDiff > 0) {
+            submission.pointsAwarded = newPointsAwarded;
+            await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: pointsDiff } });
         }
+
+        await submission.save();
 
         res.json({
             success: true,
@@ -419,12 +452,13 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
                 passed,
                 results,
                 allPassed,
-                pointsAwarded,
+                pointsAwarded: submission.pointsAwarded || 0,
+                canRetry: !allPassed, // Student can retry if not all passed
                 submission: {
                     status: submission.status,
                     score: submission.score,
                     totalTests: submission.totalTests,
-                    pointsAwarded: submission.pointsAwarded,
+                    pointsAwarded: submission.pointsAwarded || 0,
                     submittedAt: submission.submittedAt,
                 },
             },
@@ -448,6 +482,7 @@ router.get('/:id/results', teacherMiddleware, async (req: AuthRequest, res: Resp
 
         const submissions = await QuizSubmission.find({ quizId: quiz._id })
             .populate('userId', 'name email')
+            .populate('gradedBy', 'name')
             .sort({ score: -1, submittedAt: 1 });
 
         res.json({
@@ -456,22 +491,147 @@ router.get('/:id/results', teacherMiddleware, async (req: AuthRequest, res: Resp
                 quiz: {
                     _id: quiz._id,
                     title: quiz.title,
+                    description: quiz.description,
+                    language: quiz.language,
                     totalTests: quiz.testCases.length,
                     points: quiz.points,
                 },
                 submissions: submissions.map(s => ({
+                    _id: s._id,
                     user: s.userId,
+                    code: s.code,
                     status: s.status,
                     score: s.score,
                     totalTests: s.totalTests,
                     pointsAwarded: s.pointsAwarded,
                     startedAt: s.startedAt,
                     submittedAt: s.submittedAt,
+                    teacherGrade: s.teacherGrade,
+                    teacherFeedback: s.teacherFeedback,
+                    gradedAt: s.gradedAt,
+                    gradedBy: s.gradedBy,
                 })),
             },
         });
     } catch {
         res.status(500).json({ success: false, error: 'Failed to fetch results' });
+    }
+});
+
+// Get a single submission details (teachers only)
+router.get('/:id/submission/:submissionId', teacherMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.userId });
+
+        if (!quiz) {
+            return res.status(404).json({ success: false, error: 'Quiz not found or not authorized' });
+        }
+
+        const submission = await QuizSubmission.findOne({
+            _id: req.params.submissionId,
+            quizId: quiz._id,
+        })
+            .populate('userId', 'name email')
+            .populate('gradedBy', 'name');
+
+        if (!submission) {
+            return res.status(404).json({ success: false, error: 'Submission not found' });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                quiz: {
+                    _id: quiz._id,
+                    title: quiz.title,
+                    description: quiz.description,
+                    language: quiz.language,
+                    testCases: quiz.testCases,
+                    points: quiz.points,
+                },
+                submission: {
+                    _id: submission._id,
+                    user: submission.userId,
+                    code: submission.code,
+                    status: submission.status,
+                    score: submission.score,
+                    totalTests: submission.totalTests,
+                    pointsAwarded: submission.pointsAwarded,
+                    startedAt: submission.startedAt,
+                    submittedAt: submission.submittedAt,
+                    teacherGrade: submission.teacherGrade,
+                    teacherFeedback: submission.teacherFeedback,
+                    gradedAt: submission.gradedAt,
+                    gradedBy: submission.gradedBy,
+                },
+            },
+        });
+    } catch {
+        res.status(500).json({ success: false, error: 'Failed to fetch submission' });
+    }
+});
+
+// Grade a submission (teachers only)
+router.post('/:id/submission/:submissionId/grade', teacherMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const { grade, feedback } = req.body as { grade?: number; feedback?: string };
+
+        if (grade === undefined || grade < 0 || grade > 100) {
+            return res.status(400).json({ success: false, error: 'Grade must be between 0 and 100' });
+        }
+
+        const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.userId });
+
+        if (!quiz) {
+            return res.status(404).json({ success: false, error: 'Quiz not found or not authorized' });
+        }
+
+        const submission = await QuizSubmission.findOne({
+            _id: req.params.submissionId,
+            quizId: quiz._id,
+        }).populate('userId', 'name email');
+
+        if (!submission) {
+            return res.status(404).json({ success: false, error: 'Submission not found' });
+        }
+
+        // Calculate new points based on teacher grade
+        const previousPoints = submission.pointsAwarded;
+        const newPoints = Math.round((grade / 100) * quiz.points);
+        const pointsDiff = newPoints - previousPoints;
+
+        // Update submission
+        submission.teacherGrade = grade;
+        submission.teacherFeedback = feedback || '';
+        submission.gradedAt = new Date();
+        submission.gradedBy = req.userId as any;
+        submission.pointsAwarded = newPoints;
+        await submission.save();
+
+        // Update user's total points
+        if (pointsDiff !== 0) {
+            await User.findByIdAndUpdate(submission.userId, {
+                $inc: { totalPoints: pointsDiff },
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                submission: {
+                    _id: submission._id,
+                    teacherGrade: submission.teacherGrade,
+                    teacherFeedback: submission.teacherFeedback,
+                    gradedAt: submission.gradedAt,
+                    pointsAwarded: submission.pointsAwarded,
+                    previousPoints,
+                    pointsDiff,
+                },
+                message: `Graded successfully. Points ${pointsDiff >= 0 ? 'added' : 'adjusted'}: ${pointsDiff}`,
+            },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error?.message || 'Failed to grade submission' });
     }
 });
 
