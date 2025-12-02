@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, CheckCircle2, Clock, Award, MessageSquare, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
-import { getQuizResults, gradeSubmission, QuizResultsResponse, QuizSubmissionDetail } from '../services/quizService';
+import { getQuizResults, gradeSubmission, gradeStudentByUserId, QuizResultsResponse, QuizSubmissionDetail } from '../services/quizService';
 
 export default function QuizResultsPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,7 +41,14 @@ export default function QuizResultsPage() {
 
     try {
       setSubmittingGrade(true);
-      await gradeSubmission(id, submission._id, gradeValue, feedbackValue);
+      
+      // Use different endpoint based on whether submission exists
+      if (submission._id) {
+        await gradeSubmission(id, submission._id, gradeValue, feedbackValue);
+      } else {
+        // Student didn't attempt - grade by user ID
+        await gradeStudentByUserId(id, submission.user._id, gradeValue, feedbackValue);
+      }
       
       // Reload results
       await loadResults();
@@ -56,10 +63,15 @@ export default function QuizResultsPage() {
   };
 
   const openGrading = (submission: QuizSubmissionDetail) => {
-    setGradingSubmission(submission._id);
-    setGradeValue(submission.teacherGrade ?? Math.round((submission.score / submission.totalTests) * 100));
+    const uniqueKey = submission._id || submission.user._id;
+    setGradingSubmission(uniqueKey);
+    // Default to 0 for students who didn't attempt
+    const defaultGrade = submission.status === 'not_attempted' 
+      ? 0 
+      : submission.teacherGrade ?? Math.round((submission.score / submission.totalTests) * 100);
+    setGradeValue(defaultGrade);
     setFeedbackValue(submission.teacherFeedback || '');
-    setExpandedSubmission(submission._id);
+    setExpandedSubmission(uniqueKey);
   };
 
   if (loading) {
@@ -156,21 +168,23 @@ export default function QuizResultsPage() {
 
           {submissions.length === 0 ? (
             <div className="p-8 text-center text-gray-400">
-              No submissions yet
+              No students assigned to this quiz
             </div>
           ) : (
             <div className={`divide-y ${theme === 'dark' ? 'divide-gray-800' : 'divide-gray-200'}`}>
               {submissions.map(submission => {
-                const isExpanded = expandedSubmission === submission._id;
-                const isGrading = gradingSubmission === submission._id;
-                const hasSubmitted = submission.status !== 'started';
+                const uniqueKey = submission._id || submission.user._id;
+                const isExpanded = expandedSubmission === uniqueKey;
+                const isGrading = gradingSubmission === uniqueKey;
+                const hasSubmitted = submission.status !== 'started' && submission.status !== 'not_attempted';
+                const notAttempted = submission.status === 'not_attempted';
 
                 return (
-                  <div key={submission._id} className="p-4">
+                  <div key={uniqueKey} className="p-4">
                     {/* Submission Header */}
                     <div
                       className="flex items-center justify-between cursor-pointer"
-                      onClick={() => setExpandedSubmission(isExpanded ? null : submission._id)}
+                      onClick={() => setExpandedSubmission(isExpanded ? null : uniqueKey)}
                     >
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -186,7 +200,18 @@ export default function QuizResultsPage() {
 
                       <div className="flex items-center gap-4">
                         {/* Status */}
-                        {hasSubmitted ? (
+                        {notAttempted ? (
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm px-2 py-1 rounded bg-red-500/20 text-red-400">
+                              ❌ Not Attempted
+                            </span>
+                            {submission.teacherGrade !== undefined ? (
+                              <span className="text-sm px-2 py-1 rounded bg-blue-500/20 text-blue-400">
+                                Grade: {submission.teacherGrade}%
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : hasSubmitted ? (
                           <div className="flex items-center gap-3">
                             <span className={`text-sm px-2 py-1 rounded ${
                               submission.status === 'passed'
@@ -215,7 +240,7 @@ export default function QuizResultsPage() {
                     </div>
 
                     {/* Expanded Content */}
-                    {isExpanded && hasSubmitted && (
+                    {isExpanded && (hasSubmitted || notAttempted) && (
                       <div className="mt-4 space-y-4">
                         {/* Code Display */}
                         <div>
@@ -223,11 +248,19 @@ export default function QuizResultsPage() {
                             Student's Code
                             <span className="text-xs text-gray-400">({quiz.language})</span>
                           </h4>
-                          <pre className={`p-4 rounded-lg text-sm font-mono overflow-x-auto max-h-80 ${
-                            theme === 'dark' ? 'bg-gray-950 border border-gray-800' : 'bg-gray-100 border border-gray-200'
-                          }`}>
-                            {submission.code || '(No code submitted)'}
-                          </pre>
+                          {notAttempted ? (
+                            <div className={`p-4 rounded-lg text-center ${
+                              theme === 'dark' ? 'bg-red-950/30 border border-red-800' : 'bg-red-50 border border-red-200'
+                            }`}>
+                              <p className="text-red-400">Student did not attempt this quiz</p>
+                            </div>
+                          ) : (
+                            <pre className={`p-4 rounded-lg text-sm font-mono overflow-x-auto max-h-80 ${
+                              theme === 'dark' ? 'bg-gray-950 border border-gray-800' : 'bg-gray-100 border border-gray-200'
+                            }`}>
+                              {submission.code || '(No code submitted)'}
+                            </pre>
+                          )}
                         </div>
 
                         {/* Grading Section */}
@@ -303,13 +336,38 @@ export default function QuizResultsPage() {
                                       Graded on {new Date(submission.gradedAt!).toLocaleString()}
                                     </p>
                                   </div>
+                                ) : notAttempted ? (
+                                  <p className="text-red-400">Student did not attempt - grade as 0?</p>
                                 ) : (
                                   <p className="text-gray-400">Not graded yet</p>
                                 )}
                               </div>
-                              <Button onClick={() => openGrading(submission)}>
-                                {submission.teacherGrade !== undefined ? 'Edit Grade' : 'Grade'}
-                              </Button>
+                              <div className="flex gap-2">
+                                {notAttempted && submission.teacherGrade === undefined && (
+                                  <Button 
+                                    variant="outline"
+                                    className="text-red-400 border-red-400 hover:bg-red-500/10"
+                                    onClick={async () => {
+                                      if (!id) return;
+                                      try {
+                                        setSubmittingGrade(true);
+                                        await gradeStudentByUserId(id, submission.user._id, 0, 'Did not attempt the quiz');
+                                        await loadResults();
+                                      } catch (err: any) {
+                                        alert(err.message || 'Failed to grade');
+                                      } finally {
+                                        setSubmittingGrade(false);
+                                      }
+                                    }}
+                                    disabled={submittingGrade}
+                                  >
+                                    Grade 0
+                                  </Button>
+                                )}
+                                <Button onClick={() => openGrading(submission)}>
+                                  {submission.teacherGrade !== undefined ? 'Edit Grade' : 'Grade'}
+                                </Button>
+                              </div>
                             </div>
                           )}
                         </div>

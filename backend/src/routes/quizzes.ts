@@ -503,7 +503,8 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
 // Get quiz results/leaderboard (teachers only)
 router.get('/:id/results', teacherMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.userId });
+        const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.userId })
+            .populate('assignedTo', 'name email');
 
         if (!quiz) {
             return res.status(404).json({ success: false, error: 'Quiz not found or not authorized' });
@@ -513,6 +514,68 @@ router.get('/:id/results', teacherMiddleware, async (req: AuthRequest, res: Resp
             .populate('userId', 'name email')
             .populate('gradedBy', 'name')
             .sort({ score: -1, submittedAt: 1 });
+
+        // Create a map of submissions by user ID
+        const submissionMap = new Map(submissions.map(s => [(s.userId as any)._id.toString(), s]));
+
+        // Get list of assigned students (or all students if not specifically assigned)
+        let assignedStudents: any[] = [];
+        if (quiz.assignedTo && quiz.assignedTo.length > 0) {
+            assignedStudents = quiz.assignedTo as any[];
+        } else {
+            // If no specific assignment, get all students (users with role 'user')
+            assignedStudents = await User.find({ role: 'user' }).select('name email');
+        }
+
+        // Build results including students who didn't attempt
+        const allResults = assignedStudents.map(student => {
+            const submission = submissionMap.get(student._id.toString());
+
+            if (submission) {
+                return {
+                    _id: submission._id,
+                    user: submission.userId,
+                    code: submission.code,
+                    status: submission.status,
+                    score: submission.score,
+                    totalTests: submission.totalTests,
+                    pointsAwarded: submission.pointsAwarded,
+                    startedAt: submission.startedAt,
+                    submittedAt: submission.submittedAt,
+                    teacherGrade: submission.teacherGrade,
+                    teacherFeedback: submission.teacherFeedback,
+                    gradedAt: submission.gradedAt,
+                    gradedBy: submission.gradedBy,
+                    attempted: true,
+                };
+            } else {
+                // Student didn't attempt - show as not attempted
+                return {
+                    _id: null,
+                    user: student,
+                    code: '',
+                    status: 'not_attempted',
+                    score: 0,
+                    totalTests: quiz.testCases.length,
+                    pointsAwarded: 0,
+                    startedAt: null,
+                    submittedAt: null,
+                    teacherGrade: undefined,
+                    teacherFeedback: undefined,
+                    gradedAt: undefined,
+                    gradedBy: undefined,
+                    attempted: false,
+                };
+            }
+        });
+
+        // Sort: attempted first (by score), then not attempted
+        allResults.sort((a, b) => {
+            if (a.attempted && !b.attempted) return -1;
+            if (!a.attempted && b.attempted) return 1;
+            if (a.attempted && b.attempted) return (b.score || 0) - (a.score || 0);
+            return 0;
+        });
 
         res.json({
             success: true,
@@ -524,22 +587,9 @@ router.get('/:id/results', teacherMiddleware, async (req: AuthRequest, res: Resp
                     language: quiz.language,
                     totalTests: quiz.testCases.length,
                     points: quiz.points,
+                    assignedCount: assignedStudents.length,
                 },
-                submissions: submissions.map(s => ({
-                    _id: s._id,
-                    user: s.userId,
-                    code: s.code,
-                    status: s.status,
-                    score: s.score,
-                    totalTests: s.totalTests,
-                    pointsAwarded: s.pointsAwarded,
-                    startedAt: s.startedAt,
-                    submittedAt: s.submittedAt,
-                    teacherGrade: s.teacherGrade,
-                    teacherFeedback: s.teacherFeedback,
-                    gradedAt: s.gradedAt,
-                    gradedBy: s.gradedBy,
-                })),
+                submissions: allResults,
             },
         });
     } catch {
@@ -661,6 +711,90 @@ router.post('/:id/submission/:submissionId/grade', teacherMiddleware, async (req
         });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error?.message || 'Failed to grade submission' });
+    }
+});
+
+// Grade a student who didn't attempt (teachers only) - creates submission with grade
+router.post('/:id/grade-student/:userId', teacherMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const { grade, feedback } = req.body as { grade?: number; feedback?: string };
+
+        if (grade === undefined || grade < 0 || grade > 100) {
+            return res.status(400).json({ success: false, error: 'Grade must be between 0 and 100' });
+        }
+
+        const quiz = await Quiz.findOne({ _id: req.params.id, createdBy: req.userId });
+
+        if (!quiz) {
+            return res.status(404).json({ success: false, error: 'Quiz not found or not authorized' });
+        }
+
+        // Check if submission already exists
+        let submission = await QuizSubmission.findOne({
+            quizId: quiz._id,
+            userId: req.params.userId,
+        });
+
+        const newPoints = Math.round((grade / 100) * quiz.points);
+
+        if (submission) {
+            // Update existing submission
+            const previousPoints = submission.pointsAwarded;
+            const pointsDiff = newPoints - previousPoints;
+
+            submission.teacherGrade = grade;
+            submission.teacherFeedback = feedback || '';
+            submission.gradedAt = new Date();
+            submission.gradedBy = req.userId as any;
+            submission.pointsAwarded = newPoints;
+            await submission.save();
+
+            if (pointsDiff !== 0) {
+                await User.findByIdAndUpdate(req.params.userId, {
+                    $inc: { totalPoints: pointsDiff },
+                });
+            }
+        } else {
+            // Create new submission for student who didn't attempt
+            submission = await QuizSubmission.create({
+                quizId: quiz._id,
+                userId: req.params.userId,
+                code: '',
+                status: 'submitted',
+                score: 0,
+                totalTests: quiz.testCases.length,
+                pointsAwarded: newPoints,
+                startedAt: new Date(),
+                submittedAt: new Date(),
+                teacherGrade: grade,
+                teacherFeedback: feedback || '',
+                gradedAt: new Date(),
+                gradedBy: req.userId,
+            });
+
+            // Add points to user
+            if (newPoints > 0) {
+                await User.findByIdAndUpdate(req.params.userId, {
+                    $inc: { totalPoints: newPoints },
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                submission: {
+                    _id: submission._id,
+                    teacherGrade: submission.teacherGrade,
+                    teacherFeedback: submission.teacherFeedback,
+                    gradedAt: submission.gradedAt,
+                    pointsAwarded: submission.pointsAwarded,
+                },
+                message: 'Graded successfully',
+            },
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error?.message || 'Failed to grade student' });
     }
 });
 

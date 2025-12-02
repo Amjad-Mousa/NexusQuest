@@ -174,16 +174,17 @@ export async function submitQuiz(id: string, code: string): Promise<QuizSubmitRe
 }
 
 export interface QuizSubmissionDetail {
-    _id: string;
+    _id: string | null;
     user: { _id: string; name: string; email: string };
     code: string;
     status: string;
     score: number;
     totalTests: number;
     pointsAwarded: number;
-    startedAt: string;
-    submittedAt?: string;
+    startedAt: string | null;
+    submittedAt?: string | null;
     teacherGrade?: number;
+    attempted?: boolean;
     teacherFeedback?: string;
     gradedAt?: string;
     gradedBy?: { _id: string; name: string };
@@ -226,6 +227,31 @@ export async function gradeSubmission(
     message: string;
 }> {
     const res = await authFetch(`${API_URL}/api/quizzes/${quizId}/submission/${submissionId}/grade`, {
+        method: 'POST',
+        body: JSON.stringify({ grade, feedback }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+}
+
+// Grade a student who didn't attempt (by user ID)
+export async function gradeStudentByUserId(
+    quizId: string,
+    userId: string,
+    grade: number,
+    feedback: string
+): Promise<{
+    submission: {
+        _id: string;
+        teacherGrade: number;
+        teacherFeedback: string;
+        gradedAt: string;
+        pointsAwarded: number;
+    };
+    message: string;
+}> {
+    const res = await authFetch(`${API_URL}/api/quizzes/${quizId}/grade-student/${userId}`, {
         method: 'POST',
         body: JSON.stringify({ grade, feedback }),
     });
