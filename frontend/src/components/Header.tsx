@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
-import { Play, Square, Download, Upload, Sparkles, User, LogIn, X, Save, MessageSquare } from 'lucide-react';
+import { Play, Square, Download, Upload, User, LogIn, X, Save, MessageSquare } from 'lucide-react';
 import type { Language, Theme, User as UserType, Project, ProjectFile } from '../types';
 
 interface HeaderProps {

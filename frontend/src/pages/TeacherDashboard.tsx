@@ -8,6 +8,7 @@ import CreateTaskModal from '../components/teacher/CreateTaskModal';
 import CreateQuizModal from '../components/teacher/CreateQuizModal';
 import { UserSidebar } from '../components/UserSidebar';
 import { useTheme } from '../context/ThemeContext';
+import { NotificationsBell } from '../components/NotificationsBell';
 
 interface TeacherDashboardProps {
   user: { name: string; email: string } | null;
@@ -162,6 +163,8 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
+
+            <NotificationsBell theme={theme} />
 
             {/* User Menu */}
             <Button

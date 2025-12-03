@@ -13,6 +13,7 @@ import terminalRouter from './routes/terminal.js';
 import versionsRouter from './routes/versions.js';
 import dailyChallengeRouter from './routes/daily-challenge.js';
 import quizzesRouter from './routes/quizzes.js';
+import notificationRouter from './routes/notification.js';
 import { streamExecutionRouter } from './routes/stream-execution.js';
 import { playgroundExecutionRouter } from './routes/playground-execution.js';
 import { projectExecutionRouter } from './routes/project-execution.js';
@@ -73,6 +74,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/versions', versionsRouter);
 app.use('/api/daily-challenge', dailyChallengeRouter);
 app.use('/api/quizzes', quizzesRouter);
+app.use('/api/notifications', notificationRouter);
 
 // Error handling
 app.use(errorHandler);

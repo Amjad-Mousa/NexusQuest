@@ -8,6 +8,7 @@ import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../service
 import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { DailyChallenge } from '@/components/DailyChallenge';
+import { NotificationsBell } from '@/components/NotificationsBell';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -118,6 +119,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <NotificationsBell theme={theme} />
             <Button
               onClick={() => setShowSidePanel(true)}
               variant="outline"
