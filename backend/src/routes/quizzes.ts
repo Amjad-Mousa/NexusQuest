@@ -3,6 +3,8 @@ import { Quiz, QuizSubmission } from '../models/Quiz.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { User } from '../models/User.js';
 import { executeCode } from '../services/dockerService.js';
+import { Notification } from '../models/Notification.js';
+import { NotificationType } from '../enums/NotificationType.js';
 
 const router = Router();
 
@@ -238,6 +240,30 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
             assignedTo: assignedTo || [],
         });
 
+        // Create notifications for explicitly assigned students
+        if (Array.isArray(assignedTo) && assignedTo.length > 0) {
+            const message = `New quiz "${title}" has been assigned to you.`;
+            const notifications = assignedTo.map((studentId: string) => ({
+                userId: studentId,
+                type: NotificationType.NEW_QUIZ,
+                message,
+                metadata: {
+                    quizId: quiz._id,
+                    title: quiz.title,
+                    points: quiz.points,
+                    startTime: quiz.startTime,
+                    endTime: quiz.endTime,
+                },
+                read: false,
+            }));
+
+            try {
+                await Notification.insertMany(notifications);
+            } catch (notifyError) {
+                console.error('Failed to create NEW_QUIZ notifications:', notifyError);
+            }
+        }
+
         res.status(201).json({ success: true, data: quiz });
     } catch (error: unknown) {
         const err = error as Error;
@@ -470,6 +496,24 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
         if (allPassed && pointsDiff > 0) {
             submission.pointsAwarded = newPointsAwarded;
             await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: pointsDiff } });
+
+            // Notification: points earned from quiz
+            try {
+                await Notification.create({
+                    userId: req.userId,
+                    type: NotificationType.POINTS_EARNED,
+                    message: `You earned ${pointsDiff} points from quiz "${quiz.title}"`,
+                    metadata: {
+                        quizId: quiz._id,
+                        title: quiz.title,
+                        points: pointsDiff,
+                        reason: 'quiz_auto_pass',
+                    },
+                    read: false,
+                });
+            } catch (notifyError) {
+                console.error('Failed to create POINTS_EARNED notification (quiz submit):', notifyError);
+            }
         }
 
         await submission.save();
@@ -692,6 +736,44 @@ router.post('/:id/submission/:submissionId/grade', teacherMiddleware, async (req
             await User.findByIdAndUpdate(submission.userId, {
                 $inc: { totalPoints: pointsDiff },
             });
+
+            // Notification: points earned/adjusted from graded quiz
+            if (pointsDiff > 0) {
+                try {
+                    await Notification.create({
+                        userId: submission.userId,
+                        type: NotificationType.POINTS_EARNED,
+                        message: `You earned ${pointsDiff} points from quiz "${quiz.title}"`,
+                        metadata: {
+                            quizId: quiz._id,
+                            title: quiz.title,
+                            points: pointsDiff,
+                            reason: 'quiz_teacher_grade',
+                        },
+                        read: false,
+                    });
+                } catch (notifyError) {
+                    console.error('Failed to create POINTS_EARNED notification (teacher grade):', notifyError);
+                }
+            }
+        }
+
+        // Notification: grade updated
+        try {
+            await Notification.create({
+                userId: submission.userId,
+                type: NotificationType.GRADE_UPDATED,
+                message: `Your grade for quiz "${quiz.title}" has been updated.`,
+                metadata: {
+                    quizId: quiz._id,
+                    title: quiz.title,
+                    grade,
+                    pointsAwarded: submission.pointsAwarded,
+                },
+                read: false,
+            });
+        } catch (notifyError) {
+            console.error('Failed to create GRADE_UPDATED notification:', notifyError);
         }
 
         res.json({
@@ -737,10 +819,12 @@ router.post('/:id/grade-student/:userId', teacherMiddleware, async (req: AuthReq
 
         const newPoints = Math.round((grade / 100) * quiz.points);
 
+        let pointsDiff = newPoints;
+
         if (submission) {
             // Update existing submission
             const previousPoints = submission.pointsAwarded;
-            const pointsDiff = newPoints - previousPoints;
+            pointsDiff = newPoints - previousPoints;
 
             submission.teacherGrade = grade;
             submission.teacherFeedback = feedback || '';
@@ -778,6 +862,39 @@ router.post('/:id/grade-student/:userId', teacherMiddleware, async (req: AuthReq
                     $inc: { totalPoints: newPoints },
                 });
             }
+        }
+
+        // Notifications: grade updated and possibly points earned
+        try {
+            await Notification.create({
+                userId: req.params.userId,
+                type: NotificationType.GRADE_UPDATED,
+                message: `Your grade for quiz "${quiz.title}" has been updated.`,
+                metadata: {
+                    quizId: quiz._id,
+                    title: quiz.title,
+                    grade,
+                    pointsAwarded: submission.pointsAwarded,
+                },
+                read: false,
+            });
+
+            if (pointsDiff > 0) {
+                await Notification.create({
+                    userId: req.params.userId,
+                    type: NotificationType.POINTS_EARNED,
+                    message: `You earned ${pointsDiff} points from quiz "${quiz.title}"`,
+                    metadata: {
+                        quizId: quiz._id,
+                        title: quiz.title,
+                        points: pointsDiff,
+                        reason: 'quiz_teacher_grade_student',
+                    },
+                    read: false,
+                });
+            }
+        } catch (notifyError) {
+            console.error('Failed to create notifications for grade-student:', notifyError);
         }
 
         res.json({

@@ -2,6 +2,8 @@ import { Router, Response } from 'express';
 import { UserTaskProgress } from '../models/UserTaskProgress.js';
 import { Task } from '../models/Task.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
+import { Notification } from '../models/Notification.js';
+import { NotificationType } from '../enums/NotificationType.js';
 
 const router = Router();
 
@@ -111,6 +113,25 @@ router.put('/:taskId/complete', async (req: AuthRequest, res: Response) => {
 
     if (!progress) {
       return res.status(404).json({ success: false, error: 'Progress not found. Start the task first.' });
+    }
+
+    // Fire-and-forget task completion notification
+    try {
+      const task = await Task.findById(req.params.taskId);
+      if (task) {
+        await Notification.create({
+          userId: req.userId,
+          type: NotificationType.Task_COMPLETED,
+          message: `You completed the task "${task.title}"`,
+          metadata: {
+            taskId: task._id,
+            taskTitle: task.title,
+          },
+          read: false,
+        });
+      }
+    } catch (notifyError) {
+      console.error('Failed to create TASK_COMPLETED notification (manual complete):', notifyError);
     }
 
     res.json({ success: true, data: progress });

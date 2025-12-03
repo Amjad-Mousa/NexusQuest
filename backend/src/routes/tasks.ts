@@ -4,6 +4,8 @@ import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { User } from '../models/User.js';
 import { UserTaskProgress } from '../models/UserTaskProgress.js';
 import { executeCode } from '../services/dockerService.js';
+import { Notification } from '../models/Notification.js';
+import { NotificationType } from '../enums/NotificationType.js';
 
 const router = Router();
 
@@ -254,8 +256,44 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
         { new: true, upsert: true }
       );
 
-      if (isFirstCompletion && typeof task.points === 'number') {
-        await User.findByIdAndUpdate(userId, { $inc: { totalPoints: task.points } });
+      if (isFirstCompletion) {
+        // Points for first completion
+        if (typeof task.points === 'number' && task.points > 0) {
+          await User.findByIdAndUpdate(userId, { $inc: { totalPoints: task.points } });
+
+          try {
+            await Notification.create({
+              userId,
+              type: NotificationType.POINTS_EARNED,
+              message: `You earned ${task.points} points for completing task "${task.title}"`,
+              metadata: {
+                taskId,
+                taskTitle: task.title,
+                points: task.points,
+                reason: 'task_completion',
+              },
+              read: false,
+            });
+          } catch (notifyError) {
+            console.error('Failed to create POINTS_EARNED notification (task run-tests):', notifyError);
+          }
+        }
+
+        // Task completed notification
+        try {
+          await Notification.create({
+            userId,
+            type: NotificationType.Task_COMPLETED,
+            message: `You completed the task "${task.title}"`,
+            metadata: {
+              taskId,
+              taskTitle: task.title,
+            },
+            read: false,
+          });
+        } catch (notifyError) {
+          console.error('Failed to create TASK_COMPLETED notification (task run-tests):', notifyError);
+        }
       }
 
       completionUpdated = true;
