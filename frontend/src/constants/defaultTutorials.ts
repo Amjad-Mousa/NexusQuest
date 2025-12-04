@@ -1610,6 +1610,7 @@ print(get_grade(85))  # B`,
     language: "java",
     difficulty: "beginner",
     order: 1,
+    nextTutorialId: 'java-methods',
     sections: [
       {
         id: 'intro',
@@ -1726,6 +1727,757 @@ public class Main {
     ]
   },
 
+  // Java Methods
+  {
+    id: 'java-methods',
+    title: "Java Methods and Functions",
+    description: "Learn to create and use methods in Java including parameters, return types, and method overloading",
+    language: "java",
+    difficulty: "beginner",
+    order: 2,
+    nextTutorialId: 'java-arrays',
+    sections: [
+      {
+        id: 'intro',
+        title: "What are Methods?",
+        content: `Methods in Java are blocks of code that perform specific tasks. They help organize code and promote reusability.
+
+Methods must be declared inside a class and can be called to execute their code.`,
+        codeExample: `public class Calculator {
+    // Method declaration
+    public int add(int a, int b) {
+        return a + b;
+    }
+    
+    public static void main(String[] args) {
+        Calculator calc = new Calculator();
+        int result = calc.add(5, 3);
+        System.out.println(result);  // 8
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'syntax',
+        title: "Method Syntax",
+        content: `Java method syntax includes access modifier, return type, method name, and parameters.
+
+**Access Modifiers**: public, private, protected
+**Return Type**: data type or void
+**Parameters**: input values (optional)`,
+        codeExample: `public class Example {
+    // No parameters, void return
+    public void greet() {
+        System.out.println("Hello!");
+    }
+    
+    // With parameters, returns value
+    public int multiply(int x, int y) {
+        return x * y;
+    }
+    
+    // Static method (belongs to class)
+    public static double square(double num) {
+        return num * num;
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'parameters',
+        title: "Method Parameters",
+        content: `Methods can accept multiple parameters of different types. Parameters are passed by value in Java.`,
+        codeExample: `public class Student {
+    private String name;
+    private int age;
+    
+    // Constructor with parameters
+    public Student(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+    
+    // Method with multiple parameters
+    public void printInfo(String prefix, boolean detailed) {
+        System.out.println(prefix + name);
+        if (detailed) {
+            System.out.println("Age: " + age);
+        }
+    }
+    
+    public static void main(String[] args) {
+        Student s = new Student("Ahmed", 20);
+        s.printInfo("Student: ", true);
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'overloading',
+        title: "Method Overloading",
+        content: `Method overloading allows multiple methods with the same name but different parameters. Java determines which method to call based on the arguments.`,
+        codeExample: `public class Calculator {
+    // Overloaded methods
+    public int add(int a, int b) {
+        return a + b;
+    }
+    
+    public double add(double a, double b) {
+        return a + b;
+    }
+    
+    public int add(int a, int b, int c) {
+        return a + b + c;
+    }
+    
+    public static void main(String[] args) {
+        Calculator calc = new Calculator();
+        System.out.println(calc.add(5, 3));           // 8
+        System.out.println(calc.add(5.5, 3.2));       // 8.7
+        System.out.println(calc.add(1, 2, 3));        // 6
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'return',
+        title: "Return Statements",
+        content: `Methods can return values using the return keyword. The return type must match the declared type.
+
+Methods with void return type don't return a value.`,
+        codeExample: `public class Math {
+    // Returns int
+    public int getMax(int a, int b) {
+        return (a > b) ? a : b;
+    }
+    
+    // Returns boolean
+    public boolean isEven(int num) {
+        return num % 2 == 0;
+    }
+    
+    // Returns String
+    public String getGrade(int score) {
+        if (score >= 90) return "A";
+        else if (score >= 80) return "B";
+        else if (score >= 70) return "C";
+        else return "F";
+    }
+    
+    // Void - no return
+    public void printMessage(String msg) {
+        System.out.println(msg);
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'practice',
+        title: "Practice Exercise",
+        content: `Create methods to solve common problems and practice method overloading.`,
+        codeExample: `public class Practice {
+    // Calculate area of rectangle
+    public static double area(double length, double width) {
+        return length * width;
+    }
+    
+    // Calculate area of circle (overloaded)
+    public static double area(double radius) {
+        return Math.PI * radius * radius;
+    }
+    
+    // Check if number is prime
+    public static boolean isPrime(int num) {
+        if (num <= 1) return false;
+        for (int i = 2; i <= Math.sqrt(num); i++) {
+            if (num % i == 0) return false;
+        }
+        return true;
+    }
+    
+    public static void main(String[] args) {
+        System.out.println("Rectangle area: " + area(5, 3));
+        System.out.println("Circle area: " + area(4));
+        System.out.println("Is 17 prime? " + isPrime(17));
+    }
+}`,
+        language: 'java'
+      }
+    ]
+  },
+
+  // Java Arrays
+  {
+    id: 'java-arrays',
+    title: "Java Arrays and Collections",
+    description: "Master Java arrays including declaration, initialization, and array manipulation",
+    language: "java",
+    difficulty: "beginner",
+    order: 3,
+    nextTutorialId: 'java-loops',
+    sections: [
+      {
+        id: 'intro',
+        title: "Introduction to Arrays",
+        content: `Arrays in Java are fixed-size collections that store elements of the same type. They provide efficient indexed access to elements.
+
+Arrays are objects in Java and have a fixed length once created.`,
+        codeExample: `// Array declaration and initialization
+int[] numbers = {1, 2, 3, 4, 5};
+String[] fruits = {"apple", "banana", "orange"};
+
+// Accessing elements
+System.out.println(numbers[0]);  // 1
+System.out.println(fruits.length);  // 3`,
+        language: 'java'
+      },
+      {
+        id: 'declaration',
+        title: "Array Declaration",
+        content: `Java provides multiple ways to declare and initialize arrays.`,
+        codeExample: `// Declaration with initialization
+int[] scores = {95, 87, 92, 88, 91};
+
+// Declaration with size
+int[] numbers = new int[5];
+numbers[0] = 10;
+numbers[1] = 20;
+
+// Two-dimensional array
+int[][] matrix = {
+    {1, 2, 3},
+    {4, 5, 6},
+    {7, 8, 9}
+};
+
+// Alternative syntax (less common)
+String names[] = new String[3];
+names[0] = "Ali";
+names[1] = "Sara";
+names[2] = "Omar";`,
+        language: 'java'
+      },
+      {
+        id: 'iteration',
+        title: "Iterating Through Arrays",
+        content: `You can loop through arrays using traditional for loops or enhanced for-each loops.`,
+        codeExample: `String[] fruits = {"apple", "banana", "orange", "mango"};
+
+// Traditional for loop
+for (int i = 0; i < fruits.length; i++) {
+    System.out.println(fruits[i]);
+}
+
+// Enhanced for-each loop
+for (String fruit : fruits) {
+    System.out.println(fruit);
+}
+
+// Two-dimensional array iteration
+int[][] matrix = {{1, 2, 3}, {4, 5, 6}};
+for (int i = 0; i < matrix.length; i++) {
+    for (int j = 0; j < matrix[i].length; j++) {
+        System.out.print(matrix[i][j] + " ");
+    }
+    System.out.println();
+}`,
+        language: 'java'
+      },
+      {
+        id: 'methods',
+        title: "Array Methods and Utilities",
+        content: `Java provides the Arrays class with utility methods for array manipulation.`,
+        codeExample: `import java.util.Arrays;
+
+public class ArrayExample {
+    public static void main(String[] args) {
+        int[] numbers = {5, 2, 8, 1, 9};
+        
+        // Sort array
+        Arrays.sort(numbers);
+        System.out.println(Arrays.toString(numbers));
+        // [1, 2, 5, 8, 9]
+        
+        // Binary search (must be sorted)
+        int index = Arrays.binarySearch(numbers, 5);
+        System.out.println("Index of 5: " + index);
+        
+        // Fill array with value
+        int[] filled = new int[5];
+        Arrays.fill(filled, 10);
+        System.out.println(Arrays.toString(filled));
+        // [10, 10, 10, 10, 10]
+        
+        // Copy array
+        int[] copy = Arrays.copyOf(numbers, numbers.length);
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'arraylist',
+        title: "ArrayList - Dynamic Arrays",
+        content: `ArrayList is a dynamic array that can grow or shrink in size. It's part of Java's Collections Framework.`,
+        codeExample: `import java.util.ArrayList;
+
+public class ListExample {
+    public static void main(String[] args) {
+        // Create ArrayList
+        ArrayList<String> fruits = new ArrayList<>();
+        
+        // Add elements
+        fruits.add("apple");
+        fruits.add("banana");
+        fruits.add("orange");
+        
+        // Access elements
+        System.out.println(fruits.get(0));  // apple
+        
+        // Size
+        System.out.println(fruits.size());  // 3
+        
+        // Remove element
+        fruits.remove("banana");
+        
+        // Check if contains
+        boolean hasApple = fruits.contains("apple");
+        
+        // Iterate
+        for (String fruit : fruits) {
+            System.out.println(fruit);
+        }
+    }
+}`,
+        language: 'java'
+      },
+      {
+        id: 'practice',
+        title: "Practice Exercise",
+        content: `Practice working with arrays and ArrayLists.`,
+        codeExample: `import java.util.Arrays;
+import java.util.ArrayList;
+
+public class ArrayPractice {
+    // Find maximum in array
+    public static int findMax(int[] arr) {
+        int max = arr[0];
+        for (int num : arr) {
+            if (num > max) max = num;
+        }
+        return max;
+    }
+    
+    // Calculate average
+    public static double average(int[] arr) {
+        int sum = 0;
+        for (int num : arr) {
+            sum += num;
+        }
+        return (double) sum / arr.length;
+    }
+    
+    public static void main(String[] args) {
+        int[] scores = {85, 92, 78, 95, 88};
+        
+        System.out.println("Max: " + findMax(scores));
+        System.out.println("Average: " + average(scores));
+        
+        // Using ArrayList
+        ArrayList<Integer> numbers = new ArrayList<>();
+        numbers.add(10);
+        numbers.add(20);
+        numbers.add(30);
+        System.out.println("ArrayList: " + numbers);
+    }
+}`,
+        language: 'java'
+      }
+    ]
+  },
+
+  // Java Loops
+  {
+    id: 'java-loops',
+    title: "Java Loops and Iteration",
+    description: "Learn Java loops: for, while, do-while, and enhanced for loops",
+    language: "java",
+    difficulty: "beginner",
+    order: 4,
+    nextTutorialId: 'java-conditionals',
+    sections: [
+      {
+        id: 'intro',
+        title: "Introduction to Loops",
+        content: `Loops allow you to execute code repeatedly. Java provides several types of loops for different scenarios.`,
+        codeExample: `// Basic for loop
+for (int i = 0; i < 5; i++) {
+    System.out.println("Count: " + i);
+}
+
+// Output: Count: 0, 1, 2, 3, 4`,
+        language: 'java'
+      },
+      {
+        id: 'for-loop',
+        title: "For Loop",
+        content: `The for loop is ideal when you know how many iterations you need. It has initialization, condition, and increment/decrement.`,
+        codeExample: `// Basic for loop
+for (int i = 1; i <= 10; i++) {
+    System.out.println(i);
+}
+
+// Loop backwards
+for (int i = 10; i > 0; i--) {
+    System.out.println(i);
+}
+
+// Skip even numbers
+for (int i = 1; i <= 10; i++) {
+    if (i % 2 == 0) continue;
+    System.out.println(i);  // 1, 3, 5, 7, 9
+}
+
+// Break early
+for (int i = 1; i <= 10; i++) {
+    if (i == 5) break;
+    System.out.println(i);  // 1, 2, 3, 4
+}
+
+// Nested loops
+for (int i = 1; i <= 3; i++) {
+    for (int j = 1; j <= 3; j++) {
+        System.out.print(i + "," + j + " ");
+    }
+    System.out.println();
+}`,
+        language: 'java'
+      },
+      {
+        id: 'while-loop',
+        title: "While Loop",
+        content: `The while loop continues as long as the condition is true. It checks the condition before each iteration.`,
+        codeExample: `// Basic while loop
+int count = 0;
+while (count < 5) {
+    System.out.println(count);
+    count++;
+}
+
+// User input simulation
+Scanner scanner = new Scanner(System.in);
+String input = "";
+while (!input.equals("quit")) {
+    System.out.print("Enter command (or 'quit'): ");
+    input = scanner.nextLine();
+    System.out.println("You entered: " + input);
+}
+
+// Factorial calculation
+int n = 5;
+int factorial = 1;
+int i = 1;
+while (i <= n) {
+    factorial *= i;
+    i++;
+}
+System.out.println("Factorial: " + factorial);`,
+        language: 'java'
+      },
+      {
+        id: 'do-while',
+        title: "Do-While Loop",
+        content: `The do-while loop executes at least once before checking the condition. The condition is checked after each iteration.`,
+        codeExample: `// Basic do-while
+int num = 0;
+do {
+    System.out.println(num);
+    num++;
+} while (num < 5);
+
+// Menu system
+Scanner scanner = new Scanner(System.in);
+int choice;
+do {
+    System.out.println("\\n1. Option 1");
+    System.out.println("2. Option 2");
+    System.out.println("3. Exit");
+    System.out.print("Choose: ");
+    choice = scanner.nextInt();
+    
+    switch (choice) {
+        case 1: System.out.println("Option 1 selected"); break;
+        case 2: System.out.println("Option 2 selected"); break;
+        case 3: System.out.println("Goodbye!"); break;
+    }
+} while (choice != 3);`,
+        language: 'java'
+      },
+      {
+        id: 'enhanced-for',
+        title: "Enhanced For Loop",
+        content: `The enhanced for loop (for-each) makes it easy to iterate through arrays and collections.`,
+        codeExample: `// Array iteration
+String[] fruits = {"apple", "banana", "orange"};
+for (String fruit : fruits) {
+    System.out.println(fruit);
+}
+
+// ArrayList iteration
+ArrayList<Integer> numbers = new ArrayList<>();
+numbers.add(10);
+numbers.add(20);
+numbers.add(30);
+
+for (int num : numbers) {
+    System.out.println(num);
+}
+
+// Two-dimensional array
+int[][] matrix = {{1, 2, 3}, {4, 5, 6}};
+for (int[] row : matrix) {
+    for (int value : row) {
+        System.out.print(value + " ");
+    }
+    System.out.println();
+}`,
+        language: 'java'
+      },
+      {
+        id: 'practice',
+        title: "Practice Exercise",
+        content: `Practice using different loop types to solve problems.`,
+        codeExample: `public class LoopPractice {
+    // Sum of numbers 1 to n
+    public static int sum(int n) {
+        int total = 0;
+        for (int i = 1; i <= n; i++) {
+            total += i;
+        }
+        return total;
+    }
+    
+    // Print multiplication table
+    public static void multiplicationTable(int num) {
+        for (int i = 1; i <= 10; i++) {
+            System.out.println(num + " x " + i + " = " + (num * i));
+        }
+    }
+    
+    // Fibonacci sequence
+    public static void fibonacci(int n) {
+        int a = 0, b = 1;
+        for (int i = 0; i < n; i++) {
+            System.out.print(a + " ");
+            int next = a + b;
+            a = b;
+            b = next;
+        }
+    }
+    
+    public static void main(String[] args) {
+        System.out.println("Sum 1-100: " + sum(100));
+        multiplicationTable(5);
+        fibonacci(10);
+    }
+}`,
+        language: 'java'
+      }
+    ]
+  },
+
+  // Java Conditionals
+  {
+    id: 'java-conditionals',
+    title: "Java Conditional Statements",
+    description: "Master if, else if, else, switch statements and conditional operators in Java",
+    language: "java",
+    difficulty: "beginner",
+    order: 5,
+    sections: [
+      {
+        id: 'intro',
+        title: "Conditional Statements",
+        content: `Conditional statements allow your program to make decisions and execute different code based on conditions.`,
+        codeExample: `int age = 18;
+
+if (age >= 18) {
+    System.out.println("Adult");
+} else {
+    System.out.println("Minor");
+}`,
+        language: 'java'
+      },
+      {
+        id: 'if-else',
+        title: "If-Else Statements",
+        content: `Use if for the first condition, else if for additional conditions, and else when no conditions are met.`,
+        codeExample: `int score = 85;
+
+if (score >= 90) {
+    System.out.println("Grade: A");
+} else if (score >= 80) {
+    System.out.println("Grade: B");
+} else if (score >= 70) {
+    System.out.println("Grade: C");
+} else if (score >= 60) {
+    System.out.println("Grade: D");
+} else {
+    System.out.println("Grade: F");
+}
+
+// Nested if statements
+int age = 25;
+boolean hasLicense = true;
+
+if (age >= 18) {
+    if (hasLicense) {
+        System.out.println("Can drive");
+    } else {
+        System.out.println("Need license");
+    }
+} else {
+    System.out.println("Too young");
+}`,
+        language: 'java'
+      },
+      {
+        id: 'comparison',
+        title: "Comparison Operators",
+        content: `Java supports all standard comparison operators for comparing values.
+
+**Operators**: == (equal), != (not equal), > (greater), < (less), >= (greater or equal), <= (less or equal)`,
+        codeExample: `int x = 10;
+int y = 20;
+
+System.out.println(x == y);   // false
+System.out.println(x != y);   // true
+System.out.println(x < y);    // true
+System.out.println(x <= 10);  // true
+
+// String comparison (use .equals())
+String str1 = "hello";
+String str2 = "hello";
+String str3 = new String("hello");
+
+System.out.println(str1.equals(str2));  // true
+System.out.println(str1 == str3);       // false (different objects)
+System.out.println(str1.equals(str3));  // true (same content)`,
+        language: 'java'
+      },
+      {
+        id: 'logical',
+        title: "Logical Operators",
+        content: `Logical operators combine multiple conditions: && (AND), || (OR), ! (NOT).`,
+        codeExample: `int age = 25;
+int income = 50000;
+
+// AND - both must be true
+if (age >= 18 && income > 30000) {
+    System.out.println("Eligible for loan");
+}
+
+// OR - at least one must be true
+boolean isWeekend = true;
+boolean isHoliday = false;
+if (isWeekend || isHoliday) {
+    System.out.println("Day off!");
+}
+
+// NOT - inverts boolean
+boolean isRaining = false;
+if (!isRaining) {
+    System.out.println("Go outside!");
+}
+
+// Combining operators
+int x = 15;
+if ((x > 10 && x < 20) || x == 5) {
+    System.out.println("Condition met");
+}`,
+        language: 'java'
+      },
+      {
+        id: 'switch',
+        title: "Switch Statement",
+        content: `The switch statement is useful for multiple conditions based on the same variable. It's cleaner than multiple if-else statements.`,
+        codeExample: `int day = 3;
+String dayName;
+
+switch (day) {
+    case 1:
+        dayName = "Monday";
+        break;
+    case 2:
+        dayName = "Tuesday";
+        break;
+    case 3:
+        dayName = "Wednesday";
+        break;
+    case 4:
+        dayName = "Thursday";
+        break;
+    case 5:
+        dayName = "Friday";
+        break;
+    case 6:
+    case 7:
+        dayName = "Weekend";
+        break;
+    default:
+        dayName = "Invalid day";
+}
+
+System.out.println(dayName);  // Wednesday
+
+// Switch with String (Java 7+)
+String grade = "B";
+switch (grade) {
+    case "A":
+        System.out.println("Excellent!");
+        break;
+    case "B":
+        System.out.println("Good job!");
+        break;
+    default:
+        System.out.println("Keep trying!");
+}`,
+        language: 'java'
+      },
+      {
+        id: 'ternary',
+        title: "Ternary Operator",
+        content: `The ternary operator provides a shorthand for simple if-else statements.
+
+Syntax: condition ? valueIfTrue : valueIfFalse`,
+        codeExample: `int age = 20;
+
+// Traditional if-else
+String status;
+if (age >= 18) {
+    status = "adult";
+} else {
+    status = "minor";
+}
+
+// Ternary operator (same result)
+String status2 = (age >= 18) ? "adult" : "minor";
+
+// Find maximum
+int a = 10, b = 20;
+int max = (a > b) ? a : b;
+
+// Nested ternary (use sparingly)
+int score = 85;
+String grade = (score >= 90) ? "A" : 
+               (score >= 80) ? "B" : 
+               (score >= 70) ? "C" : "F";
+
+System.out.println("Grade: " + grade);`,
+        language: 'java'
+      }
+    ]
+  },
+
   // C++ Basics
   {
     id: 'cpp-basics',
@@ -1734,6 +2486,7 @@ public class Main {
     language: "cpp",
     difficulty: "beginner",
     order: 1,
+    nextTutorialId: 'cpp-functions',
     sections: [
       {
         id: 'intro',
@@ -1841,6 +2594,954 @@ int main() {
     cout << "Sum: " << sum << endl;
     cout << "Difference: " << diff << endl;
     cout << "Product: " << prod << endl;
+    
+    return 0;
+}`,
+        language: 'cpp'
+      }
+    ]
+  },
+
+  // C++ Functions
+  {
+    id: 'cpp-functions',
+    title: "C++ Functions",
+    description: "Learn to create and use functions in C++ including parameters, return types, and function overloading",
+    language: "cpp",
+    difficulty: "beginner",
+    order: 2,
+    nextTutorialId: 'cpp-arrays',
+    sections: [
+      {
+        id: 'intro',
+        title: "Introduction to Functions",
+        content: `Functions in C++ are reusable blocks of code that perform specific tasks. They help organize code and avoid repetition.
+
+Functions must be declared before use, either with a prototype or full definition.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+// Function declaration (prototype)
+int add(int a, int b);
+
+int main() {
+    int result = add(5, 3);
+    cout << "Result: " << result << endl;
+    return 0;
+}
+
+// Function definition
+int add(int a, int b) {
+    return a + b;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'syntax',
+        title: "Function Syntax",
+        content: `C++ function syntax includes return type, function name, parameters, and function body.
+
+Functions can return a value or void (no return value).`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+// No parameters, void return
+void greet() {
+    cout << "Hello, World!" << endl;
+}
+
+// With parameters, returns value
+int multiply(int x, int y) {
+    return x * y;
+}
+
+// Multiple parameters
+double calculateArea(double length, double width) {
+    return length * width;
+}
+
+int main() {
+    greet();
+    cout << multiply(4, 5) << endl;
+    cout << calculateArea(5.5, 3.2) << endl;
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'parameters',
+        title: "Pass by Value and Reference",
+        content: `C++ supports pass by value (copy) and pass by reference (actual variable).
+
+Pass by reference uses & and allows functions to modify the original variable.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+// Pass by value (copy)
+void incrementValue(int x) {
+    x++;  // Only changes local copy
+}
+
+// Pass by reference (actual variable)
+void incrementReference(int& x) {
+    x++;  // Changes original variable
+}
+
+// Pass by pointer
+void incrementPointer(int* x) {
+    (*x)++;
+}
+
+int main() {
+    int num = 10;
+    
+    incrementValue(num);
+    cout << "After value: " << num << endl;  // 10
+    
+    incrementReference(num);
+    cout << "After reference: " << num << endl;  // 11
+    
+    incrementPointer(&num);
+    cout << "After pointer: " << num << endl;  // 12
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'overloading',
+        title: "Function Overloading",
+        content: `Function overloading allows multiple functions with the same name but different parameters. The compiler chooses the right function based on arguments.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+// Overloaded functions
+int add(int a, int b) {
+    return a + b;
+}
+
+double add(double a, double b) {
+    return a + b;
+}
+
+int add(int a, int b, int c) {
+    return a + b + c;
+}
+
+int main() {
+    cout << add(5, 3) << endl;        // 8
+    cout << add(5.5, 3.2) << endl;    // 8.7
+    cout << add(1, 2, 3) << endl;     // 6
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'default',
+        title: "Default Parameters",
+        content: `C++ allows you to specify default values for parameters. If no argument is provided, the default value is used.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+// Function with default parameters
+void printMessage(string msg = "Hello", int times = 1) {
+    for (int i = 0; i < times; i++) {
+        cout << msg << endl;
+    }
+}
+
+double power(double base, int exponent = 2) {
+    double result = 1;
+    for (int i = 0; i < exponent; i++) {
+        result *= base;
+    }
+    return result;
+}
+
+int main() {
+    printMessage();                    // Hello (once)
+    printMessage("Hi");               // Hi (once)
+    printMessage("Hey", 3);           // Hey (3 times)
+    
+    cout << power(5) << endl;         // 25 (5^2)
+    cout << power(2, 3) << endl;      // 8 (2^3)
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'practice',
+        title: "Practice Exercise",
+        content: `Practice creating and using functions with different parameter types.`,
+        codeExample: `#include <iostream>
+#include <cmath>
+using namespace std;
+
+// Check if number is prime
+bool isPrime(int n) {
+    if (n <= 1) return false;
+    for (int i = 2; i <= sqrt(n); i++) {
+        if (n % i == 0) return false;
+    }
+    return true;
+}
+
+// Calculate factorial
+int factorial(int n) {
+    if (n <= 1) return 1;
+    return n * factorial(n - 1);
+}
+
+// Swap two numbers (by reference)
+void swap(int& a, int& b) {
+    int temp = a;
+    a = b;
+    b = temp;
+}
+
+int main() {
+    cout << "Is 17 prime? " << isPrime(17) << endl;
+    cout << "Factorial of 5: " << factorial(5) << endl;
+    
+    int x = 10, y = 20;
+    cout << "Before: x=" << x << ", y=" << y << endl;
+    swap(x, y);
+    cout << "After: x=" << x << ", y=" << y << endl;
+    
+    return 0;
+}`,
+        language: 'cpp'
+      }
+    ]
+  },
+
+  // C++ Arrays
+  {
+    id: 'cpp-arrays',
+    title: "C++ Arrays and Vectors",
+    description: "Master C++ arrays and vectors including declaration, manipulation, and STL containers",
+    language: "cpp",
+    difficulty: "beginner",
+    order: 3,
+    nextTutorialId: 'cpp-loops',
+    sections: [
+      {
+        id: 'intro',
+        title: "Introduction to Arrays",
+        content: `Arrays in C++ are fixed-size collections of elements of the same type. They provide fast indexed access.
+
+Arrays have a fixed size that must be known at compile time.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    // Array declaration and initialization
+    int numbers[5] = {1, 2, 3, 4, 5};
+    string fruits[3] = {"apple", "banana", "orange"};
+    
+    // Accessing elements
+    cout << numbers[0] << endl;  // 1
+    cout << fruits[2] << endl;   // orange
+    
+    // Size of array
+    int size = sizeof(numbers) / sizeof(numbers[0]);
+    cout << "Size: " << size << endl;  // 5
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'manipulation',
+        title: "Array Manipulation",
+        content: `You can iterate through arrays, modify elements, and perform various operations.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int scores[5] = {85, 92, 78, 95, 88};
+    
+    // Iterate and print
+    cout << "Scores: ";
+    for (int i = 0; i < 5; i++) {
+        cout << scores[i] << " ";
+    }
+    cout << endl;
+    
+    // Find maximum
+    int max = scores[0];
+    for (int i = 1; i < 5; i++) {
+        if (scores[i] > max) {
+            max = scores[i];
+        }
+    }
+    cout << "Maximum: " << max << endl;
+    
+    // Calculate average
+    int sum = 0;
+    for (int i = 0; i < 5; i++) {
+        sum += scores[i];
+    }
+    double average = (double)sum / 5;
+    cout << "Average: " << average << endl;
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'multidimensional',
+        title: "Multi-dimensional Arrays",
+        content: `C++ supports multi-dimensional arrays, commonly used for matrices and tables.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    // 2D array (matrix)
+    int matrix[3][3] = {
+        {1, 2, 3},
+        {4, 5, 6},
+        {7, 8, 9}
+    };
+    
+    // Access element
+    cout << matrix[1][2] << endl;  // 6
+    
+    // Iterate through 2D array
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            cout << matrix[i][j] << " ";
+        }
+        cout << endl;
+    }
+    
+    // 3D array
+    int cube[2][2][2] = {
+        {{1, 2}, {3, 4}},
+        {{5, 6}, {7, 8}}
+    };
+    
+    cout << cube[1][0][1] << endl;  // 6
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'vectors',
+        title: "Vectors - Dynamic Arrays",
+        content: `Vectors are dynamic arrays from the C++ Standard Library. They can grow and shrink in size.`,
+        codeExample: `#include <iostream>
+#include <vector>
+using namespace std;
+
+int main() {
+    // Create vector
+    vector<int> numbers;
+    
+    // Add elements
+    numbers.push_back(10);
+    numbers.push_back(20);
+    numbers.push_back(30);
+    
+    // Access elements
+    cout << numbers[0] << endl;      // 10
+    cout << numbers.at(1) << endl;   // 20 (with bounds checking)
+    
+    // Size
+    cout << "Size: " << numbers.size() << endl;  // 3
+    
+    // Remove last element
+    numbers.pop_back();
+    
+    // Iterate
+    for (int num : numbers) {
+        cout << num << " ";
+    }
+    cout << endl;
+    
+    // Initialize with values
+    vector<string> fruits = {"apple", "banana", "orange"};
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'algorithms',
+        title: "STL Algorithms",
+        content: `The C++ Standard Library provides algorithms for sorting, searching, and manipulating arrays and vectors.`,
+        codeExample: `#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    vector<int> numbers = {5, 2, 8, 1, 9, 3};
+    
+    // Sort
+    sort(numbers.begin(), numbers.end());
+    for (int num : numbers) {
+        cout << num << " ";  // 1 2 3 5 8 9
+    }
+    cout << endl;
+    
+    // Reverse
+    reverse(numbers.begin(), numbers.end());
+    
+    // Find element
+    auto it = find(numbers.begin(), numbers.end(), 5);
+    if (it != numbers.end()) {
+        cout << "Found 5" << endl;
+    }
+    
+    // Count occurrences
+    int count = count(numbers.begin(), numbers.end(), 3);
+    
+    // Min and max
+    int min = *min_element(numbers.begin(), numbers.end());
+    int max = *max_element(numbers.begin(), numbers.end());
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'practice',
+        title: "Practice Exercise",
+        content: `Practice working with arrays and vectors.`,
+        codeExample: `#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+// Find sum of array
+int arraySum(int arr[], int size) {
+    int sum = 0;
+    for (int i = 0; i < size; i++) {
+        sum += arr[i];
+    }
+    return sum;
+}
+
+// Remove duplicates from vector
+vector<int> removeDuplicates(vector<int> vec) {
+    sort(vec.begin(), vec.end());
+    vec.erase(unique(vec.begin(), vec.end()), vec.end());
+    return vec;
+}
+
+int main() {
+    // Array practice
+    int numbers[] = {1, 2, 3, 4, 5};
+    int size = sizeof(numbers) / sizeof(numbers[0]);
+    cout << "Sum: " << arraySum(numbers, size) << endl;
+    
+    // Vector practice
+    vector<int> nums = {1, 2, 2, 3, 3, 3, 4, 5, 5};
+    vector<int> unique_nums = removeDuplicates(nums);
+    
+    cout << "Unique: ";
+    for (int num : unique_nums) {
+        cout << num << " ";
+    }
+    cout << endl;
+    
+    return 0;
+}`,
+        language: 'cpp'
+      }
+    ]
+  },
+
+  // C++ Loops
+  {
+    id: 'cpp-loops',
+    title: "C++ Loops and Iteration",
+    description: "Learn C++ loops: for, while, do-while, and range-based for loops",
+    language: "cpp",
+    difficulty: "beginner",
+    order: 4,
+    nextTutorialId: 'cpp-conditionals',
+    sections: [
+      {
+        id: 'intro',
+        title: "Introduction to Loops",
+        content: `Loops allow you to execute code repeatedly. C++ provides several loop types for different scenarios.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    // Basic for loop
+    for (int i = 0; i < 5; i++) {
+        cout << "Count: " << i << endl;
+    }
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'for-loop',
+        title: "For Loop",
+        content: `The for loop is ideal when you know how many iterations you need.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    // Basic for loop
+    for (int i = 1; i <= 10; i++) {
+        cout << i << " ";
+    }
+    cout << endl;
+    
+    // Loop backwards
+    for (int i = 10; i > 0; i--) {
+        cout << i << " ";
+    }
+    cout << endl;
+    
+    // Skip iteration
+    for (int i = 1; i <= 10; i++) {
+        if (i % 2 == 0) continue;  // Skip even
+        cout << i << " ";
+    }
+    cout << endl;
+    
+    // Break early
+    for (int i = 1; i <= 10; i++) {
+        if (i == 5) break;
+        cout << i << " ";
+    }
+    cout << endl;
+    
+    // Nested loops
+    for (int i = 1; i <= 3; i++) {
+        for (int j = 1; j <= 3; j++) {
+            cout << i * j << " ";
+        }
+        cout << endl;
+    }
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'while-loop',
+        title: "While Loop",
+        content: `The while loop continues as long as the condition is true.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    // Basic while loop
+    int count = 0;
+    while (count < 5) {
+        cout << count << endl;
+        count++;
+    }
+    
+    // Factorial calculation
+    int n = 5;
+    int factorial = 1;
+    int i = 1;
+    while (i <= n) {
+        factorial *= i;
+        i++;
+    }
+    cout << "Factorial: " << factorial << endl;
+    
+    // Find first power of 2 greater than 1000
+    int power = 1;
+    while (power <= 1000) {
+        power *= 2;
+    }
+    cout << "Power: " << power << endl;
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'do-while',
+        title: "Do-While Loop",
+        content: `The do-while loop executes at least once before checking the condition.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    // Basic do-while
+    int num = 0;
+    do {
+        cout << num << endl;
+        num++;
+    } while (num < 5);
+    
+    // Menu system
+    int choice;
+    do {
+        cout << "\\n1. Option 1" << endl;
+        cout << "2. Option 2" << endl;
+        cout << "3. Exit" << endl;
+        cout << "Choose: ";
+        cin >> choice;
+        
+        switch (choice) {
+            case 1:
+                cout << "Option 1 selected" << endl;
+                break;
+            case 2:
+                cout << "Option 2 selected" << endl;
+                break;
+            case 3:
+                cout << "Goodbye!" << endl;
+                break;
+            default:
+                cout << "Invalid choice" << endl;
+        }
+    } while (choice != 3);
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'range-based',
+        title: "Range-Based For Loop",
+        content: `C++11 introduced range-based for loops for easy iteration over containers.`,
+        codeExample: `#include <iostream>
+#include <vector>
+using namespace std;
+
+int main() {
+    // Array iteration
+    int numbers[] = {1, 2, 3, 4, 5};
+    for (int num : numbers) {
+        cout << num << " ";
+    }
+    cout << endl;
+    
+    // Vector iteration
+    vector<string> fruits = {"apple", "banana", "orange"};
+    for (string fruit : fruits) {
+        cout << fruit << endl;
+    }
+    
+    // Modify elements with reference
+    vector<int> values = {1, 2, 3, 4, 5};
+    for (int& val : values) {
+        val *= 2;  // Double each value
+    }
+    
+    for (int val : values) {
+        cout << val << " ";  // 2 4 6 8 10
+    }
+    cout << endl;
+    
+    // Const reference for read-only
+    for (const string& fruit : fruits) {
+        cout << fruit << " ";
+    }
+    cout << endl;
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'practice',
+        title: "Practice Exercise",
+        content: `Practice using different loop types to solve problems.`,
+        codeExample: `#include <iostream>
+#include <vector>
+using namespace std;
+
+// Sum of numbers 1 to n
+int sum(int n) {
+    int total = 0;
+    for (int i = 1; i <= n; i++) {
+        total += i;
+    }
+    return total;
+}
+
+// Print multiplication table
+void multiplicationTable(int num) {
+    for (int i = 1; i <= 10; i++) {
+        cout << num << " x " << i << " = " << (num * i) << endl;
+    }
+}
+
+// Fibonacci sequence
+void fibonacci(int n) {
+    int a = 0, b = 1;
+    for (int i = 0; i < n; i++) {
+        cout << a << " ";
+        int next = a + b;
+        a = b;
+        b = next;
+    }
+    cout << endl;
+}
+
+// Pattern printing
+void printPattern(int rows) {
+    for (int i = 1; i <= rows; i++) {
+        for (int j = 1; j <= i; j++) {
+            cout << "* ";
+        }
+        cout << endl;
+    }
+}
+
+int main() {
+    cout << "Sum 1-100: " << sum(100) << endl;
+    multiplicationTable(7);
+    fibonacci(10);
+    printPattern(5);
+    
+    return 0;
+}`,
+        language: 'cpp'
+      }
+    ]
+  },
+
+  // C++ Conditionals
+  {
+    id: 'cpp-conditionals',
+    title: "C++ Conditional Statements",
+    description: "Master if, else, switch statements and conditional operators in C++",
+    language: "cpp",
+    difficulty: "beginner",
+    order: 5,
+    sections: [
+      {
+        id: 'intro',
+        title: "Conditional Statements",
+        content: `Conditional statements allow your program to make decisions based on conditions.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int age = 18;
+    
+    if (age >= 18) {
+        cout << "Adult" << endl;
+    } else {
+        cout << "Minor" << endl;
+    }
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'if-else',
+        title: "If-Else Statements",
+        content: `Use if for the first condition, else if for additional conditions, and else when no conditions are met.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int score = 85;
+    
+    if (score >= 90) {
+        cout << "Grade: A" << endl;
+    } else if (score >= 80) {
+        cout << "Grade: B" << endl;
+    } else if (score >= 70) {
+        cout << "Grade: C" << endl;
+    } else if (score >= 60) {
+        cout << "Grade: D" << endl;
+    } else {
+        cout << "Grade: F" << endl;
+    }
+    
+    // Nested if statements
+    int age = 25;
+    bool hasLicense = true;
+    
+    if (age >= 18) {
+        if (hasLicense) {
+            cout << "Can drive" << endl;
+        } else {
+            cout << "Need license" << endl;
+        }
+    } else {
+        cout << "Too young" << endl;
+    }
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'comparison',
+        title: "Comparison Operators",
+        content: `C++ supports all standard comparison operators.
+
+**Operators**: == (equal), != (not equal), > (greater), < (less), >= (greater or equal), <= (less or equal)`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int x = 10;
+    int y = 20;
+    
+    cout << (x == y) << endl;   // 0 (false)
+    cout << (x != y) << endl;   // 1 (true)
+    cout << (x < y) << endl;    // 1 (true)
+    cout << (x <= 10) << endl;  // 1 (true)
+    
+    // String comparison
+    string str1 = "hello";
+    string str2 = "hello";
+    
+    if (str1 == str2) {
+        cout << "Strings are equal" << endl;
+    }
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'logical',
+        title: "Logical Operators",
+        content: `Logical operators combine multiple conditions: && (AND), || (OR), ! (NOT).`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int age = 25;
+    int income = 50000;
+    
+    // AND - both must be true
+    if (age >= 18 && income > 30000) {
+        cout << "Eligible for loan" << endl;
+    }
+    
+    // OR - at least one must be true
+    bool isWeekend = true;
+    bool isHoliday = false;
+    if (isWeekend || isHoliday) {
+        cout << "Day off!" << endl;
+    }
+    
+    // NOT - inverts boolean
+    bool isRaining = false;
+    if (!isRaining) {
+        cout << "Go outside!" << endl;
+    }
+    
+    // Combining operators
+    int x = 15;
+    if ((x > 10 && x < 20) || x == 5) {
+        cout << "Condition met" << endl;
+    }
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'switch',
+        title: "Switch Statement",
+        content: `The switch statement is useful for multiple conditions based on the same variable.`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int day = 3;
+    string dayName;
+    
+    switch (day) {
+        case 1:
+            dayName = "Monday";
+            break;
+        case 2:
+            dayName = "Tuesday";
+            break;
+        case 3:
+            dayName = "Wednesday";
+            break;
+        case 4:
+            dayName = "Thursday";
+            break;
+        case 5:
+            dayName = "Friday";
+            break;
+        case 6:
+        case 7:
+            dayName = "Weekend";
+            break;
+        default:
+            dayName = "Invalid day";
+    }
+    
+    cout << dayName << endl;
+    
+    // Switch with char
+    char grade = 'B';
+    switch (grade) {
+        case 'A':
+            cout << "Excellent!" << endl;
+            break;
+        case 'B':
+            cout << "Good job!" << endl;
+            break;
+        case 'C':
+            cout << "Fair" << endl;
+            break;
+        default:
+            cout << "Keep trying!" << endl;
+    }
+    
+    return 0;
+}`,
+        language: 'cpp'
+      },
+      {
+        id: 'ternary',
+        title: "Ternary Operator",
+        content: `The ternary operator provides a shorthand for simple if-else statements.
+
+Syntax: condition ? valueIfTrue : valueIfFalse`,
+        codeExample: `#include <iostream>
+using namespace std;
+
+int main() {
+    int age = 20;
+    
+    // Traditional if-else
+    string status;
+    if (age >= 18) {
+        status = "adult";
+    } else {
+        status = "minor";
+    }
+    
+    // Ternary operator (same result)
+    string status2 = (age >= 18) ? "adult" : "minor";
+    
+    // Find maximum
+    int a = 10, b = 20;
+    int max = (a > b) ? a : b;
+    cout << "Max: " << max << endl;
+    
+    // Nested ternary
+    int score = 85;
+    string grade = (score >= 90) ? "A" : 
+                   (score >= 80) ? "B" : 
+                   (score >= 70) ? "C" : "F";
+    
+    cout << "Grade: " << grade << endl;
+    
+    // Even or odd
+    int num = 7;
+    cout << num << " is " << ((num % 2 == 0) ? "even" : "odd") << endl;
     
     return 0;
 }`,
