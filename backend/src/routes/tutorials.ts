@@ -1,13 +1,25 @@
 import { Router, Request, Response } from 'express';
-import { authenticateToken, requireTeacher } from '../middleware/auth';
+import { authMiddleware, AuthRequest } from '../middleware/auth';
 import Tutorial from '../models/Tutorial.js';
 import User from '../models/User.js';
 import TutorialSettings from '../models/TutorialSettings.js';
 
+// Middleware to check if user is a teacher
+const requireTeacher = async (req: AuthRequest, res: Response, next: Function) => {
+  try {
+    if (!req.user || req.user.type !== 'teacher') {
+      return res.status(403).json({ error: 'Access denied. Teacher role required.' });
+    }
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Authorization check failed' });
+  }
+};
+
 const router = Router();
 
 // Get tutorial visibility settings (MUST be before /:id route)
-router.get('/settings/visibility', authenticateToken, async (req: Request, res: Response) => {
+router.get('/settings/visibility', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const settings = await TutorialSettings.find({});
     
@@ -25,7 +37,7 @@ router.get('/settings/visibility', authenticateToken, async (req: Request, res: 
 });
 
 // Toggle tutorial visibility (teachers only) (MUST be before /:id route)
-router.post('/settings/:tutorialId/toggle', authenticateToken, requireTeacher, async (req: Request, res: Response) => {
+router.post('/settings/:tutorialId/toggle', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const { tutorialId } = req.params;
     
@@ -55,7 +67,7 @@ router.post('/settings/:tutorialId/toggle', authenticateToken, requireTeacher, a
 });
 
 // Get all tutorials (public or for students)
-router.get('/', authenticateToken, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { language, difficulty } = req.query;
     
@@ -81,7 +93,7 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // Get tutorials by language
-router.get('/language/:language', authenticateToken, async (req: Request, res: Response) => {
+router.get('/language/:language', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { language } = req.params;
 
@@ -100,7 +112,7 @@ router.get('/language/:language', authenticateToken, async (req: Request, res: R
 });
 
 // Get single tutorial by ID
-router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -121,7 +133,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response) => {
 });
 
 // Get all tutorials for teacher (including unpublished)
-router.get('/teacher/all', authenticateToken, requireTeacher, async (req: Request, res: Response) => {
+router.get('/teacher/all', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const tutorials = await Tutorial.find({
       createdBy: req.user!.userId,
@@ -137,7 +149,7 @@ router.get('/teacher/all', authenticateToken, requireTeacher, async (req: Reques
 });
 
 // Create new tutorial (teacher only)
-router.post('/', authenticateToken, requireTeacher, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const { title, description, language, content, difficulty, order, isPublished } = req.body;
 
@@ -167,7 +179,7 @@ router.post('/', authenticateToken, requireTeacher, async (req: Request, res: Re
 });
 
 // Update tutorial (teacher only)
-router.put('/:id', authenticateToken, requireTeacher, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { title, description, language, content, difficulty, order, isPublished } = req.body;
@@ -202,7 +214,7 @@ router.put('/:id', authenticateToken, requireTeacher, async (req: Request, res: 
 });
 
 // Delete tutorial (teacher only)
-router.delete('/:id', authenticateToken, requireTeacher, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -225,7 +237,7 @@ router.delete('/:id', authenticateToken, requireTeacher, async (req: Request, re
 });
 
 // Get available languages
-router.get('/meta/languages', authenticateToken, async (req: Request, res: Response) => {
+router.get('/meta/languages', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const languages = await Tutorial.distinct('language', { isPublished: true });
 
