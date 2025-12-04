@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
-  Eye,
-  EyeOff,
   Loader2,
   ExternalLink,
 } from 'lucide-react';
@@ -11,11 +9,10 @@ import { Button } from '../ui/button';
 import { useTheme } from '../../context/ThemeContext';
 import {
   getTeacherTutorials,
-  toggleTutorialVisibility,
+import {
+  getTeacherTutorials,
   Tutorial,
-} from '../../services/tutorialService';
-
-export default function TutorialManagement() {
+} from '../../services/tutorialService';nt() {
   const { theme } = useTheme();
   const navigate = useNavigate();
 
@@ -39,29 +36,11 @@ export default function TutorialManagement() {
   };
 
   const handleView = (tutorial: Tutorial) => {
+  const handleView = (tutorial: Tutorial) => {
     navigate(`/tutorials/${tutorial.id}`);
   };
 
-  const handleToggleVisibility = async (tutorial: Tutorial) => {
-    try {
-      console.log('🔄 Starting toggle for:', tutorial.id, 'Current status:', tutorial.isPublished);
-      const updated = await toggleTutorialVisibility(tutorial.id);
-      console.log('✅ Toggle successful! New status:', updated.isPublished);
-      await loadTutorials();
-      console.log('✅ Tutorials reloaded');
-    } catch (error: any) {
-      console.error('❌ Error toggling visibility:', error);
-      console.error('❌ Error details:', error.response?.data || error.message);
-      alert(`Failed to toggle visibility: ${error.response?.data?.error || error.message}`);
-    }
-  };
-
-
-
-
-
   const groupedTutorials = tutorials.reduce((acc, tutorial) => {
-    if (!acc[tutorial.language]) {
       acc[tutorial.language] = [];
     }
     acc[tutorial.language].push(tutorial);
@@ -123,15 +102,6 @@ export default function TutorialManagement() {
                             <h4 className="font-semibold text-lg">{tutorial.title}</h4>
                             <span
                               className={`px-2 py-1 rounded text-xs ${
-                                tutorial.isPublished
-                                  ? 'bg-green-500/20 text-green-400'
-                                  : 'bg-gray-500/20 text-gray-400'
-                              }`}
-                            >
-                              {tutorial.isPublished ? 'Visible' : 'Hidden'}
-                            </span>
-                            <span
-                              className={`px-2 py-1 rounded text-xs ${
                                 tutorial.difficulty === 'beginner'
                                   ? 'bg-green-500/20 text-green-400'
                                   : tutorial.difficulty === 'intermediate'
@@ -154,18 +124,6 @@ export default function TutorialManagement() {
                         </div>
 
                         <div className="flex items-center gap-2 ml-4">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleVisibility(tutorial)}
-                            title={tutorial.isPublished ? 'Hide from students' : 'Show to students'}
-                          >
-                            {tutorial.isPublished ? (
-                              <Eye className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <EyeOff className="w-4 h-4 text-gray-500" />
-                            )}
-                          </Button>
                           <Button 
                             variant="ghost" 
                             size="sm" 
