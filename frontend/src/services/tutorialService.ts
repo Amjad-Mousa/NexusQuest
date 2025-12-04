@@ -34,14 +34,20 @@ export const getTutorials = async (language?: string, difficulty?: string): Prom
   const settings = getTutorialSettings();
   const customizations = getTutorialCustomizations();
   
+  console.log('getTutorials - visibility settings:', settings);
+  
   let tutorials: Tutorial[] = defaultTutorials.map((tutorial: BaseTutorial) => ({
     ...tutorial,
     ...customizations[tutorial.id],
-    isPublished: settings[tutorial.id] !== false, // default to true
+    isPublished: settings[tutorial.id] === undefined ? true : settings[tutorial.id], // default to true
   }));
+
+  console.log('getTutorials - before filter:', tutorials.map(t => ({ id: t.id, title: t.title, isPublished: t.isPublished })));
 
   // Filter by published status
   tutorials = tutorials.filter((t: Tutorial) => t.isPublished);
+  
+  console.log('getTutorials - after filter:', tutorials.length, 'tutorials');
 
   // Filter by language
   if (language) {
@@ -75,7 +81,7 @@ export const getTutorial = async (id: string): Promise<Tutorial> => {
   return {
     ...tutorial,
     ...customizations[id],
-    isPublished: settings[id] !== false,
+    isPublished: settings[id] === undefined ? true : settings[id],
   };
 };
 
@@ -87,7 +93,7 @@ export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
   return defaultTutorials.map((tutorial: BaseTutorial): Tutorial => ({
     ...tutorial,
     ...customizations[tutorial.id],
-    isPublished: settings[tutorial.id] !== false,
+    isPublished: settings[tutorial.id] === undefined ? true : settings[tutorial.id],
     isCustom: !!customizations[tutorial.id] && Object.keys(customizations[tutorial.id]).length > 0,
   }));
 };
@@ -117,7 +123,10 @@ export const updateTutorial = async (id: string, updates: Partial<Tutorial>): Pr
 // Toggle tutorial visibility (teacher)
 export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
   const settings = getTutorialSettings();
-  const currentStatus = settings[id] !== false; // default is true if not set
+  // If not set, default is true (visible)
+  // If set to false, it's hidden
+  // If set to true, it's visible
+  const currentStatus = settings[id] === undefined ? true : settings[id];
   console.log('Toggle - Current settings:', settings);
   console.log('Toggle - Current status for', id, ':', currentStatus);
   settings[id] = !currentStatus; // Toggle it
