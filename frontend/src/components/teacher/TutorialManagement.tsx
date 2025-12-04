@@ -44,7 +44,9 @@ export default function TutorialManagement() {
 
   const handleToggleVisibility = async (tutorial: Tutorial) => {
     try {
-      await toggleTutorialVisibility(tutorial.id);
+      console.log('Toggling visibility for:', tutorial.id, 'Current:', tutorial.isPublished);
+      const updated = await toggleTutorialVisibility(tutorial.id);
+      console.log('After toggle:', updated.isPublished);
       await loadTutorials();
     } catch (error) {
       console.error('Error toggling visibility:', error);

@@ -117,8 +117,13 @@ export const updateTutorial = async (id: string, updates: Partial<Tutorial>): Pr
 // Toggle tutorial visibility (teacher)
 export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
   const settings = getTutorialSettings();
-  settings[id] = !(settings[id] !== false); // Toggle (default is true)
+  const currentStatus = settings[id] !== false; // default is true if not set
+  console.log('Toggle - Current settings:', settings);
+  console.log('Toggle - Current status for', id, ':', currentStatus);
+  settings[id] = !currentStatus; // Toggle it
+  console.log('Toggle - New status:', settings[id]);
   saveTutorialSettings(settings);
+  console.log('Toggle - Saved settings:', localStorage.getItem('tutorial-visibility'));
   
   return getTutorial(id);
 };
