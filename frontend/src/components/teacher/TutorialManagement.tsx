@@ -36,11 +36,11 @@ export default function TutorialManagement() {
   };
 
   const handleView = (tutorial: Tutorial) => {
-  const handleView = (tutorial: Tutorial) => {
     navigate(`/tutorials/${tutorial.id}`);
   };
 
   const groupedTutorials = tutorials.reduce((acc, tutorial) => {
+    if (!acc[tutorial.language]) {
       acc[tutorial.language] = [];
     }
     acc[tutorial.language].push(tutorial);
