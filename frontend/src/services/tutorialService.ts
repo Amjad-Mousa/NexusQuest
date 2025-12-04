@@ -48,7 +48,6 @@ export const getTutorialsByLanguage = async (language: string): Promise<Tutorial
 
 // Get single tutorial
 export const getTutorial = async (id: string): Promise<Tutorial> => {
-  const settings = await getTutorialSettings();
   const customizations = getTutorialCustomizations();
   
   const tutorial = defaultTutorials.find((t: BaseTutorial) => t.id === id);
@@ -56,14 +55,14 @@ export const getTutorial = async (id: string): Promise<Tutorial> => {
   if (!tutorial) {
     throw new Error('Tutorial not found');
   }
-// Get single tutorial
-export const getTutorial = async (id: string): Promise<Tutorial> => {
-  const customizations = getTutorialCustomizations();
-  
-  const tutorial = defaultTutorials.find((t: BaseTutorial) => t.id === id);
-  
-  if (!tutorial) {
-    throw new Error('Tutorial not found');
+
+  return {
+    ...tutorial,
+    ...customizations[id],
+    isPublished: true, // Always visible
+  };
+};
+
 // Get all tutorials for teacher
 export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
   const customizations = getTutorialCustomizations();
@@ -75,13 +74,14 @@ export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
     isCustom: !!customizations[tutorial.id] && Object.keys(customizations[tutorial.id]).length > 0,
   }));
 };
-// Toggle tutorial visibility (teacher)
-export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
+
 // Toggle tutorial visibility (disabled - all tutorials always visible)
 export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
   // No-op: visibility toggle disabled
   return getTutorial(id);
-}; Get available languages
+};
+
+// Get available languages
 export const getAvailableLanguages = async (): Promise<string[]> => {
   const tutorials = await getTutorials();
   const languages = [...new Set(tutorials.map((t: Tutorial) => t.language))];
