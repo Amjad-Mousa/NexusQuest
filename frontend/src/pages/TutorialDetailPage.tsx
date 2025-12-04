@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Calendar, Code, Loader2, User } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { getTutorial, Tutorial } from '../services/tutorialService';
@@ -97,14 +97,6 @@ export default function TutorialDetailPage() {
           {/* Meta Info */}
           <div className="flex flex-wrap gap-4 text-sm text-gray-500">
             <div className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              <span>By {tutorial.creator?.name || 'Unknown'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>{new Date(tutorial.createdAt).toLocaleDateString()}</span>
-            </div>
-            <div className="flex items-center gap-2">
               <Code className="w-4 h-4" />
               <span>{tutorial.language}</span>
             </div>
@@ -124,11 +116,11 @@ export default function TutorialDetailPage() {
           >
             <ReactMarkdown
               components={{
-                code({ node, inline, className, children, ...props }) {
+                code({ className, children, ...props }: any) {
                   const match = /language-(\w+)/.exec(className || '');
-                  return !inline && match ? (
+                  return match ? (
                     <SyntaxHighlighter
-                      style={vscDarkPlus}
+                      style={vscDarkPlus as any}
                       language={match[1]}
                       PreTag="div"
                       {...props}

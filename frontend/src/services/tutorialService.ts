@@ -1,122 +1,145 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9876';
+import { defaultTutorials } from '../constants/defaultTutorials';
 
 export interface Tutorial {
-  _id: string;
+  id: string;
   title: string;
   description: string;
   language: string;
   content: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   order: number;
-  createdBy: string;
   isPublished: boolean;
-  creator?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  createdAt: string;
-  updatedAt: string;
+  isCustom?: boolean;
 }
 
-export interface TutorialInput {
-  title: string;
-  description: string;
-  language: string;
-  content: string;
-  difficulty?: 'beginner' | 'intermediate' | 'advanced';
-  order?: number;
-  isPublished?: boolean;
-}
+// Get tutorial visibility settings from localStorage
+const getTutorialSettings = (): Record<string, boolean> => {
+  const settings = localStorage.getItem('tutorial-visibility');
+  return settings ? JSON.parse(settings) : {};
+};
 
-// Get all tutorials (students)
+// Save tutorial visibility settings
+const saveTutorialSettings = (settings: Record<string, boolean>) => {
+  localStorage.setItem('tutorial-visibility', JSON.stringify(settings));
+};
+
+// Get tutorial customizations from localStorage
+const getTutorialCustomizations = (): Record<string, Partial<Tutorial>> => {
+  const customizations = localStorage.getItem('tutorial-customizations');
+  return customizations ? JSON.parse(customizations) : {};
+};
+
+// Save tutorial customizations
+const saveTutorialCustomizations = (customizations: Record<string, Partial<Tutorial>>) => {
+  localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
+};
+
+// Get all tutorials (students) - only published ones
 export const getTutorials = async (language?: string, difficulty?: string): Promise<Tutorial[]> => {
-  const token = localStorage.getItem('token');
-  const params = new URLSearchParams();
+  const settings = getTutorialSettings();
+  const customizations = getTutorialCustomizations();
   
-  if (language) params.append('language', language);
-  if (difficulty) params.append('difficulty', difficulty);
+  let tutorials = defaultTutorials.map(tutorial => ({
+    ...tutorial,
+    ...customizations[tutorial.id],
+    isPublished: settings[tutorial.id] !== false, // default to true
+  }));
 
-  const response = await axios.get(`${API_URL}/api/tutorials?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  // Filter by published status
+  tutorials = tutorials.filter(t => t.isPublished);
 
-  return response.data;
+  // Filter by language
+  if (language) {
+    tutorials = tutorials.filter(t => t.language === language);
+  }
+
+  // Filter by difficulty
+  if (difficulty) {
+    tutorials = tutorials.filter(t => t.difficulty === difficulty);
+  }
+
+  return tutorials;
 };
 
 // Get tutorials by language
 export const getTutorialsByLanguage = async (language: string): Promise<Tutorial[]> => {
-  const token = localStorage.getItem('token');
-
-  const response = await axios.get(`${API_URL}/api/tutorials/language/${language}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+  return getTutorials(language);
 };
 
 // Get single tutorial
 export const getTutorial = async (id: string): Promise<Tutorial> => {
-  const token = localStorage.getItem('token');
+  const settings = getTutorialSettings();
+  const customizations = getTutorialCustomizations();
+  
+  const tutorial = defaultTutorials.find(t => t.id === id);
+  
+  if (!tutorial) {
+    throw new Error('Tutorial not found');
+  }
 
-  const response = await axios.get(`${API_URL}/api/tutorials/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+  return {
+    ...tutorial,
+    ...customizations[id],
+    isPublished: settings[id] !== false,
+  };
 };
 
-// Get all tutorials for teacher
+// Get all tutorials for teacher (including unpublished)
 export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
-  const token = localStorage.getItem('token');
-
-  const response = await axios.get(`${API_URL}/api/tutorials/teacher/all`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+  const settings = getTutorialSettings();
+  const customizations = getTutorialCustomizations();
+  
+  return defaultTutorials.map(tutorial => ({
+    ...tutorial,
+    ...customizations[tutorial.id],
+    isPublished: settings[tutorial.id] !== false,
+    isCustom: !!customizations[tutorial.id] && Object.keys(customizations[tutorial.id]).length > 0,
+  }));
 };
 
-// Create tutorial (teacher)
-export const createTutorial = async (tutorial: TutorialInput): Promise<Tutorial> => {
-  const token = localStorage.getItem('token');
-
-  const response = await axios.post(`${API_URL}/api/tutorials`, tutorial, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+// Update tutorial (teacher) - only content and visibility
+export const updateTutorial = async (id: string, updates: Partial<Tutorial>): Promise<Tutorial> => {
+  const customizations = getTutorialCustomizations();
+  const settings = getTutorialSettings();
+  
+  // Update customizations (content, description, etc.)
+  customizations[id] = {
+    ...customizations[id],
+    ...updates,
+  };
+  
+  // Update visibility if changed
+  if (updates.isPublished !== undefined) {
+    settings[id] = updates.isPublished;
+    saveTutorialSettings(settings);
+  }
+  
+  saveTutorialCustomizations(customizations);
+  
+  return getTutorial(id);
 };
 
-// Update tutorial (teacher)
-export const updateTutorial = async (id: string, tutorial: Partial<TutorialInput>): Promise<Tutorial> => {
-  const token = localStorage.getItem('token');
-
-  const response = await axios.put(`${API_URL}/api/tutorials/${id}`, tutorial, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+// Toggle tutorial visibility (teacher)
+export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
+  const settings = getTutorialSettings();
+  settings[id] = !(settings[id] !== false); // Toggle (default is true)
+  saveTutorialSettings(settings);
+  
+  return getTutorial(id);
 };
 
-// Delete tutorial (teacher)
-export const deleteTutorial = async (id: string): Promise<void> => {
-  const token = localStorage.getItem('token');
-
-  await axios.delete(`${API_URL}/api/tutorials/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// Reset tutorial to default (teacher)
+export const resetTutorial = async (id: string): Promise<Tutorial> => {
+  const customizations = getTutorialCustomizations();
+  delete customizations[id];
+  saveTutorialCustomizations(customizations);
+  
+  return getTutorial(id);
 };
 
 // Get available languages
 export const getAvailableLanguages = async (): Promise<string[]> => {
-  const token = localStorage.getItem('token');
-
-  const response = await axios.get(`${API_URL}/api/tutorials/meta/languages`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  return response.data;
+  const tutorials = await getTutorials();
+  const languages = [...new Set(tutorials.map(t => t.language))];
+  return languages.sort();
 };

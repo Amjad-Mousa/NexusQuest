@@ -184,8 +184,8 @@ export default function TutorialsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {langTutorials.map((tutorial) => (
                       <div
-                        key={tutorial._id}
-                        onClick={() => navigate(`/tutorials/${tutorial._id}`)}
+                        key={tutorial.id}
+                        onClick={() => navigate(`/tutorials/${tutorial.id}`)}
                         className={`p-6 rounded-xl cursor-pointer transition-all hover:scale-105 ${
                           theme === 'dark'
                             ? 'bg-gray-900 border border-gray-800 hover:border-blue-500'
@@ -199,14 +199,9 @@ export default function TutorialsPage() {
                           </span>
                         </div>
 
-                        <p className="text-sm text-gray-400 mb-4 line-clamp-2">
+                        <p className="text-sm text-gray-400 line-clamp-2">
                           {tutorial.description}
                         </p>
-
-                        <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>By {tutorial.creator?.name || 'Unknown'}</span>
-                          <span>{new Date(tutorial.createdAt).toLocaleDateString()}</span>
-                        </div>
                       </div>
                     ))}
                   </div>
