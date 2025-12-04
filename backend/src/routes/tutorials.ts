@@ -187,4 +187,55 @@ router.get('/meta/languages', authenticateToken, async (req: Request, res: Respo
   }
 });
 
+// Import TutorialSettings model
+import TutorialSettings from '../models/TutorialSettings.js';
+
+// Get tutorial visibility settings
+router.get('/settings/visibility', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const settings = await TutorialSettings.find({});
+    
+    // Convert to object format: { tutorialId: isPublished }
+    const settingsMap: Record<string, boolean> = {};
+    settings.forEach(setting => {
+      settingsMap[setting.tutorialId] = setting.isPublished;
+    });
+    
+    res.json(settingsMap);
+  } catch (error: any) {
+    console.error('Error fetching tutorial settings:', error);
+    res.status(500).json({ error: 'Failed to fetch tutorial settings' });
+  }
+});
+
+// Toggle tutorial visibility (teachers only)
+router.post('/settings/:tutorialId/toggle', authenticateToken, requireTeacher, async (req: Request, res: Response) => {
+  try {
+    const { tutorialId } = req.params;
+    
+    let setting = await TutorialSettings.findOne({ tutorialId });
+    
+    if (!setting) {
+      // Create new setting with opposite of default (default is true, so toggle to false)
+      setting = new TutorialSettings({
+        tutorialId,
+        isPublished: false,
+      });
+    } else {
+      // Toggle existing setting
+      setting.isPublished = !setting.isPublished;
+    }
+    
+    await setting.save();
+    
+    res.json({
+      tutorialId: setting.tutorialId,
+      isPublished: setting.isPublished,
+    });
+  } catch (error: any) {
+    console.error('Error toggling tutorial visibility:', error);
+    res.status(500).json({ error: 'Failed to toggle tutorial visibility' });
+  }
+});
+
 export default router;

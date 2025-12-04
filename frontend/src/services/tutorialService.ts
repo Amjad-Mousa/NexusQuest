@@ -1,4 +1,7 @@
 import { defaultTutorials, type Tutorial as BaseTutorial, type TutorialSection } from '../constants/defaultTutorials';
+import axios from 'axios';
+
+const API_URL = 'http://localhost:3001/api';
 
 export interface Tutorial extends BaseTutorial {
   isPublished: boolean;
@@ -7,15 +10,18 @@ export interface Tutorial extends BaseTutorial {
 
 export type { TutorialSection };
 
-// Get tutorial visibility settings from localStorage
-const getTutorialSettings = (): Record<string, boolean> => {
-  const settings = localStorage.getItem('tutorial-visibility');
-  return settings ? JSON.parse(settings) : {};
-};
-
-// Save tutorial visibility settings
-const saveTutorialSettings = (settings: Record<string, boolean>) => {
-  localStorage.setItem('tutorial-visibility', JSON.stringify(settings));
+// Get tutorial visibility settings from backend
+const getTutorialSettings = async (): Promise<Record<string, boolean>> => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(`${API_URL}/tutorials/settings/visibility`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching tutorial settings:', error);
+    return {};
+  }
 };
 
 // Get tutorial customizations from localStorage
@@ -31,7 +37,7 @@ const saveTutorialCustomizations = (customizations: Record<string, Partial<Tutor
 
 // Get all tutorials (students) - only published ones
 export const getTutorials = async (language?: string, difficulty?: string): Promise<Tutorial[]> => {
-  const settings = getTutorialSettings();
+  const settings = await getTutorialSettings();
   const customizations = getTutorialCustomizations();
   
   console.log('getTutorials - visibility settings:', settings);
@@ -69,7 +75,7 @@ export const getTutorialsByLanguage = async (language: string): Promise<Tutorial
 
 // Get single tutorial
 export const getTutorial = async (id: string): Promise<Tutorial> => {
-  const settings = getTutorialSettings();
+  const settings = await getTutorialSettings();
   const customizations = getTutorialCustomizations();
   
   const tutorial = defaultTutorials.find((t: BaseTutorial) => t.id === id);
@@ -87,7 +93,7 @@ export const getTutorial = async (id: string): Promise<Tutorial> => {
 
 // Get all tutorials for teacher (including unpublished)
 export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
-  const settings = getTutorialSettings();
+  const settings = await getTutorialSettings();
   const customizations = getTutorialCustomizations();
   
   return defaultTutorials.map((tutorial: BaseTutorial): Tutorial => ({
@@ -98,52 +104,25 @@ export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
   }));
 };
 
-// Update tutorial (teacher) - only content and visibility
-export const updateTutorial = async (id: string, updates: Partial<Tutorial>): Promise<Tutorial> => {
-  const customizations = getTutorialCustomizations();
-  const settings = getTutorialSettings();
-  
-  // Update customizations (content, description, etc.)
-  customizations[id] = {
-    ...customizations[id],
-    ...updates,
-  };
-  
-  // Update visibility if changed
-  if (updates.isPublished !== undefined) {
-    settings[id] = updates.isPublished;
-    saveTutorialSettings(settings);
-  }
-  
-  saveTutorialCustomizations(customizations);
-  
-  return getTutorial(id);
-};
-
 // Toggle tutorial visibility (teacher)
 export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
-  const settings = getTutorialSettings();
-  // If not set, default is true (visible)
-  // If set to false, it's hidden
-  // If set to true, it's visible
-  const currentStatus = settings[id] === undefined ? true : settings[id];
-  console.log('Toggle - Current settings:', settings);
-  console.log('Toggle - Current status for', id, ':', currentStatus);
-  settings[id] = !currentStatus; // Toggle it
-  console.log('Toggle - New status:', settings[id]);
-  saveTutorialSettings(settings);
-  console.log('Toggle - Saved settings:', localStorage.getItem('tutorial-visibility'));
-  
-  return getTutorial(id);
-};
-
-// Reset tutorial to default (teacher)
-export const resetTutorial = async (id: string): Promise<Tutorial> => {
-  const customizations = getTutorialCustomizations();
-  delete customizations[id];
-  saveTutorialCustomizations(customizations);
-  
-  return getTutorial(id);
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(
+      `${API_URL}/tutorials/settings/${id}/toggle`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    
+    console.log('Toggle response:', response.data);
+    
+    return getTutorial(id);
+  } catch (error) {
+    console.error('Error toggling tutorial visibility:', error);
+    throw error;
+  }
 };
 
 // Get available languages
