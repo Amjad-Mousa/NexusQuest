@@ -152,6 +152,8 @@ export function UserProfilePage() {
           onAvatarChange={() => {}}
           onCoverChange={() => {}}
           onEditProfile={() => {}}
+          showEditButton={false}
+          showImageEditors={false}
         />
 
         <StatsGrid stats={stats} />

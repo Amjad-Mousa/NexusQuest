@@ -22,6 +22,8 @@ interface ProfileCardProps {
   onAvatarChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onCoverChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onEditProfile: () => void;
+  showEditButton?: boolean;
+  showImageEditors?: boolean;
 }
 
 export function ProfileCard({ 
@@ -31,7 +33,9 @@ export function ProfileCard({
   profileData, 
   onAvatarChange, 
   onCoverChange, 
-  onEditProfile 
+  onEditProfile,
+  showEditButton = true,
+  showImageEditors = true,
 }: ProfileCardProps) {
   const { theme } = useTheme();
 
@@ -44,10 +48,14 @@ export function ProfileCard({
         ) : (
           <div className="w-full h-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600" />
         )}
-        <input type="file" id="cover-upload" accept="image/*" onChange={onCoverChange} className="hidden" />
-        <label htmlFor="cover-upload" className={`absolute bottom-4 right-4 z-20 cursor-pointer ${theme === 'dark' ? 'bg-gray-900 hover:bg-gray-800' : 'bg-white hover:bg-gray-100'} rounded-lg p-3 shadow-xl transition-all hover:scale-110`}>
-          <Camera className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
-        </label>
+        {showImageEditors && (
+          <>
+            <input type="file" id="cover-upload" accept="image/*" onChange={onCoverChange} className="hidden" />
+            <label htmlFor="cover-upload" className={`absolute bottom-4 right-4 z-20 cursor-pointer ${theme === 'dark' ? 'bg-gray-900 hover:bg-gray-800' : 'bg-white hover:bg-gray-100'} rounded-lg p-3 shadow-xl transition-all hover:scale-110`}>
+              <Camera className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
+            </label>
+          </>
+        )}
       </div>
 
       <div className="px-8 pb-6 relative">
@@ -61,15 +69,21 @@ export function ProfileCard({
                 {user?.name?.charAt(0).toUpperCase()}
               </div>
             )}
-            <input type="file" id="avatar-upload" accept="image/*" onChange={onAvatarChange} className="hidden" />
-            <label htmlFor="avatar-upload" className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 rounded-full p-2 shadow-lg transition-colors cursor-pointer">
-              <Camera className="w-3 h-3 text-white" />
-            </label>
+            {showImageEditors && (
+              <>
+                <input type="file" id="avatar-upload" accept="image/*" onChange={onAvatarChange} className="hidden" />
+                <label htmlFor="avatar-upload" className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 rounded-full p-2 shadow-lg transition-colors cursor-pointer">
+                  <Camera className="w-3 h-3 text-white" />
+                </label>
+              </>
+            )}
           </div>
-          <Button onClick={onEditProfile} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
-            <Edit className="w-4 h-4 mr-2" />
-            Edit Profile
-          </Button>
+          {showEditButton && (
+            <Button onClick={onEditProfile} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Profile
+            </Button>
+          )}
         </div>
 
         {/* User Info */}
