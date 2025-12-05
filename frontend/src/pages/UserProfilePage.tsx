@@ -164,6 +164,7 @@ export function UserProfilePage() {
           skills={skills}
           recentActivity={recentActivity}
           achievements={achievements}
+          showSettings={false}
         />
       </div>
     </div>

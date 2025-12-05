@@ -146,6 +146,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     if (!term) return { list: [] as ChatUser[], hasMore: false };
 
     const matches = allUsers.filter((u: ChatUser) =>
+      u.id !== storedUser?.id &&
       u.name.toLowerCase().includes(term)
     );
 

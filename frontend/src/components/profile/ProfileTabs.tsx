@@ -31,15 +31,21 @@ interface ProfileTabsProps {
   skills: Skill[];
   recentActivity: Activity[];
   achievements: Achievement[];
+  showSettings?: boolean;
 }
 
-export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, achievements }: ProfileTabsProps) {
+export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, achievements, showSettings = true }: ProfileTabsProps) {
   const { theme } = useTheme();
+
+  const tabs = (showSettings
+    ? (['overview', 'activity', 'achievements', 'settings'] as const)
+    : (['overview', 'activity', 'achievements'] as const)
+  );
 
   return (
     <div className={`${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200 shadow-sm'} border rounded-xl mb-6`}>
       <div className="flex border-b border-gray-800">
-        {(['overview', 'activity', 'achievements', 'settings'] as const).map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -123,7 +129,7 @@ export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, ac
           </div>
         )}
 
-        {activeTab === 'settings' && (
+        {showSettings && activeTab === 'settings' && (
           <div className="space-y-6">
             <div>
               <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-4 flex items-center gap-2`}>
