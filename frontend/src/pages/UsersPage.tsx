@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+
 import { fetchUsers, fetchConversations, type ChatUser } from '../services/userService';
 import { getStoredUser } from '../services/authService';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
@@ -10,6 +11,7 @@ export function UsersPage() {
   const [search, setSearch] = useState('');
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const currentUser = getStoredUser();
@@ -32,6 +34,11 @@ export function UsersPage() {
       }
     });
   }, [navigate]);
+
+  useEffect(() => {
+    const initial = searchParams.get('q') || '';
+    setSearch(initial);
+  }, [searchParams]);
 
   useEffect(() => {
     const s = connectChat();
@@ -63,8 +70,7 @@ export function UsersPage() {
     if (!term) return users;
     return users.filter(
       (u) =>
-        u.name.toLowerCase().includes(term) ||
-        u.email.toLowerCase().includes(term)
+        u.name.toLowerCase().includes(term)
     );
   }, [users, search]);
 
@@ -104,7 +110,15 @@ export function UsersPage() {
             className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-gray-900/90 border border-gray-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-gray-500 shadow-lg"
             placeholder="Search by name..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSearch(value);
+              if (value.trim()) {
+                setSearchParams({ q: value.trim() });
+              } else {
+                setSearchParams({});
+              }
+            }}
           />
         </div>
 
@@ -116,8 +130,7 @@ export function UsersPage() {
               {conversations.map((u) => (
                 <Link
                   key={u.id}
-                  to={`/chat/${u.id}`}
-                  state={{ userName: u.name, userEmail: u.email }}
+                  to={`/user/${u.id}`}
                   onClick={() => clearUnread(u.id)}
                   className="group relative rounded-2xl border border-gray-800/50 bg-gradient-to-br from-gray-900/80 to-gray-900/40 hover:border-emerald-500/50 hover:from-gray-900 hover:to-gray-800/80 transition-all px-5 py-4 flex flex-col justify-between shadow-lg hover:shadow-emerald-500/10"
                 >
@@ -151,8 +164,7 @@ export function UsersPage() {
             {filteredUsers.map((u) => (
               <Link
                 key={u.id}
-                to={`/chat/${u.id}`}
-                state={{ userName: u.name, userEmail: u.email }}
+                to={`/user/${u.id}`}
                 onClick={() => clearUnread(u.id)}
                 className="group relative rounded-2xl border border-gray-800/50 bg-gradient-to-r from-gray-900/70 to-gray-900/40 hover:border-emerald-500/50 hover:from-gray-900/90 hover:to-gray-900/70 transition-all px-5 py-4 flex items-center justify-between shadow-lg hover:shadow-emerald-500/10"
               >

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle } from 'lucide-react';
@@ -10,6 +10,7 @@ import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { DailyChallenge } from '@/components/DailyChallenge';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
+import { fetchUsers, type ChatUser } from '../services/userService';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -23,6 +24,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const { theme, setTheme } = useTheme();
   const [fontSize, setFontSize] = useState(14);
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [userSearch, setUserSearch] = useState('');
+  const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const storedUser = getStoredUser();
   const isTeacher = storedUser?.role === 'teacher';
 
@@ -51,7 +54,22 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         console.error('Failed to load user avatar:', error);
       }
     };
+
     loadUserAvatar();
+  }, []);
+
+  // Load users list once for header search suggestions
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const users = await fetchUsers();
+        setAllUsers(users);
+      } catch (error) {
+        console.error('Failed to load users for search:', error);
+      }
+    };
+
+    loadUsers();
   }, []);
 
   // Subscribe to chat socket for unread indicator
@@ -123,9 +141,20 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     streak: 5  // TODO: implement streak tracking
   };
 
+  const userSuggestions = useMemo(() => {
+    const term = userSearch.trim().toLowerCase();
+    if (!term) return { list: [] as ChatUser[], hasMore: false };
 
+    const matches = allUsers.filter((u: ChatUser) =>
+      u.name.toLowerCase().includes(term)
+    );
 
-  
+    const maxSuggestions = 5;
+    return {
+      list: matches.slice(0, maxSuggestions),
+      hasMore: matches.length > maxSuggestions,
+    };
+  }, [allUsers, userSearch]);
 
   const learningPaths = [
     { id: 1, title: 'Python Basics', progress: 75, total: 20 },
@@ -154,6 +183,75 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <div className="hidden md:block">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const term = userSearch.trim();
+                  if (!term) return;
+                  navigate(`/users?q=${encodeURIComponent(term)}`);
+                }}
+              >
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search users by name..."
+                    className={`w-64 pl-3 pr-3 py-2 rounded-full text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/60 shadow-sm transition-colors ${
+                      theme === 'dark'
+                        ? 'bg-gray-900/80 border-gray-700 text-gray-100 placeholder:text-gray-500'
+                        : 'bg-white/80 border-gray-300 text-gray-800 placeholder:text-gray-400'
+                    }`}
+                  />
+                  {userSearch.trim() && userSuggestions.list.length > 0 && (
+                    <div
+                      className={`absolute mt-2 w-full rounded-xl border shadow-lg text-sm overflow-hidden z-50 ${
+                        theme === 'dark'
+                          ? 'bg-gray-900/95 border-gray-800'
+                          : 'bg-white border-gray-200'
+                      }`}
+                    >
+                      {userSuggestions.list.map((u) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => {
+                            setUserSearch('');
+                            navigate(`/user/${u.id}`);
+                          }}
+                          className={`w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-blue-500/10 ${
+                            theme === 'dark' ? 'text-gray-100' : 'text-gray-800'
+                          }`}
+                        >
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center text-emerald-400 text-xs font-semibold">
+                            {u.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="truncate">{u.name}</span>
+                        </button>
+                      ))}
+                      {userSuggestions.hasMore && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const term = userSearch.trim();
+                            if (!term) return;
+                            navigate(`/users?q=${encodeURIComponent(term)}`);
+                          }}
+                          className={`w-full text-left px-3 py-2 border-t text-xs font-medium ${
+                            theme === 'dark'
+                              ? 'border-gray-800 text-blue-300 hover:bg-blue-500/10'
+                              : 'border-gray-200 text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          Show all results
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </form>
+            </div>
             <button
               type="button"
               onClick={() => {

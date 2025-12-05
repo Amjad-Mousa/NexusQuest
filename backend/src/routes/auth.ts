@@ -112,6 +112,44 @@ router.get('/users', authMiddleware, async (req: AuthRequest, res: Response) => 
 });
 
 /**
+ * GET /api/auth/users/:id
+ * Get another user's public profile by id
+ */
+router.get('/users/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatarImage: user.avatarImage,
+        coverImage: user.coverImage,
+        totalPoints: user.totalPoints,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    logger.error('Get other user profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user profile',
+    });
+  }
+});
+
+/**
  * POST /api/auth/login
  * Login user
  */
