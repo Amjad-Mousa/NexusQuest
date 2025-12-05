@@ -23,7 +23,6 @@ export function UsersPage() {
       setUsers(filteredUsers);
       setConversations(convos);
 
-      // Load any stored unread counts from localStorage
       try {
         const raw = localStorage.getItem('nexusquest-unread-users');
         const map: Record<string, number> = raw ? JSON.parse(raw) : {};
@@ -34,7 +33,6 @@ export function UsersPage() {
     });
   }, [navigate]);
 
-  // Subscribe for new messages indicator within Messages page
   useEffect(() => {
     const s = connectChat();
     if (!s) return;
@@ -70,66 +68,74 @@ export function UsersPage() {
     );
   }, [users, search]);
 
+  const clearUnread = (userId: string) => {
+    setUnreadByUser(prev => {
+      const next = { ...prev };
+      if (next[userId]) {
+        delete next[userId];
+        localStorage.setItem('nexusquest-unread-users', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
-      <header className="px-4 py-3 border-b border-gray-800 flex items-center justify-between bg-gray-950/80 backdrop-blur">
+    <div className="min-h-screen flex flex-col bg-gray-950 text-white">
+      {/* Header */}
+      <header className="sticky top-0 z-10 px-6 py-4 border-b border-gray-800/50 flex items-center justify-between bg-gray-900/95 backdrop-blur-xl shadow-lg">
         <button
           type="button"
-          className="text-sm text-gray-300 hover:text-white"
+          className="text-sm text-gray-400 hover:text-white transition-colors font-medium"
           onClick={() => navigate(-1)}
         >
-          Back
+          ← Back
         </button>
-        <h1 className="text-lg font-semibold">Messages</h1>
-        <div className="w-10" />
+        <h1 className="text-base font-semibold">Messages</h1>
+        <div className="w-16" />
       </header>
 
-      <main className="flex-1 px-4 py-4 w-full max-w-4xl mx-auto space-y-5">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm text-gray-400 flex-1">Search by name</h2>
+      <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 w-full max-w-5xl mx-auto space-y-8">
+        {/* Search Bar */}
+        <div className="relative">
+          <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
-            className="px-3 py-1.5 rounded-full bg-gray-900 border border-gray-700 text-xs outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-52"
-            placeholder="Search by name or email"
+            className="w-full pl-11 pr-4 py-3.5 rounded-2xl bg-gray-900/90 border border-gray-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-gray-500 shadow-lg"
+            placeholder="Search by name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
+        {/* Recent Chats */}
         {conversations.length > 0 && (
           <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm text-gray-300">Recent chats</h3>
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-1">
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Recent Chats</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {conversations.map((u) => (
                 <Link
                   key={u.id}
                   to={`/chat/${u.id}`}
                   state={{ userName: u.name, userEmail: u.email }}
-                  onClick={() => {
-                    // Clear unread for this user when opening chat
-                    setUnreadByUser(prev => {
-                      const next = { ...prev };
-                      if (next[u.id]) {
-                        delete next[u.id];
-                        localStorage.setItem('nexusquest-unread-users', JSON.stringify(next));
-                      }
-                      return next;
-                    });
-                  }}
-                  className="min-w-[160px] max-w-[200px] rounded-2xl border border-gray-800 bg-gray-900/70 hover:border-emerald-500 hover:bg-gray-900/90 transition-colors px-3 py-2 flex-shrink-0 flex flex-col justify-center"
+                  onClick={() => clearUnread(u.id)}
+                  className="group relative rounded-2xl border border-gray-800/50 bg-gradient-to-br from-gray-900/80 to-gray-900/40 hover:border-emerald-500/50 hover:from-gray-900 hover:to-gray-800/80 transition-all px-5 py-4 flex flex-col justify-between shadow-lg hover:shadow-emerald-500/10"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold truncate">{u.name}</div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold truncate group-hover:text-emerald-400 transition-colors">
+                        {u.name}
+                      </div>
+                    </div>
                     {unreadByUser[u.id] > 0 && (
-                      <span className="ml-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] leading-4 text-white flex items-center justify-center">
+                      <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-[10px] font-bold leading-5 text-white flex items-center justify-center shadow-lg shadow-red-500/30">
                         {unreadByUser[u.id] > 9 ? '9+' : unreadByUser[u.id]}
                       </span>
                     )}
                   </div>
                   {u.lastMessageAt && (
-                    <div className="text-[10px] text-gray-500 mt-1">
-                      Last: {new Date(u.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <div className="text-xs text-gray-600">
+                      {new Date(u.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   )}
                 </Link>
@@ -138,47 +144,50 @@ export function UsersPage() {
           </section>
         )}
 
+        {/* All Users */}
         <section>
-          <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">All Users</h3>
+          <div className="space-y-2.5">
             {filteredUsers.map((u) => (
               <Link
                 key={u.id}
                 to={`/chat/${u.id}`}
                 state={{ userName: u.name, userEmail: u.email }}
-                onClick={() => {
-                  // Clear unread for this user when opening chat
-                  setUnreadByUser(prev => {
-                    const next = { ...prev };
-                    if (next[u.id]) {
-                      delete next[u.id];
-                      localStorage.setItem('nexusquest-unread-users', JSON.stringify(next));
-                    }
-                    return next;
-                  });
-                }}
-                className="group rounded-2xl border border-gray-800 bg-gray-900/70 hover:border-emerald-500 hover:bg-gray-900/90 transition-colors px-4 py-3 flex items-center justify-between"
+                onClick={() => clearUnread(u.id)}
+                className="group relative rounded-2xl border border-gray-800/50 bg-gradient-to-r from-gray-900/70 to-gray-900/40 hover:border-emerald-500/50 hover:from-gray-900/90 hover:to-gray-900/70 transition-all px-5 py-4 flex items-center justify-between shadow-lg hover:shadow-emerald-500/10"
               >
-                <div className="flex flex-col">
-                  <div className="text-sm font-semibold group-hover:text-emerald-400">
-                    {u.name}
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center text-emerald-400 font-semibold text-sm flex-shrink-0 border border-emerald-500/30">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold group-hover:text-emerald-400 transition-colors truncate">
+                      {u.name}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   {unreadByUser[u.id] > 0 && (
-                    <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] leading-4 text-white flex items-center justify-center">
+                    <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-[10px] font-bold leading-5 text-white flex items-center justify-center shadow-lg shadow-red-500/30">
                       {unreadByUser[u.id] > 9 ? '9+' : unreadByUser[u.id]}
                     </span>
                   )}
-                  <span className="text-[11px] text-emerald-400 opacity-80 group-hover:opacity-100">
-                    Open chat →
-                  </span>
+                  <svg className="w-5 h-5 text-emerald-400/60 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
                 </div>
               </Link>
             ))}
           </div>
           {filteredUsers.length === 0 && (
-            <div className="text-sm text-gray-500 text-center mt-8">
-              No users match your search.
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-400">No users found</p>
+              <p className="text-xs text-gray-600 mt-1">Try a different search term</p>
             </div>
           )}
         </section>
@@ -188,4 +197,3 @@ export function UsersPage() {
 }
 
 export default UsersPage;
-
