@@ -11,6 +11,10 @@ interface DirectMessagePayload {
     content: string;
 }
 
+interface TypingPayload {
+    toUserId: string;
+}
+
 const userSocketMap = new Map<string, string>();
 
 function getTokenFromSocket(socket: Socket): string | null {
@@ -80,6 +84,38 @@ export function setupChat(io: Server) {
                     }
                 } catch {
                     // Swallow errors to avoid crashing the socket handler
+                }
+            });
+
+            socket.on('typing', (payload: TypingPayload) => {
+                try {
+                    const { toUserId } = payload;
+                    if (!toUserId) return;
+
+                    const recipientSocketId = userSocketMap.get(toUserId);
+                    if (recipientSocketId) {
+                        io.to(recipientSocketId).emit('user-typing', { fromUserId: userId });
+                    } else {
+                        io.to(toUserId).emit('user-typing', { fromUserId: userId });
+                    }
+                } catch {
+                    // Swallow errors
+                }
+            });
+
+            socket.on('stop-typing', (payload: TypingPayload) => {
+                try {
+                    const { toUserId } = payload;
+                    if (!toUserId) return;
+
+                    const recipientSocketId = userSocketMap.get(toUserId);
+                    if (recipientSocketId) {
+                        io.to(recipientSocketId).emit('user-stop-typing', { fromUserId: userId });
+                    } else {
+                        io.to(toUserId).emit('user-stop-typing', { fromUserId: userId });
+                    }
+                } catch {
+                    // Swallow errors
                 }
             });
 

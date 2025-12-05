@@ -7,6 +7,8 @@ import {
   disconnectChat,
   fetchConversation,
   sendDirectMessage,
+  emitTyping,
+  emitStopTyping,
   type ChatMessage,
 } from '../services/chatService';
 import { getStoredUser } from '../services/authService';
@@ -19,7 +21,9 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const [socket, setSocket] = useState<Socket | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const navState = (location.state as { userName?: string; userEmail?: string } | null) || null;
   const [otherUserName] = useState<string>(navState?.userName || 'Direct Messages');
 
@@ -60,14 +64,30 @@ export function ChatPage() {
       setMessages((prev) => [...prev, message]);
     };
 
+    const handleTyping = (data: { fromUserId: string }) => {
+      if (data.fromUserId === userId) {
+        setIsOtherUserTyping(true);
+      }
+    };
+
+    const handleStopTyping = (data: { fromUserId: string }) => {
+      if (data.fromUserId === userId) {
+        setIsOtherUserTyping(false);
+      }
+    };
+
     s.on('dm:received', handleReceived as any);
     s.on('dm:sent', handleSent as any);
+    s.on('user-typing', handleTyping as any);
+    s.on('user-stop-typing', handleStopTyping as any);
 
     return () => {
       const existing = getChatSocket();
       if (existing) {
         existing.off('dm:received', handleReceived as any);
         existing.off('dm:sent', handleSent as any);
+        existing.off('user-typing', handleTyping as any);
+        existing.off('user-stop-typing', handleStopTyping as any);
       }
       disconnectChat();
     };
@@ -144,6 +164,17 @@ export function ChatPage() {
               <p className="text-xs text-gray-600 mt-1">Start the conversation!</p>
             </div>
           )}
+          {isOtherUserTyping && (
+            <div className="flex w-full mb-3 justify-start">
+              <div className="max-w-[70%] rounded-2xl px-4 py-2.5 bg-gray-800/90 border border-gray-700/50">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                </div>
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 
@@ -155,11 +186,23 @@ export function ChatPage() {
                 className="w-full px-5 py-3.5 rounded-3xl bg-gray-900/90 border border-gray-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-gray-500 shadow-lg"
                 placeholder="Type your message..."
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  if (userId) {
+                    emitTyping(userId);
+                    if (typingTimeoutRef.current) {
+                      clearTimeout(typingTimeoutRef.current);
+                    }
+                    typingTimeoutRef.current = setTimeout(() => {
+                      emitStopTyping(userId);
+                    }, 1000);
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSend();
+                    if (userId) emitStopTyping(userId);
                   }
                 }}
               />

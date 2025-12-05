@@ -76,3 +76,13 @@ export function sendDirectMessage(toUserId: string, content: string): void {
     socket.emit('dm:send', { toUserId, content });
 }
 
+export function emitTyping(toUserId: string): void {
+    if (!socket) return;
+    socket.emit('typing', { toUserId });
+}
+
+export function emitStopTyping(toUserId: string): void {
+    if (!socket) return;
+    socket.emit('stop-typing', { toUserId });
+}
+
