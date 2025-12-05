@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { Message } from '../models/Message.js';
 import { User } from '../models/User.js';
@@ -17,12 +18,14 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res) => {
             return;
         }
 
+        const currentObjectId = new mongoose.Types.ObjectId(currentUserId);
+
         const pipeline = [
             {
                 $match: {
                     $or: [
-                        { sender: currentUserId },
-                        { recipient: currentUserId },
+                        { sender: currentObjectId },
+                        { recipient: currentObjectId },
                     ],
                 },
             },
@@ -30,7 +33,7 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res) => {
                 $addFields: {
                     otherUserId: {
                         $cond: [
-                            { $eq: ['$sender', currentUserId] },
+                            { $eq: ['$sender', currentObjectId] },
                             '$recipient',
                             '$sender',
                         ],

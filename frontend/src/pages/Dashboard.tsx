@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User } from 'lucide-react';
+import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
@@ -9,6 +9,7 @@ import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { DailyChallenge } from '@/components/DailyChallenge';
 import { NotificationsBell } from '@/components/NotificationsBell';
+import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -21,6 +22,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [avatarImage, setAvatarImage] = useState<string | null>(null);
   const { theme, setTheme } = useTheme();
   const [fontSize, setFontSize] = useState(14);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const storedUser = getStoredUser();
   const isTeacher = storedUser?.role === 'teacher';
 
@@ -50,6 +52,39 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       }
     };
     loadUserAvatar();
+  }, []);
+
+  // Subscribe to chat socket for unread indicator
+  useEffect(() => {
+    const s = connectChat();
+    if (!s) return;
+
+    const handleReceived = (_msg: ChatMessage) => {
+      if (!storedUser || _msg.recipientId !== storedUser.id) return;
+
+      // Increment global counter
+      setNewMessageCount((prev) => prev + 1);
+
+      // Persist per-user unread counts so Messages page can show badges
+      try {
+        const raw = localStorage.getItem('nexusquest-unread-users');
+        const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+        const fromId = _msg.senderId;
+        map[fromId] = (map[fromId] || 0) + 1;
+        localStorage.setItem('nexusquest-unread-users', JSON.stringify(map));
+      } catch {
+        // ignore JSON/localStorage errors
+      }
+    };
+
+    s.on('dm:received', handleReceived as any);
+
+    return () => {
+      const existing = getChatSocket();
+      if (existing) {
+        existing.off('dm:received', handleReceived as any);
+      }
+    };
   }, []);
 
   // User's task progress (started/completed tasks)
@@ -119,6 +154,23 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setNewMessageCount(0);
+                navigate('/users');
+              }}
+              className={`relative rounded-full p-2 border text-gray-300 hover:text-emerald-300 hover:border-emerald-500 transition-colors ${
+                theme === 'dark' ? 'border-gray-700 bg-gray-900/70' : 'border-gray-300 bg-white/70'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              {newMessageCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] leading-4 text-white flex items-center justify-center">
+                  {newMessageCount > 9 ? '9+' : newMessageCount}
+                </span>
+              )}
+            </button>
             <NotificationsBell theme={theme} />
             <Button
               onClick={() => setShowSidePanel(true)}
@@ -197,12 +249,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 text-lg"
             >
               + New Project
-            </Button>
-            <Button
-              onClick={() => navigate('/users')}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-3 text-lg"
-            >
-              💬 Messages
             </Button>
           </div>
         </div>
