@@ -80,6 +80,38 @@ router.post('/signup', async (req: AuthRequest, res: Response) => {
 });
 
 /**
+ * GET /api/auth/users
+ * Get list of users for chat (basic info only)
+ */
+router.get('/users', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const users = await User.find({}, {
+      name: 1,
+      email: 1,
+      role: 1,
+    })
+      .sort({ name: 1 })
+      .lean();
+
+    res.json({
+      success: true,
+      users: users.map(u => ({
+        id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      })),
+    });
+  } catch (error) {
+    logger.error('List users error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load users',
+    });
+  }
+});
+
+/**
  * POST /api/auth/login
  * Login user
  */

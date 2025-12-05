@@ -198,6 +198,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             >
               + New Project
             </Button>
+            <Button
+              onClick={() => navigate('/users')}
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-3 text-lg"
+            >
+              💬 Messages
+            </Button>
           </div>
         </div>
 
