@@ -104,6 +104,10 @@ export default function TutorialCardView() {
     setCurrentSection(index);
   };
 
+  const handleReviewTutorial = () => {
+    setCurrentSection(0);
+  };
+
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'beginner':
@@ -256,6 +260,14 @@ export default function TutorialCardView() {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={handleReviewTutorial}
+                  className="flex items-center justify-center gap-2 px-6 py-3 text-lg border-blue-500 text-blue-500 hover:bg-blue-500/10"
+                >
+                  <BookOpen className="w-5 h-5" />
+                  Review Tutorial
+                </Button>
                 {nextTutorial && (
                   <Button
                     onClick={() => navigate(`/tutorials/${nextTutorial.id}`)}
