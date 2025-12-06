@@ -7,17 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import api from '../services/api';
 import Markdown from 'react-native-markdown-display';
-
-interface Tutorial {
-  _id: string;
-  title: string;
-  description: string;
-  language: string;
-  difficulty: string;
-  content?: string;
-}
+import { getTutorial, type Tutorial } from '../services/tutorialService';
 
 export default function TutorialDetailScreen({ route, navigation }: any) {
   const { tutorialId } = route.params;
@@ -30,10 +21,8 @@ export default function TutorialDetailScreen({ route, navigation }: any) {
 
   const loadTutorial = async () => {
     try {
-      const response = await api.get(`/api/tutorials/${tutorialId}`);
-      if (response.data) {
-        setTutorial(response.data);
-      }
+      const t = await getTutorial(tutorialId);
+      setTutorial(t);
     } catch (error) {
       console.error('Failed to load tutorial:', error);
     } finally {
@@ -69,6 +58,19 @@ export default function TutorialDetailScreen({ route, navigation }: any) {
       </View>
     );
   }
+
+  // Build markdown content from tutorial sections
+  const markdownContent = tutorial.sections
+    .map((section) => {
+      const heading = `## ${section.title}`;
+      const body = section.content || '';
+      const code = section.codeExample
+        ? `\n\n\n\n
+\n\n`
+        : '';
+      return `${heading}\n\n${body}${code}`;
+    })
+    .join('\n\n---\n\n');
 
   return (
     <View style={styles.container}>
@@ -109,7 +111,7 @@ export default function TutorialDetailScreen({ route, navigation }: any) {
               list_item: { color: '#cbd5e1', marginBottom: 5 },
             }}
           >
-            {tutorial.content || ''}
+            {markdownContent}
           </Markdown>
         </View>
       </ScrollView>

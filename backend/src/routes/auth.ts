@@ -80,6 +80,91 @@ router.post('/signup', async (req: AuthRequest, res: Response) => {
 });
 
 /**
+ * GET /api/auth/leaderboard/top
+ * Get top users by totalPoints (default top 50)
+ */
+router.get('/leaderboard/top', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const limit = Math.min(parseInt((req.query.limit as string) || '50', 10) || 50, 100);
+    const role = (req.query.role as string) || undefined;
+    const filter: Record<string, any> = {};
+    if (role === 'user' || role === 'teacher') {
+      filter.role = role;
+    }
+
+    const users = await User.find(filter, {
+      name: 1,
+      email: 1,
+      totalPoints: 1,
+    })
+      .sort({ totalPoints: -1, createdAt: 1 })
+      .limit(limit)
+      .lean();
+
+    const leaderboard = users.map((u, index) => ({
+      id: u._id,
+      name: u.name,
+      email: u.email,
+      totalPoints: u.totalPoints || 0,
+      rank: index + 1,
+    }));
+
+    res.json({
+      success: true,
+      data: leaderboard,
+    });
+  } catch (error) {
+    logger.error('Get top leaderboard error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get leaderboard',
+    });
+  }
+});
+
+/**
+ * GET /api/auth/leaderboard/user/:id
+ * Get a specific user's global leaderboard rank based on totalPoints
+ */
+router.get('/leaderboard/user/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id).select('totalPoints');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    const userPoints = user.totalPoints || 0;
+
+    const [betterCount, totalUsers] = await Promise.all([
+      User.countDocuments({ totalPoints: { $gt: userPoints } }),
+      User.countDocuments({}),
+    ]);
+
+    const rank = betterCount + 1;
+
+    res.json({
+      success: true,
+      data: {
+        rank,
+        totalUsers,
+        totalPoints: userPoints,
+      },
+    });
+  } catch (error) {
+    logger.error('Get user leaderboard rank error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user leaderboard rank',
+    });
+  }
+});
+
+/**
  * GET /api/auth/users
  * Get list of users for chat (basic info only)
  */
@@ -417,6 +502,55 @@ router.post('/sync-points', authMiddleware, async (req: AuthRequest, res: Respon
     res.status(500).json({
       success: false,
       error: 'Failed to sync points',
+    });
+  }
+});
+
+/**
+ * GET /api/auth/leaderboard/me
+ * Get current user's global leaderboard rank based on totalPoints
+ */
+router.get('/leaderboard/me', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    const user = await User.findById(userId).select('totalPoints');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    const userPoints = user.totalPoints || 0;
+
+    const [betterCount, totalUsers] = await Promise.all([
+      User.countDocuments({ totalPoints: { $gt: userPoints } }),
+      User.countDocuments({}),
+    ]);
+
+    const rank = betterCount + 1;
+
+    res.json({
+      success: true,
+      data: {
+        rank,
+        totalUsers,
+        totalPoints: userPoints,
+      },
+    });
+  } catch (error) {
+    logger.error('Get leaderboard rank error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get leaderboard rank',
     });
   }
 });

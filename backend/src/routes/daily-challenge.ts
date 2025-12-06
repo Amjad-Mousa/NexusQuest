@@ -134,7 +134,7 @@ router.post('/submit', async (req: AuthRequest, res: Response) => {
     }
 });
 
-// Get user's daily challenge history/stats
+// Get current user's daily challenge history/stats
 router.get('/stats', async (req: AuthRequest, res: Response) => {
     try {
         const completions = await DailyChallengeCompletion.find({ userId: req.userId })
@@ -172,6 +172,48 @@ router.get('/stats', async (req: AuthRequest, res: Response) => {
         });
     } catch (error) {
         console.error('Failed to get daily challenge stats:', error);
+        res.status(500).json({ success: false, error: 'Failed to get stats' });
+    }
+});
+
+// Get any user's daily challenge history/stats by id
+router.get('/stats/:userId', async (req: AuthRequest, res: Response) => {
+    try {
+        const { userId } = req.params;
+
+        const completions = await DailyChallengeCompletion.find({ userId })
+            .sort({ completedDate: -1 })
+            .limit(30);
+
+        let streak = 0;
+        const today = new Date();
+
+        for (let i = 0; i < 30; i++) {
+            const checkDate = new Date(today);
+            checkDate.setDate(checkDate.getDate() - i);
+            const dateStr = checkDate.toISOString().split('T')[0];
+
+            const found = completions.find(c => c.completedDate === dateStr);
+            if (found) {
+                streak++;
+            } else if (i > 0) {
+                break;
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                totalCompleted: completions.length,
+                currentStreak: streak,
+                recentCompletions: completions.slice(0, 7).map(c => ({
+                    date: c.completedDate,
+                    challengeIndex: c.challengeIndex,
+                })),
+            },
+        });
+    } catch (error) {
+        console.error('Failed to get user daily challenge stats:', error);
         res.status(500).json({ success: false, error: 'Failed to get stats' });
     }
 });

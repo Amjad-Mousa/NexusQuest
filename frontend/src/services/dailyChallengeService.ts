@@ -55,6 +55,13 @@ export async function getTodayChallenge(): Promise<TodayChallengeResponse> {
     return data.data;
 }
 
+export async function getUserDailyChallengeStats(userId: string): Promise<DailyChallengeStats> {
+    const res = await authFetch(`${API_URL}/api/daily-challenge/stats/${userId}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+}
+
 export async function submitDailyChallenge(code: string): Promise<SubmitResult> {
     const res = await authFetch(`${API_URL}/api/daily-challenge/submit`, {
         method: 'POST',

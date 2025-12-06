@@ -8,6 +8,8 @@ export interface User {
   role: 'user' | 'teacher';
 }
 
+export type UserRole = 'user' | 'teacher';
+
 export interface AuthResponse {
   success: boolean;
   token?: string;
@@ -31,9 +33,9 @@ export const login = async (email: string, password: string): Promise<AuthRespon
   }
 };
 
-export const signup = async (name: string, email: string, password: string): Promise<AuthResponse> => {
+export const signup = async (name: string, email: string, password: string, role: UserRole = 'user'): Promise<AuthResponse> => {
   try {
-    const response = await api.post('/api/auth/signup', { name, email, password });
+    const response = await api.post('/api/auth/signup', { name, email, password, role });
     if (response.data.success && response.data.token) {
       await AsyncStorage.setItem('nexusquest-token', response.data.token);
       await AsyncStorage.setItem('nexusquest-user', JSON.stringify(response.data.user));

@@ -23,13 +23,13 @@ router.get('/public', async (req: AuthRequest, res: Response) => {
   console.log('👉 GET /api/tutorials/public hit');
   try {
     const { language, difficulty } = req.query;
-    
+
     const filter: any = { isPublished: true };
-    
+
     if (language) {
       filter.language = language;
     }
-    
+
     if (difficulty) {
       filter.difficulty = difficulty;
     }
@@ -49,13 +49,13 @@ router.get('/public', async (req: AuthRequest, res: Response) => {
 router.get('/settings/visibility', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const settings = await TutorialSettings.find({});
-    
+
     // Convert to object format: { tutorialId: isPublished }
     const settingsMap: Record<string, boolean> = {};
     settings.forEach(setting => {
       settingsMap[setting.tutorialId] = setting.isPublished;
     });
-    
+
     res.json(settingsMap);
   } catch (error: any) {
     console.error('Error fetching tutorial settings:', error);
@@ -67,9 +67,9 @@ router.get('/settings/visibility', authMiddleware, async (req: AuthRequest, res:
 router.post('/settings/:tutorialId/toggle', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const { tutorialId } = req.params;
-    
+
     let setting = await TutorialSettings.findOne({ tutorialId });
-    
+
     if (!setting) {
       // Create new setting with opposite of default (default is true, so toggle to false)
       setting = new TutorialSettings({
@@ -80,9 +80,9 @@ router.post('/settings/:tutorialId/toggle', authMiddleware, requireTeacher, asyn
       // Toggle existing setting
       setting.isPublished = !setting.isPublished;
     }
-    
+
     await setting.save();
-    
+
     res.json({
       tutorialId: setting.tutorialId,
       isPublished: setting.isPublished,
@@ -97,13 +97,13 @@ router.post('/settings/:tutorialId/toggle', authMiddleware, requireTeacher, asyn
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { language, difficulty } = req.query;
-    
+
     const filter: any = { isPublished: true };
-    
+
     if (language) {
       filter.language = language;
     }
-    
+
     if (difficulty) {
       filter.difficulty = difficulty;
     }

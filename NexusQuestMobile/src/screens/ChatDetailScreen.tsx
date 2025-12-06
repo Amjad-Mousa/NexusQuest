@@ -22,7 +22,7 @@ import {
 } from '../services/chatService';
 
 export default function ChatDetailScreen({ route, navigation }: any) {
-  const { userId, userName, userEmail } = route.params;
+  const { userId, userName } = route.params;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -151,7 +151,6 @@ export default function ChatDetailScreen({ route, navigation }: any) {
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerName}>{userName}</Text>
-          <Text style={styles.headerEmail}>{userEmail}</Text>
         </View>
       </View>
 

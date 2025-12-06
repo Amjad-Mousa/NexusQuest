@@ -9,15 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import api from '../services/api';
-
-interface Tutorial {
-  _id: string;
-  title: string;
-  description: string;
-  language: string;
-  difficulty: string;
-  sections: any[];
-}
+import { getTutorials as getLocalTutorials, type Tutorial } from '../services/tutorialService';
 
 export default function TutorialsScreen({ navigation }: any) {
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
@@ -26,7 +18,7 @@ export default function TutorialsScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('all');
 
-  const languages = ['all', 'javascript', 'python', 'java', 'cpp', 'go'];
+  const languages = ['all', 'javascript', 'python', 'java', 'cpp'];
 
   useEffect(() => {
     loadTutorials();
@@ -39,14 +31,9 @@ export default function TutorialsScreen({ navigation }: any) {
   const loadTutorials = async () => {
     try {
       console.log('Loading tutorials...');
-      const response = await api.get('/api/tutorials/public');
-      console.log('Tutorials response:', response.data);
-      
-      // Handle both array response and object with data property
-      const tutorialsData = Array.isArray(response.data) 
-        ? response.data 
-        : response.data?.tutorials || [];
-      
+      const tutorialsData = await getLocalTutorials();
+      console.log('Tutorials loaded from local defaults:', tutorialsData.length);
+
       setTutorials(tutorialsData);
       setFilteredTutorials(tutorialsData);
     } catch (error: any) {
@@ -90,7 +77,7 @@ export default function TutorialsScreen({ navigation }: any) {
   const renderTutorial = ({ item }: { item: Tutorial }) => (
     <TouchableOpacity
       style={styles.tutorialCard}
-      onPress={() => navigation.navigate('TutorialDetail', { tutorialId: item._id })}
+      onPress={() => navigation.navigate('TutorialDetail', { tutorialId: item.id })}
     >
       <View style={styles.tutorialHeader}>
         <Text style={styles.tutorialTitle}>{item.title}</Text>
@@ -170,7 +157,7 @@ export default function TutorialsScreen({ navigation }: any) {
       <FlatList
         data={filteredTutorials}
         renderItem={renderTutorial}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import TutorialsScreen from './src/screens/TutorialsScreen';
 import TutorialDetailScreen from './src/screens/TutorialDetailScreen';
@@ -28,6 +29,7 @@ function AppNavigator() {
         }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
         <Stack.Screen name="Tutorials" component={TutorialsScreen} />
         <Stack.Screen name="TutorialDetail" component={TutorialDetailScreen} />

@@ -11,12 +11,14 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import quizService from '../services/quizService';
 import { Quiz } from '../types/quiz';
+import { useTheme } from '../context/ThemeContext';
 
 const QuizDetailScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { quizId } = route.params as { quizId: string };
 
+  const { colors, theme } = useTheme();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,13 +56,13 @@ const QuizDetailScreen = () => {
   const getStatusText = (status?: string) => {
     switch (status) {
       case 'active':
-        return 'جاري';
+        return 'Active';
       case 'scheduled':
-        return 'مجدول';
+        return 'Scheduled';
       case 'ended':
-        return 'منتهي';
+        return 'Ended';
       default:
-        return 'غير معروف';
+        return 'Unknown';
     }
   };
 
@@ -80,11 +82,11 @@ const QuizDetailScreen = () => {
   const getDifficultyText = (difficulty: string) => {
     switch (difficulty) {
       case 'easy':
-        return 'سهل';
+        return 'Easy';
       case 'medium':
-        return 'متوسط';
+        return 'Medium';
       case 'hard':
-        return 'صعب';
+        return 'Hard';
       default:
         return difficulty;
     }
@@ -107,7 +109,7 @@ const QuizDetailScreen = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('ar-SA', {
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -118,26 +120,27 @@ const QuizDetailScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#7c3aed" />
-        <Text style={styles.loadingText}>جاري تحميل الكويز...</Text>
+        <Text style={styles.loadingText}>Loading quiz...</Text>
       </View>
     );
   }
 
   if (!quiz) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>الكويز غير موجود</Text>
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <Text style={styles.errorText}>Quiz not found</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}
+    >
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{quiz.title}</Text>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.text }]}>{quiz.title}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(quiz.status) }]}>
           <Text style={styles.statusText}>{getStatusText(quiz.status)}</Text>
         </View>
@@ -145,13 +148,15 @@ const QuizDetailScreen = () => {
 
       {/* Info Cards */}
       <View style={styles.infoGrid}>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>اللغة</Text>
-          <Text style={styles.infoValue}>{getLanguageText(quiz.language)}</Text>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Language</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{getLanguageText(quiz.language)}</Text>
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>الصعوبة</Text>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Difficulty</Text>
           <View
             style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(quiz.difficulty) }]}
           >
@@ -159,66 +164,106 @@ const QuizDetailScreen = () => {
           </View>
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>النقاط</Text>
-          <Text style={styles.infoValue}>{quiz.points}</Text>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Points</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{quiz.points}</Text>
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>المدة</Text>
-          <Text style={styles.infoValue}>{quiz.duration} دقيقة</Text>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Duration</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{quiz.duration} min</Text>
         </View>
       </View>
 
       {/* Description */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>الوصف</Text>
-        <Text style={styles.description}>{quiz.description}</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface }]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Description</Text>
+        <Text style={[styles.description, { color: colors.textSecondary }]}>{quiz.description}</Text>
       </View>
 
       {/* Dates */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>المواعيد</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface }]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Schedule</Text>
         <View style={styles.dateContainer}>
-          <View style={styles.dateItem}>
-            <Text style={styles.dateLabel}>تاريخ البداية:</Text>
-            <Text style={styles.dateValue}>{formatDate(quiz.startTime)}</Text>
+          <View
+            style={[
+              styles.dateItem,
+              { backgroundColor: theme === 'dark' ? '#020617' : '#f9fafb' },
+            ]}
+          >
+            <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>Start:</Text>
+            <Text style={[styles.dateValue, { color: colors.text }]}>{formatDate(quiz.startTime)}</Text>
           </View>
-          <View style={styles.dateItem}>
-            <Text style={styles.dateLabel}>تاريخ النهاية:</Text>
-            <Text style={styles.dateValue}>{formatDate(quiz.endTime)}</Text>
+          <View
+            style={[
+              styles.dateItem,
+              { backgroundColor: theme === 'dark' ? '#020617' : '#f9fafb' },
+            ]}
+          >
+            <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>End:</Text>
+            <Text style={[styles.dateValue, { color: colors.text }]}>{formatDate(quiz.endTime)}</Text>
           </View>
         </View>
       </View>
 
       {/* Starter Code */}
       {quiz.starterCode && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>الكود الأساسي</Text>
-          <View style={styles.codeContainer}>
+        <View style={[styles.section, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Starter code</Text>
+          <View style={[styles.codeContainer, { backgroundColor: theme === 'dark' ? '#020617' : '#1f2937' }]}
+          >
             <Text style={styles.codeText}>{quiz.starterCode}</Text>
           </View>
         </View>
       )}
 
       {/* Test Cases */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>حالات الاختبار</Text>
-        <Text style={styles.testCaseNote}>
-          عدد حالات الاختبار: {quiz.testCases.length}
+      <View style={[styles.section, { backgroundColor: colors.surface }]}
+      >
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Test cases</Text>
+        <Text style={[styles.testCaseNote, { color: colors.textSecondary }]}>
+          Visible test cases: {quiz.testCases.filter(tc => !tc.isHidden).length}
         </Text>
         {quiz.testCases
           .filter((tc) => !tc.isHidden)
           .map((testCase, index) => (
-            <View key={index} style={styles.testCaseCard}>
-              <Text style={styles.testCaseTitle}>حالة اختبار {index + 1}</Text>
+            <View key={index} style={[styles.testCaseCard, { backgroundColor: theme === 'dark' ? '#020617' : '#f9fafb', borderColor: colors.border }]}
+            >
+              <Text style={[styles.testCaseTitle, { color: colors.text }]}>Test case {index + 1}</Text>
               <View style={styles.testCaseContent}>
-                <Text style={styles.testCaseLabel}>المدخلات:</Text>
-                <Text style={styles.testCaseValue}>{testCase.input || 'لا يوجد'}</Text>
+                <Text style={[styles.testCaseLabel, { color: colors.textSecondary }]}>Input:</Text>
+                <Text
+                  style={[
+                    styles.testCaseValue,
+                    {
+                      color: colors.text,
+                      backgroundColor: theme === 'dark' ? '#020617' : '#ffffff',
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  {testCase.input || 'None'}
+                </Text>
               </View>
               <View style={styles.testCaseContent}>
-                <Text style={styles.testCaseLabel}>المخرجات المتوقعة:</Text>
-                <Text style={styles.testCaseValue}>{testCase.expectedOutput}</Text>
+                <Text style={[styles.testCaseLabel, { color: colors.textSecondary }]}>Expected output:</Text>
+                <Text
+                  style={[
+                    styles.testCaseValue,
+                    {
+                      color: colors.text,
+                      backgroundColor: theme === 'dark' ? '#020617' : '#ffffff',
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  {testCase.expectedOutput}
+                </Text>
               </View>
             </View>
           ))}
@@ -226,26 +271,28 @@ const QuizDetailScreen = () => {
 
       {/* Created By */}
       {quiz.createdBy && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>أنشئ بواسطة</Text>
-          <Text style={styles.creatorText}>{quiz.createdBy.name}</Text>
-          <Text style={styles.creatorEmail}>{quiz.createdBy.email}</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface }]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Created by</Text>
+          <Text style={[styles.creatorText, { color: colors.text }]}>{quiz.createdBy.name}</Text>
         </View>
       )}
 
       {/* Note about submission */}
-      <View style={styles.noteContainer}>
-        <Text style={styles.noteText}>
-          📝 ملاحظة: عرض الكويزات متاح فقط. لتقديم الكويز، يرجى استخدام تطبيق الويب.
+      <View style={[styles.noteContainer, { backgroundColor: theme === 'dark' ? '#1f2937' : '#fef3c7', borderColor: theme === 'dark' ? colors.border : '#fbbf24' }]}
+      >
+        <Text style={[styles.noteText, { color: theme === 'dark' ? colors.textSecondary : '#92400e' }]}
+        >
+          📝 Note: Quizzes are view-only here. To submit answers, please use the web app.
         </Text>
       </View>
 
       {/* Back Button */}
       <TouchableOpacity
-        style={styles.backButton}
+        style={[styles.backButton, { backgroundColor: colors.primary }]}
         onPress={() => navigation.goBack()}
       >
-        <Text style={styles.backButtonText}>رجوع</Text>
+        <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
     </ScrollView>
   );

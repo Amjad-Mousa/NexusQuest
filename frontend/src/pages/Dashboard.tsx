@@ -10,7 +10,8 @@ import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { DailyChallenge } from '@/components/DailyChallenge';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
-import { fetchUsers, type ChatUser } from '../services/userService';
+import { fetchUsers, type ChatUser, getMyLeaderboardRank } from '../services/userService';
+import { getDailyChallengeStats } from '../services/dailyChallengeService';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -110,21 +111,52 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [completedTasks, setCompletedTasks] = useState<TaskProgress[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   const [userStats, setUserStats] = useState<UserStats>({ totalPoints: 0, completedTasks: 0, startedTasks: 0 });
+  const [globalRank, setGlobalRank] = useState<number | null>(null);
+  const [streak, setStreak] = useState(0);
+  const [badgesCount, setBadgesCount] = useState(0);
 
   // Load user's task progress and stats
   useEffect(() => {
     const loadProgress = async () => {
       try {
-        const [progress, completed, stats] = await Promise.all([
+        const [progress, completed, stats, dailyStats, leaderboard] = await Promise.all([
           getMyProgress('started'),
           getMyProgress('completed'),
-          getUserStats()
+          getUserStats(),
+          getDailyChallengeStats(),
+          getMyLeaderboardRank(),
         ]);
+
         setMyTaskProgress(progress.slice(0, 4)); // Show first 4 in-progress
         setCompletedTasks(completed.slice(0, 4)); // Show first 4 completed
         setUserStats(stats);
+
+        if (dailyStats) {
+          setStreak(dailyStats.currentStreak || 0);
+        }
+
+        if (leaderboard && typeof leaderboard.rank === 'number') {
+          setGlobalRank(leaderboard.rank);
+        } else {
+          setGlobalRank(null);
+        }
+
+        const points = stats.totalPoints;
+        const completedCount = stats.completedTasks;
+        const currentStreak = dailyStats ? (dailyStats.currentStreak || 0) : 0;
+
+        let computedBadges = 0;
+        if (points >= 100) computedBadges++;
+        if (points >= 500) computedBadges++;
+        if (points >= 1000) computedBadges++;
+        if (completedCount >= 5) computedBadges++;
+        if (completedCount >= 20) computedBadges++;
+        if (currentStreak >= 3) computedBadges++;
+        if (currentStreak >= 7) computedBadges++;
+
+        setBadgesCount(computedBadges);
       } catch (err) {
-        console.error('Failed to load task progress:', err);
+        console.error('Failed to load task progress or stats:', err);
       } finally {
         setTasksLoading(false);
       }
@@ -137,8 +169,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     completedChallenges: userStats.completedTasks,
     inProgressChallenges: userStats.startedTasks,
     points: userStats.totalPoints,
-    rank: 156, // TODO: implement leaderboard
-    streak: 5  // TODO: implement streak tracking
+    rank: globalRank ?? 0,
+    streak,
   };
 
   const userSuggestions = useMemo(() => {
@@ -390,7 +422,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             <Star className="w-8 h-8 text-yellow-400 mb-2" />
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>#{stats.rank}</div>
+            }`}>{stats.rank > 0 ? `#${stats.rank}` : '-'}</div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             }`}>Global Rank</div>
@@ -418,7 +450,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             <Award className="w-8 h-8 text-green-400 mb-2" />
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>8</div>
+            }`}>{badgesCount}</div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             }`}>Badges Earned</div>

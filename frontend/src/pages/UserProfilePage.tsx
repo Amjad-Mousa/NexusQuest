@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchUserProfile, type UserProfile } from '../services/userService';
+import { fetchUserProfile, type UserProfile, getUserLeaderboardRank } from '../services/userService';
 import { getStoredUser } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { ProfileHeader, ProfileCard, StatsGrid, ProfileTabs } from '../components/profile';
 import { Star, CheckCircle, Trophy, Zap } from 'lucide-react';
+import { getUserDailyChallengeStats } from '../services/dailyChallengeService';
 
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -23,6 +24,8 @@ export function UserProfilePage() {
 
   const [totalPoints, setTotalPoints] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
+  const [globalRank, setGlobalRank] = useState<number | null>(null);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     if (!viewer) {
@@ -37,7 +40,12 @@ export function UserProfilePage() {
 
     const load = async () => {
       try {
-        const data = await fetchUserProfile(userId);
+        const [data, leaderboard, dailyStats] = await Promise.all([
+          fetchUserProfile(userId),
+          getUserLeaderboardRank(userId),
+          getUserDailyChallengeStats(userId),
+        ]);
+
         if (!data) {
           setError('User not found');
         } else {
@@ -46,8 +54,19 @@ export function UserProfilePage() {
             setTotalPoints(data.totalPoints);
           }
         }
+
+        if (dailyStats) {
+          setCompletedCount(dailyStats.totalCompleted || 0);
+          setStreak(dailyStats.currentStreak || 0);
+        }
+
+        if (leaderboard && typeof leaderboard.rank === 'number') {
+          setGlobalRank(leaderboard.rank);
+        } else {
+          setGlobalRank(null);
+        }
       } catch (e) {
-        console.error('Failed to load user profile', e);
+        console.error('Failed to load user profile or stats', e);
         setError('Failed to load user profile');
       } finally {
         setLoading(false);
@@ -56,10 +75,6 @@ export function UserProfilePage() {
 
     load();
   }, [userId, navigate, viewer]);
-
-  useEffect(() => {
-    setCompletedCount(0);
-  }, []);
 
   if (loading) {
     return (
@@ -101,8 +116,8 @@ export function UserProfilePage() {
   const stats = [
     { label: 'Total Points', value: totalPoints.toLocaleString(), icon: Star, color: 'yellow' },
     { label: 'Problems Solved', value: completedCount.toString(), icon: CheckCircle, color: 'green' },
-    { label: 'Global Rank', value: '#156', icon: Trophy, color: 'purple' },
-    { label: 'Current Streak', value: '7 days', icon: Zap, color: 'blue' }
+    { label: 'Global Rank', value: globalRank && globalRank > 0 ? `#${globalRank}` : '-', icon: Trophy, color: 'purple' },
+    { label: 'Current Streak', value: `${streak} days`, icon: Zap, color: 'blue' }
   ];
 
   const skills = [

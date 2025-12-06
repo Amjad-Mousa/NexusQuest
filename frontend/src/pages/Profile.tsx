@@ -5,6 +5,8 @@ import { useProfileImages } from '../hooks/useProfileImages';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { ProfileHeader, ProfileCard, StatsGrid, ProfileTabs, EditProfileModal } from '../components/profile';
 import { getUserStats, getMyProgress, TaskProgress } from '../services/taskService';
+import { getMyLeaderboardRank } from '../services/userService';
+import { getDailyChallengeStats } from '../services/dailyChallengeService';
 
 interface ProfileProps {
   user: { name: string; email: string } | null;
@@ -25,18 +27,33 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const [totalPoints, setTotalPoints] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
   const [completedTasks, setCompletedTasks] = useState<TaskProgress[]>([]);
+  const [globalRank, setGlobalRank] = useState<number | null>(null);
+  const [streak, setStreak] = useState(0);
 
   // Load real stats from API
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const [stats, completed] = await Promise.all([
+        const [stats, completed, leaderboard, dailyStats] = await Promise.all([
           getUserStats(),
-          getMyProgress('completed')
+          getMyProgress('completed'),
+          getMyLeaderboardRank(),
+          getDailyChallengeStats(),
         ]);
+
         setTotalPoints(stats.totalPoints);
         setCompletedCount(stats.completedTasks);
         setCompletedTasks(completed);
+
+        if (leaderboard && typeof leaderboard.rank === 'number') {
+          setGlobalRank(leaderboard.rank);
+        } else {
+          setGlobalRank(null);
+        }
+
+        if (dailyStats) {
+          setStreak(dailyStats.currentStreak || 0);
+        }
       } catch (err) {
         console.error('Failed to load profile stats:', err);
       }
@@ -110,8 +127,8 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const stats = [
     { label: 'Total Points', value: totalPoints.toLocaleString(), icon: Star, color: 'yellow' },
     { label: 'Problems Solved', value: completedCount.toString(), icon: CheckCircle, color: 'green' },
-    { label: 'Global Rank', value: '#156', icon: Trophy, color: 'purple' },
-    { label: 'Current Streak', value: '7 days', icon: Zap, color: 'blue' }
+    { label: 'Global Rank', value: globalRank && globalRank > 0 ? `#${globalRank}` : '-', icon: Trophy, color: 'purple' },
+    { label: 'Current Streak', value: `${streak} days`, icon: Zap, color: 'blue' }
   ];
 
   const skills = [
