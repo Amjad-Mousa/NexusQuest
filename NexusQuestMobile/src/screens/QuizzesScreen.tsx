@@ -12,9 +12,11 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import quizService from '../services/quizService';
 import { Quiz, QuizDifficulty, QuizLanguage } from '../types/quiz';
+import { useTheme } from '../context/ThemeContext';
 
 const QuizzesScreen = () => {
   const navigation = useNavigation();
+  const { theme, colors } = useTheme();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [filteredQuizzes, setFilteredQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,13 +86,13 @@ const QuizzesScreen = () => {
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'active':
-        return '#10b981';
+        return colors.success;
       case 'scheduled':
-        return '#f59e0b';
+        return colors.warning;
       case 'ended':
-        return '#ef4444';
+        return colors.error;
       default:
-        return '#6b7280';
+        return colors.textSecondary;
     }
   };
 
@@ -114,7 +116,7 @@ const QuizzesScreen = () => {
       case 'medium':
         return '#f59e0b';
       case 'hard':
-        return '#ef4444';
+        return colors.error;
     }
   };
 
@@ -157,28 +159,34 @@ const QuizzesScreen = () => {
 
   const renderQuizItem = ({ item }: { item: Quiz }) => (
     <TouchableOpacity
-      style={styles.quizCard}
+      style={[
+        styles.quizCard,
+        {
+          backgroundColor: colors.card,
+          shadowColor: theme === 'dark' ? '#000' : '#000',
+        },
+      ]}
       onPress={() => navigation.navigate('QuizDetail' as never, { quizId: item._id } as never)}
     >
       <View style={styles.quizHeader}>
-        <Text style={styles.quizTitle}>{item.title}</Text>
+        <Text style={[styles.quizTitle, { color: colors.text }]}>{item.title}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
         </View>
       </View>
 
-      <Text style={styles.quizDescription} numberOfLines={2}>
+      <Text style={[styles.quizDescription, { color: colors.textSecondary }]} numberOfLines={2}>
         {item.description}
       </Text>
 
       <View style={styles.quizInfo}>
         <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>اللغة:</Text>
-          <Text style={styles.infoValue}>{getLanguageText(item.language)}</Text>
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>اللغة:</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{getLanguageText(item.language)}</Text>
         </View>
 
         <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>الصعوبة:</Text>
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>الصعوبة:</Text>
           <View
             style={[
               styles.difficultyBadge,
@@ -190,24 +198,34 @@ const QuizzesScreen = () => {
         </View>
 
         <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>النقاط:</Text>
-          <Text style={styles.infoValue}>{item.points}</Text>
+          <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>النقاط:</Text>
+          <Text style={[styles.infoValue, { color: colors.text }]}>{item.points}</Text>
         </View>
       </View>
 
       <View style={styles.quizDates}>
         <View style={styles.dateItem}>
-          <Text style={styles.dateLabel}>يبدأ:</Text>
-          <Text style={styles.dateValue}>{formatDate(item.startTime)}</Text>
+          <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>يبدأ:</Text>
+          <Text style={[styles.dateValue, { color: colors.text }]}>{formatDate(item.startTime)}</Text>
         </View>
         <View style={styles.dateItem}>
-          <Text style={styles.dateLabel}>ينتهي:</Text>
-          <Text style={styles.dateValue}>{formatDate(item.endTime)}</Text>
+          <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>ينتهي:</Text>
+          <Text style={[styles.dateValue, { color: colors.text }]}>{formatDate(item.endTime)}</Text>
         </View>
       </View>
 
-      <View style={styles.durationContainer}>
-        <Text style={styles.durationText}>المدة: {item.duration} دقيقة</Text>
+      <View
+        style={[
+          styles.durationContainer,
+          {
+            backgroundColor: theme === 'dark' ? '#020617' : '#f3f4f6',
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.durationText, { color: colors.text }]}>
+          المدة: {item.duration} دقيقة
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -222,11 +240,19 @@ const QuizzesScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}
+    >
       {/* Search Bar */}
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+      >
         <TextInput
-          style={styles.searchInput}
+          style={[
+            styles.searchInput,
+            {
+              backgroundColor: theme === 'dark' ? '#020617' : '#f3f4f6',
+              color: colors.text,
+            },
+          ]}
           placeholder="ابحث عن كويز..."
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -235,8 +261,11 @@ const QuizzesScreen = () => {
       </View>
 
       {/* Language Filter */}
-      <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>اللغة:</Text>
+      <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+      >
+        <Text style={[styles.filterLabel, { color: colors.text }]}>
+          اللغة:
+        </Text>
         <FlatList
           horizontal
           data={languages}
@@ -246,14 +275,24 @@ const QuizzesScreen = () => {
             <TouchableOpacity
               style={[
                 styles.filterButton,
-                selectedLanguage === item && styles.filterButtonActive,
+                {
+                  backgroundColor:
+                    selectedLanguage === item
+                      ? colors.primary
+                      : theme === 'dark'
+                      ? '#020617'
+                      : '#f3f4f6',
+                },
               ]}
               onPress={() => setSelectedLanguage(item)}
             >
               <Text
                 style={[
                   styles.filterButtonText,
-                  selectedLanguage === item && styles.filterButtonTextActive,
+                  {
+                    color:
+                      selectedLanguage === item ? '#ffffff' : colors.textSecondary,
+                  },
                 ]}
               >
                 {getLanguageText(item)}
@@ -264,8 +303,15 @@ const QuizzesScreen = () => {
       </View>
 
       {/* Difficulty Filter */}
-      <View style={styles.filterContainer}>
-        <Text style={styles.filterLabel}>الصعوبة:</Text>
+      <View
+        style={[
+          styles.filterContainer,
+          { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.filterLabel, { color: colors.text }]}>
+          الصعوبة:
+        </Text>
         <FlatList
           horizontal
           data={difficulties}
@@ -275,14 +321,26 @@ const QuizzesScreen = () => {
             <TouchableOpacity
               style={[
                 styles.filterButton,
-                selectedDifficulty === item && styles.filterButtonActive,
+                {
+                  backgroundColor:
+                    selectedDifficulty === item
+                      ? colors.primary
+                      : theme === 'dark'
+                      ? '#020617'
+                      : '#f3f4f6',
+                },
               ]}
               onPress={() => setSelectedDifficulty(item)}
             >
               <Text
                 style={[
                   styles.filterButtonText,
-                  selectedDifficulty === item && styles.filterButtonTextActive,
+                  {
+                    color:
+                      selectedDifficulty === item
+                        ? '#ffffff'
+                        : colors.textSecondary,
+                  },
                 ]}
               >
                 {item === 'all' ? 'الكل' : getDifficultyText(item as QuizDifficulty)}
@@ -295,7 +353,7 @@ const QuizzesScreen = () => {
       {/* Quiz List */}
       {filteredQuizzes.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>لا توجد كويزات</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>لا توجد كويزات</Text>
         </View>
       ) : (
         <FlatList
