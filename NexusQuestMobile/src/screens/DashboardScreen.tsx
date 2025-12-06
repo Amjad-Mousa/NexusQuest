@@ -40,7 +40,10 @@ export default function DashboardScreen({ navigation }: any) {
           <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionText}>📝 Quizzes</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Playground')}
+          >
             <Text style={styles.actionText}>⚡ Playground</Text>
           </TouchableOpacity>
           <TouchableOpacity 

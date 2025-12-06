@@ -8,6 +8,7 @@ import TutorialsScreen from './src/screens/TutorialsScreen';
 import TutorialDetailScreen from './src/screens/TutorialDetailScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen';
+import PlaygroundScreen from './src/screens/PlaygroundScreen';
 
 const Stack = createStackNavigator();
 
@@ -27,6 +28,7 @@ export default function App() {
         <Stack.Screen name="TutorialDetail" component={TutorialDetailScreen} />
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
+        <Stack.Screen name="Playground" component={PlaygroundScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
