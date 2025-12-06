@@ -9,29 +9,21 @@ export const quizService = {
       if (language) params.language = language;
       if (difficulty) params.difficulty = difficulty;
 
-      const response = await api.get('/api/quizzes', { params });
+      const response = await api.get('/api/quizzes/public', { params });
       
-      // Add status to each quiz based on startTime and endTime
-      const quizzes = response.data.map((quiz: any) => ({
-        ...quiz,
-        status: getQuizStatus(quiz.startTime, quiz.endTime),
-      }));
-      
-      return quizzes;
+      // The backend already adds status, so just return the data
+      return response.data || [];
     } catch (error) {
       console.error('Error fetching quizzes:', error);
-      throw error;
+      return [];
     }
   },
 
   // Get quiz by ID
   async getQuizById(quizId: string): Promise<Quiz> {
     try {
-      const response = await api.get(`/api/quizzes/${quizId}`);
-      return {
-        ...response.data,
-        status: getQuizStatus(response.data.startTime, response.data.endTime),
-      };
+      const response = await api.get(`/api/quizzes/public/${quizId}`);
+      return response.data;
     } catch (error) {
       console.error('Error fetching quiz:', error);
       throw error;

@@ -24,9 +24,6 @@ const teacherMiddleware = async (req: AuthRequest, res: Response, next: () => vo
     }
 };
 
-// All routes require authentication
-router.use(authMiddleware);
-
 // Helper to get quiz status
 function getQuizStatus(quiz: { startTime: Date; endTime: Date }): 'scheduled' | 'active' | 'ended' {
     const now = new Date();
@@ -34,6 +31,65 @@ function getQuizStatus(quiz: { startTime: Date; endTime: Date }): 'scheduled' | 
     if (now > quiz.endTime) return 'ended';
     return 'active';
 }
+
+// Public endpoint for mobile - Get all quizzes without auth
+router.get('/public', async (req: AuthRequest, res: Response) => {
+    console.log('👉 GET /api/quizzes/public hit');
+    try {
+        const { language, difficulty } = req.query;
+        
+        const filter: any = {};
+        
+        if (language) {
+            filter.language = language;
+        }
+        
+        if (difficulty) {
+            filter.difficulty = difficulty;
+        }
+
+        const quizzes = await Quiz.find(filter)
+            .populate('createdBy', 'name email')
+            .sort({ startTime: -1 });
+
+        // Add status to each quiz
+        const quizzesWithStatus = quizzes.map(quiz => ({
+            ...quiz.toObject(),
+            status: getQuizStatus(quiz),
+        }));
+
+        res.json(quizzesWithStatus);
+    } catch (error: any) {
+        console.error('❌ Error fetching public quizzes:', error);
+        res.status(500).json({ error: 'Failed to fetch quizzes' });
+    }
+});
+
+// Public endpoint to get single quiz by ID (no auth required)
+router.get('/public/:id', async (req: AuthRequest, res: Response) => {
+    console.log('👉 GET /api/quizzes/public/:id hit');
+    try {
+        const quiz = await Quiz.findById(req.params.id)
+            .populate('createdBy', 'name email');
+
+        if (!quiz) {
+            return res.status(404).json({ error: 'Quiz not found' });
+        }
+
+        const status = getQuizStatus(quiz);
+
+        res.json({
+            ...quiz.toObject(),
+            status,
+        });
+    } catch (error: any) {
+        console.error('❌ Error fetching quiz:', error);
+        res.status(500).json({ error: 'Failed to fetch quiz' });
+    }
+});
+
+// All routes below require authentication
+router.use(authMiddleware);
 
 // Get all quizzes (students see only assigned quizzes, teachers see all)
 router.get('/', async (req: AuthRequest, res: Response) => {

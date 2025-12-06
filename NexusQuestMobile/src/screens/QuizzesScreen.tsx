@@ -30,10 +30,13 @@ const QuizzesScreen = () => {
     try {
       setLoading(true);
       const data = await quizService.getAllQuizzes();
-      setQuizzes(data);
-      setFilteredQuizzes(data);
+      console.log('Fetched quizzes:', data);
+      setQuizzes(data || []);
+      setFilteredQuizzes(data || []);
     } catch (error) {
       console.error('Error loading quizzes:', error);
+      setQuizzes([]);
+      setFilteredQuizzes([]);
     } finally {
       setLoading(false);
     }
