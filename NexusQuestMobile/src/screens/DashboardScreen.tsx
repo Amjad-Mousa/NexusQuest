@@ -31,7 +31,10 @@ export default function DashboardScreen({ navigation }: any) {
       <ScrollView style={styles.content}>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>🎯 Quick Actions</Text>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Tutorials')}
+          >
             <Text style={styles.actionText}>📚 Tutorials</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
@@ -40,7 +43,10 @@ export default function DashboardScreen({ navigation }: any) {
           <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionText}>⚡ Playground</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Chat')}
+          >
             <Text style={styles.actionText}>💬 Chat</Text>
           </TouchableOpacity>
         </View>
