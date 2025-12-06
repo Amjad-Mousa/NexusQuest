@@ -19,6 +19,9 @@ export function LeaderboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [fontSize, setFontSize] = useState(14);
+  const [activeRole, setActiveRole] = useState<'user' | 'teacher'>(() =>
+    viewer?.role === 'teacher' ? 'teacher' : 'user'
+  );
 
   useEffect(() => {
     if (!viewer) {
@@ -29,7 +32,7 @@ export function LeaderboardPage() {
     const load = async () => {
       try {
         const [top, me] = await Promise.all([
-          getTopLeaderboard(50),
+          getTopLeaderboard(50, activeRole),
           getMyLeaderboardRank(),
         ]);
 
@@ -48,7 +51,7 @@ export function LeaderboardPage() {
       }
     };
     load();
-  }, [navigate, viewer]);
+  }, [navigate, viewer, activeRole]);
 
   if (!viewer) {
     return null;
@@ -72,7 +75,7 @@ export function LeaderboardPage() {
               <Trophy className="w-8 h-8 text-yellow-400" />
               <div>
                 <h1 className="text-2xl font-bold text-white">Global Leaderboard</h1>
-                <p className="text-xs text-gray-400">Top 50 learners by total points</p>
+                <p className="text-xs text-gray-400">Top 50 {activeRole === 'teacher' ? 'teachers' : 'students'} by total points</p>
               </div>
             </div>
           </div>
@@ -107,12 +110,38 @@ export function LeaderboardPage() {
         ) : (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Star className="w-4 h-4 text-yellow-400" />
-                <span>
-                  Showing top <span className="font-semibold">{entries.length}</span> of{' '}
-                  <span className="font-semibold">{totalUsers ?? '...'}</span> users
-                </span>
+              <div className="flex items-center gap-3 text-sm text-gray-300">
+                <div className="flex items-center gap-2">
+                  <Star className="w-4 h-4 text-yellow-400" />
+                  <span>
+                    Showing top <span className="font-semibold">{entries.length}</span> of{' '}
+                    <span className="font-semibold">{totalUsers ?? '...'}</span> {activeRole === 'teacher' ? 'teachers' : 'students'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] bg-gray-900/70 border border-gray-700 rounded-full px-1 py-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveRole('user')}
+                    className={`px-2 py-0.5 rounded-full ${
+                      activeRole === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Students
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveRole('teacher')}
+                    className={`px-2 py-0.5 rounded-full ${
+                      activeRole === 'teacher'
+                        ? 'bg-purple-500 text-white'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Teachers
+                  </button>
+                </div>
               </div>
               {myRank && (
                 <div className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">

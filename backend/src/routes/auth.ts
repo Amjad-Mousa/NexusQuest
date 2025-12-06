@@ -86,8 +86,13 @@ router.post('/signup', async (req: AuthRequest, res: Response) => {
 router.get('/leaderboard/top', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const limit = Math.min(parseInt((req.query.limit as string) || '50', 10) || 50, 100);
+    const role = (req.query.role as string) || undefined;
+    const filter: Record<string, any> = {};
+    if (role === 'user' || role === 'teacher') {
+      filter.role = role;
+    }
 
-    const users = await User.find({}, {
+    const users = await User.find(filter, {
       name: 1,
       email: 1,
       totalPoints: 1,

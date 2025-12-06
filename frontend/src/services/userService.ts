@@ -151,11 +151,14 @@ export async function getUserLeaderboardRank(userId: string): Promise<Leaderboar
     return data.data as LeaderboardUser;
 }
 
-export async function getTopLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+export async function getTopLeaderboard(limit = 50, role?: 'user' | 'teacher'): Promise<LeaderboardEntry[]> {
     const token = getStoredToken();
     if (!token) return [];
 
-    const url = `${API_URL}/api/auth/leaderboard/top?limit=${encodeURIComponent(String(limit))}`;
+    const params = new URLSearchParams();
+    params.set('limit', String(limit));
+    if (role) params.set('role', role);
+    const url = `${API_URL}/api/auth/leaderboard/top?${params.toString()}`;
     const response = await fetch(url, {
         headers: {
             'Content-Type': 'application/json',
