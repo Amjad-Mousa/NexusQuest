@@ -229,7 +229,6 @@ const QuizDetailScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>أنشئ بواسطة</Text>
           <Text style={styles.creatorText}>{quiz.createdBy.name}</Text>
-          <Text style={styles.creatorEmail}>{quiz.createdBy.email}</Text>
         </View>
       )}
 

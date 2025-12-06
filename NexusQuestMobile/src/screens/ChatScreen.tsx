@@ -67,7 +67,6 @@ export default function ChatScreen({ navigation }: any) {
       onPress={() => navigation.navigate('ChatDetail', {
         userId: item.id,
         userName: item.name,
-        userEmail: item.email,
       })}
     >
       <View style={styles.avatar}>
@@ -79,9 +78,6 @@ export default function ChatScreen({ navigation }: any) {
           <Text style={styles.conversationName}>{item.name}</Text>
           <Text style={styles.conversationTime}>{formatTime(item.lastMessageAt)}</Text>
         </View>
-        <Text style={styles.conversationEmail} numberOfLines={1}>
-          {item.email}
-        </Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleText}>{item.role}</Text>
         </View>
@@ -202,11 +198,6 @@ const styles = StyleSheet.create({
   conversationTime: {
     color: '#64748b',
     fontSize: 12,
-  },
-  conversationEmail: {
-    color: '#94a3b8',
-    fontSize: 13,
-    marginBottom: 5,
   },
   roleBadge: {
     alignSelf: 'flex-start',
