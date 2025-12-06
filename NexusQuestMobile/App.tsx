@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import TutorialsScreen from './src/screens/TutorialsScreen';
@@ -14,10 +15,12 @@ import QuizDetailScreen from './src/screens/QuizDetailScreen';
 
 const Stack = createStackNavigator();
 
-export default function App() {
+function AppNavigator() {
+  const { theme } = useTheme();
+
   return (
     <NavigationContainer>
-      <StatusBar style="light" />
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <Stack.Navigator 
         initialRouteName="Login"
         screenOptions={{
@@ -35,5 +38,13 @@ export default function App() {
         <Stack.Screen name="QuizDetail" component={QuizDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppNavigator />
+    </ThemeProvider>
   );
 }

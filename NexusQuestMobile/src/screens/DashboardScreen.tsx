@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { getStoredUser, logout, User } from '../services/authService';
+import { useTheme } from '../context/ThemeContext';
 
 export default function DashboardScreen({ navigation }: any) {
   const [user, setUser] = useState<User | null>(null);
+  const { theme, toggleTheme, colors } = useTheme();
 
   useEffect(() => {
     loadUser();
@@ -19,13 +21,20 @@ export default function DashboardScreen({ navigation }: any) {
     navigation.replace('Login');
   };
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Welcome, {user?.name}! 👋</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity onPress={toggleTheme} style={styles.themeButton}>
+            <Text style={styles.themeText}>{theme === 'dark' ? '☀️' : '🌙'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -79,16 +88,16 @@ export default function DashboardScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.background,
   },
   header: {
     padding: 20,
     paddingTop: 60,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -96,11 +105,26 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.text,
     flex: 1,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  themeButton: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  themeText: {
+    fontSize: 20,
+  },
   logoutButton: {
-    backgroundColor: '#ef4444',
+    backgroundColor: colors.error,
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 8,
@@ -114,27 +138,29 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.card,
     borderRadius: 15,
     padding: 20,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
   },
   cardTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.text,
     marginBottom: 15,
   },
   actionButton: {
-    backgroundColor: '#334155',
+    backgroundColor: colors.surface,
     padding: 15,
     borderRadius: 10,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   actionText: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -148,11 +174,11 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#3b82f6',
+    color: colors.primary,
   },
   statLabel: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: colors.textSecondary,
     marginTop: 5,
   },
 });
