@@ -18,7 +18,9 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(false);
 
     if (result.success) {
-      navigation.replace('Dashboard');
+      // Navigate based on user role
+      const dashboardRoute = result.user?.role === 'teacher' ? 'TeacherDashboard' : 'Dashboard';
+      navigation.replace(dashboardRoute);
     } else {
       const raw = result.error || '';
       let msg = raw;

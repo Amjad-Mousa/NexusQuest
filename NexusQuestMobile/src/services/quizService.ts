@@ -40,6 +40,21 @@ export const quizService = {
       return ['python', 'javascript', 'java', 'cpp'];
     }
   },
+
+  // Create a new quiz (teacher only)
+  async createQuiz(input: any): Promise<Quiz> {
+    try {
+      const response = await api.post('/api/quizzes', input);
+      if (response.data && (response.data.success || response.data._id)) {
+        // Some APIs return {success, data}, some just the object
+        return response.data.data || response.data;
+      } else {
+        throw new Error(response.data?.error || 'Failed to create quiz');
+      }
+    } catch (error: any) {
+      throw new Error(error?.response?.data?.error || error.message || 'Failed to create quiz');
+    }
+  },
 };
 
 // Helper function to determine quiz status

@@ -82,7 +82,7 @@ export default function PlaygroundScreen({ navigation }: any) {
 
     try {
       const token = await AsyncStorage.getItem('nexusquest-token');
-      const API_URL = 'http://192.168.1.100:5000';
+      const API_URL = 'http://192.168.1.100:9876';
       
       // Use simple endpoint that returns all output at once
       const response = await fetch(`${API_URL}/api/simple-playground/execute`, {

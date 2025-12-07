@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import api from '../services/api';
 import { getTutorials as getLocalTutorials, type Tutorial } from '../services/tutorialService';
+import { useTheme } from '../context/ThemeContext';
 
 export default function TutorialsScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [filteredTutorials, setFilteredTutorials] = useState<Tutorial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,10 +101,12 @@ export default function TutorialsScreen({ navigation }: any) {
     </TouchableOpacity>
   );
 
+  const styles = getStyles(colors);
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading tutorials...</Text>
       </View>
     );
@@ -121,7 +125,7 @@ export default function TutorialsScreen({ navigation }: any) {
         <TextInput
           style={styles.searchInput}
           placeholder="Search tutorials..."
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -170,41 +174,41 @@ export default function TutorialsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
     paddingTop: 60,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: colors.border,
   },
   backButton: {
     marginRight: 15,
   },
   backText: {
-    color: '#3b82f6',
+    color: colors.primary,
     fontSize: 24,
     fontWeight: '600',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.text,
   },
   loadingText: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     marginTop: 10,
     fontSize: 14,
   },
@@ -212,33 +216,33 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   searchInput: {
-    backgroundColor: '#1e293b',
-    color: '#fff',
+    backgroundColor: colors.surface,
+    color: colors.text,
     padding: 12,
     borderRadius: 10,
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
   },
   filtersContainer: {
     paddingHorizontal: 15,
     paddingBottom: 15,
   },
   filterChip: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
   },
   filterChipActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterChipText: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -249,12 +253,12 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   tutorialCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
   },
   tutorialHeader: {
     flexDirection: 'row',
@@ -266,7 +270,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text,
     marginRight: 10,
   },
   difficultyBadge: {
@@ -281,7 +285,7 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   tutorialDescription: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 12,
@@ -292,19 +296,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   languageBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   languageText: {
-    color: '#3b82f6',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   sectionsCount: {
-    color: '#64748b',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   emptyContainer: {
@@ -316,7 +320,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   emptyText: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     fontSize: 16,
   },
 });
