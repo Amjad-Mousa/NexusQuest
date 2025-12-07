@@ -150,34 +150,6 @@ export default function TeacherDashboardScreen({ navigation }: any) {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>📊 Statistics</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats?.totalStudents || 0}</Text>
-              <Text style={styles.statLabel}>Total Students</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats?.activeStudents || 0}</Text>
-              <Text style={styles.statLabel}>Active</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats?.totalQuizzes || 0}</Text>
-              <Text style={styles.statLabel}>Quizzes</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>{stats?.pendingSubmissions || 0}</Text>
-              <Text style={styles.statLabel}>Pending</Text>
-            </View>
-          </View>
-          <View style={styles.averageScoreBox}>
-            <Text style={styles.averageScoreLabel}>Average Class Score</Text>
-            <Text style={styles.averageScoreValue}>
-              {stats?.averageClassScore?.toFixed(1) || '0.0'}%
-            </Text>
-          </View>
-        </View>
-
         {/* Quick Actions */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>🎯 Quick Actions</Text>
