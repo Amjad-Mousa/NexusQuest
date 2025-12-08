@@ -20,6 +20,7 @@ export interface ProjectExecutionRequest {
   mainFile: string;
   language: string;
   input?: string;
+  dependencies?: Record<string, string>;
 }
 
 export async function checkDockerStatus(): Promise<{ available: boolean; message: string }> {
@@ -322,10 +323,148 @@ export async function executeCode(code: string, language: string, input?: string
   }
 }
 
+// Helper to install dependencies for JavaScript projects
+async function installJavaScriptDependencies(
+  container: Docker.Container,
+  baseDir: string,
+  dependencies?: Record<string, string>
+): Promise<{ success: boolean; output: string; error: string }> {
+  try {
+    if (!dependencies || Object.keys(dependencies).length === 0) {
+      logger.info('[npm install] No dependencies specified');
+      return { success: true, output: 'No dependencies to install', error: '' };
+    }
+
+    // Create package.json with dependencies
+    const packageJson = {
+      name: 'nexusquest-project',
+      version: '1.0.0',
+      description: 'NexusQuest Project',
+      main: 'index.js',
+      dependencies,
+    };
+
+    const packageJsonContent = JSON.stringify(packageJson, null, 2);
+    const base64PackageJson = Buffer.from(packageJsonContent).toString('base64');
+
+    logger.info('[npm install] Creating package.json with dependencies');
+    const writeExec = await container.exec({
+      Cmd: ['sh', '-c', `echo "${base64PackageJson}" | base64 -d > ${baseDir}/package.json`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const writeStream = await writeExec.start({ hijack: true });
+    await new Promise((resolve) => {
+      writeStream.on('end', resolve);
+      writeStream.on('error', (err: any) => {
+        logger.error('[npm install] write error:', err);
+        resolve(null);
+      });
+    });
+
+    // Run npm install
+    logger.info('[npm install] Running npm install in ' + baseDir);
+    const installExec = await container.exec({
+      Cmd: ['sh', '-c', `cd ${baseDir} && npm install --legacy-peer-deps 2>&1`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const installStream = await installExec.start({ hijack: true });
+    const { stdout, stderr } = await demuxStream(installStream);
+
+    if (stderr && !stderr.includes('npm WARN')) {
+      logger.error('[npm install] npm install failed:', stderr);
+      return {
+        success: false,
+        output: stdout,
+        error: `npm install failed: ${stderr}`,
+      };
+    }
+
+    logger.info('[npm install] Dependencies installed successfully');
+    return {
+      success: true,
+      output: stdout,
+      error: stderr,
+    };
+  } catch (error: any) {
+    logger.error('[npm install] Error installing dependencies:', error);
+    return {
+      success: false,
+      output: '',
+      error: error.message || 'Failed to install dependencies',
+    };
+  }
+}
+
+// Helper to install dependencies for Python projects
+async function installPythonDependencies(
+  container: Docker.Container,
+  baseDir: string,
+  dependencies?: Record<string, string>
+): Promise<{ success: boolean; output: string; error: string }> {
+  try {
+    if (!dependencies || Object.keys(dependencies).length === 0) {
+      logger.info('[pip install] No dependencies specified');
+      return { success: true, output: 'No dependencies to install', error: '' };
+    }
+
+    // Create requirements.txt with dependencies
+    const requirementsContent = Object.entries(dependencies)
+      .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
+      .join('\n');
+
+    const base64Requirements = Buffer.from(requirementsContent).toString('base64');
+
+    logger.info('[pip install] Creating requirements.txt with dependencies');
+    const writeExec = await container.exec({
+      Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const writeStream = await writeExec.start({ hijack: true });
+    await new Promise((resolve) => {
+      writeStream.on('end', resolve);
+      writeStream.on('error', (err: any) => {
+        logger.error('[pip install] write error:', err);
+        resolve(null);
+      });
+    });
+
+    // Run pip install
+    logger.info('[pip install] Running pip install in ' + baseDir);
+    const installExec = await container.exec({
+      Cmd: ['sh', '-c', `cd ${baseDir} && pip install -r requirements.txt 2>&1`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const installStream = await installExec.start({ hijack: true });
+    const { stdout, stderr } = await demuxStream(installStream);
+
+    logger.info('[pip install] Dependencies installed successfully');
+    return {
+      success: true,
+      output: stdout,
+      error: stderr,
+    };
+  } catch (error: any) {
+    logger.error('[pip install] Error installing dependencies:', error);
+    return {
+      success: false,
+      output: '',
+      error: error.message || 'Failed to install dependencies',
+    };
+  }
+}
+
 // Execute multi-file project using PERSISTENT containers
 export async function executeProject(request: ProjectExecutionRequest): Promise<ExecutionResult> {
   const startTime = Date.now();
-  const { files, mainFile, language, input } = request;
+  const { files, mainFile, language, input, dependencies } = request;
   const containerName = persistentContainers[language.toLowerCase()];
 
   if (!containerName) {
@@ -411,6 +550,33 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
         writeStream.on('end', resolve);
         writeStream.on('error', resolve);
       });
+    }
+
+    // Install dependencies if specified
+    if (dependencies && Object.keys(dependencies).length > 0) {
+      logger.info(`[executeProject] Installing dependencies for ${language}`);
+      
+      if (language.toLowerCase() === 'javascript') {
+        const depResult = await installJavaScriptDependencies(container, baseDir, dependencies);
+        if (!depResult.success) {
+          logger.error('[executeProject] Dependency installation failed:', depResult.error);
+          return {
+            output: depResult.output,
+            error: `Dependency installation failed: ${depResult.error}`,
+            executionTime: Date.now() - startTime,
+          };
+        }
+      } else if (language.toLowerCase() === 'python') {
+        const depResult = await installPythonDependencies(container, baseDir, dependencies);
+        if (!depResult.success) {
+          logger.error('[executeProject] Dependency installation failed:', depResult.error);
+          return {
+            output: depResult.output,
+            error: `Dependency installation failed: ${depResult.error}`,
+            executionTime: Date.now() - startTime,
+          };
+        }
+      }
     }
 
     // Execute the main file

@@ -108,22 +108,48 @@ function App({ user, onLogout }: AppProps) {
   // Load projects and restore last session (or load project from URL)
   useEffect(() => {
     const initSession = async () => {
+      if (!user) {
+        if (urlProjectId) {
+          // Not logged in but trying to access a project - redirect to login
+          navigate('/login');
+        }
+        return;
+      }
+
       const projectsData = await loadProjects();
+      // Priority: URL project ID > localStorage last project
+      const targetProjectId = urlProjectId || localStorage.getItem('nexusquest-last-project');
+      const lastFileId = localStorage.getItem('nexusquest-last-file');
 
-      // If user is logged in, try to restore session
-      if (user && projectsData && projectsData.length > 0) {
-        // Priority: URL project ID > localStorage last project
-        const targetProjectId = urlProjectId || localStorage.getItem('nexusquest-last-project');
-        const lastFileId = localStorage.getItem('nexusquest-last-file');
+      if (targetProjectId) {
+        let project = projectsData.find((p: Project) => p._id === targetProjectId);
+        
+        // If project not found in list but we have a URL project ID, fetch it directly
+        if (!project && urlProjectId) {
+          try {
+            project = await projectService.getProject(urlProjectId);
+          } catch (error) {
+            console.error('Failed to fetch project:', error);
+            navigate('/');
+            return;
+          }
+        }
 
-        if (targetProjectId) {
-          const project = projectsData.find((p: Project) => p._id === targetProjectId);
-          if (project) {
-            setCurrentProject(project);
+        if (project) {
+          setCurrentProject(project);
 
-            // Find the last file or default to first file
-            if (lastFileId && !urlProjectId) {
-              // Only use last file if not coming from URL (URL should show first file)
+          // When navigating from URL (newly created project), always open the main file (first file)
+          if (urlProjectId) {
+            // For newly created projects, open the main file (first file)
+            if (project.files.length > 0) {
+              const mainFile = project.files[0]; // Main file is always the first file
+              setCurrentFile(mainFile);
+              setCode(mainFile.content);
+              setLanguage(mainFile.language as 'python' | 'java' | 'javascript' | 'cpp');
+            }
+          } else {
+            // For returning users, try to restore last file or default to first file
+            if (lastFileId) {
               const file = project.files.find((f: ProjectFile) => f._id === lastFileId);
               if (file) {
                 setCurrentFile(file);
@@ -132,21 +158,18 @@ function App({ user, onLogout }: AppProps) {
                 return;
               }
             }
-            // If no file found but project has files, open the first one
+            // If no file found but project has files, open the first one (main file)
             if (project.files.length > 0) {
               const firstFile = project.files[0];
               setCurrentFile(firstFile);
               setCode(firstFile.content);
               setLanguage(firstFile.language as 'python' | 'java' | 'javascript' | 'cpp');
             }
-          } else if (urlProjectId) {
-            // Project from URL not found - redirect to home
-            navigate('/');
           }
+        } else if (urlProjectId) {
+          // Project from URL not found even after direct fetch - redirect to home
+          navigate('/');
         }
-      } else if (urlProjectId && !user) {
-        // Not logged in but trying to access a project - redirect to login
-        navigate('/login');
       }
     };
 

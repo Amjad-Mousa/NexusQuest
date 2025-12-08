@@ -111,19 +111,49 @@ router.post('/', async (req: AuthRequest, res: Response) => {
         // Get default file for the language
         const defaultFile = getDefaultFile(projectLanguage);
 
+        // Create files array with default file
+        const files: any[] = [{
+            _id: new mongoose.Types.ObjectId(),
+            name: defaultFile.name,
+            content: defaultFile.content,
+            language: projectLanguage,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }];
+
+        // For JavaScript projects, also create a package.json file
+        if (projectLanguage === 'javascript') {
+            const packageJson = {
+                name: name.toLowerCase().replace(/\s+/g, '-'),
+                version: '1.0.0',
+                description: description || 'A NexusQuest JavaScript project',
+                main: defaultFile.name,
+                scripts: {
+                    start: `node ${defaultFile.name}`,
+                    dev: `node ${defaultFile.name}`
+                },
+                keywords: [],
+                author: '',
+                license: 'ISC',
+                dependencies: {}
+            };
+
+            files.push({
+                _id: new mongoose.Types.ObjectId(),
+                name: 'package.json',
+                content: JSON.stringify(packageJson, null, 2),
+                language: 'json',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+        }
+
         const project = await Project.create({
             name,
             description,
             language: projectLanguage,
             owner: req.userId,
-            files: [{
-                _id: new mongoose.Types.ObjectId(),
-                name: defaultFile.name,
-                content: defaultFile.content,
-                language: projectLanguage,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            }],
+            files,
         });
 
         res.status(201).json({
@@ -337,6 +367,156 @@ router.delete('/:projectId/files/:fileId', async (req: AuthRequest, res: Respons
         res.status(500).json({
             success: false,
             error: 'Failed to delete file',
+        });
+    }
+});
+
+// === DEPENDENCY ROUTES ===
+
+// Get project dependencies
+router.get('/:projectId/dependencies', async (req: AuthRequest, res: Response) => {
+    try {
+        const project = await Project.findOne({
+            _id: req.params.projectId,
+            owner: req.userId,
+        });
+
+        if (!project) {
+            res.status(404).json({
+                success: false,
+                error: 'Project not found',
+            });
+            return;
+        }
+
+        res.json({
+            success: true,
+            dependencies: project.dependencies || {},
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch dependencies',
+        });
+    }
+});
+
+// Add or update a dependency
+router.post('/:projectId/dependencies', async (req: AuthRequest, res: Response) => {
+    try {
+        const { name, version } = req.body;
+
+        if (!name) {
+            res.status(400).json({
+                success: false,
+                error: 'Dependency name is required',
+            });
+            return;
+        }
+
+        const project = await Project.findOne({
+            _id: req.params.projectId,
+            owner: req.userId,
+        });
+
+        if (!project) {
+            res.status(404).json({
+                success: false,
+                error: 'Project not found',
+            });
+            return;
+        }
+
+        if (!project.dependencies) {
+            project.dependencies = {};
+        }
+
+        project.dependencies[name] = version || '*';
+        await project.save();
+
+        res.status(201).json({
+            success: true,
+            dependencies: project.dependencies,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to add dependency',
+        });
+    }
+});
+
+// Update all dependencies
+router.put('/:projectId/dependencies', async (req: AuthRequest, res: Response) => {
+    try {
+        const { dependencies } = req.body;
+
+        if (!dependencies || typeof dependencies !== 'object') {
+            res.status(400).json({
+                success: false,
+                error: 'Dependencies must be an object',
+            });
+            return;
+        }
+
+        const project = await Project.findOneAndUpdate(
+            { _id: req.params.projectId, owner: req.userId },
+            { dependencies },
+            { new: true, runValidators: true }
+        );
+
+        if (!project) {
+            res.status(404).json({
+                success: false,
+                error: 'Project not found',
+            });
+            return;
+        }
+
+        res.json({
+            success: true,
+            dependencies: project.dependencies,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update dependencies',
+        });
+    }
+});
+
+// Delete a specific dependency
+router.delete('/:projectId/dependencies/:dependencyName', async (req: AuthRequest, res: Response) => {
+    try {
+        const project = await Project.findOne({
+            _id: req.params.projectId,
+            owner: req.userId,
+        });
+
+        if (!project) {
+            res.status(404).json({
+                success: false,
+                error: 'Project not found',
+            });
+            return;
+        }
+
+        if (!project.dependencies) {
+            project.dependencies = {};
+        }
+
+        delete project.dependencies[req.params.dependencyName];
+        await project.save();
+
+        res.json({
+            success: true,
+            message: 'Dependency deleted successfully',
+            dependencies: project.dependencies,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to delete dependency',
         });
     }
 });

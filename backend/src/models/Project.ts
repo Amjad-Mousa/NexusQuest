@@ -9,6 +9,10 @@ export interface IFile {
   updatedAt: Date;
 }
 
+export interface IDependencies {
+  [key: string]: string;
+}
+
 export interface IProject extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
@@ -16,6 +20,7 @@ export interface IProject extends Document {
   owner: mongoose.Types.ObjectId;
   language: string;
   files: IFile[];
+  dependencies?: IDependencies;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -67,6 +72,11 @@ const projectSchema = new Schema<IProject>(
       default: 'python',
     },
     files: [fileSchema],
+    dependencies: {
+      type: Map,
+      of: String,
+      default: {},
+    },
   },
   {
     timestamps: true,
