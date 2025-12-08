@@ -17,6 +17,7 @@ import QuizDetailScreen from './src/screens/QuizDetailScreen';
 import TeacherDashboardScreen from './src/screens/TeacherDashboardScreen';
 import CreateTaskScreen from './src/screens/CreateTaskScreen';
 import CreateQuizScreen from './src/screens/CreateQuizScreen';
+import LeaderboardScreen from './src/screens/LeaderboardScreen';
 
 const Stack = createStackNavigator();
 
@@ -45,6 +46,7 @@ function AppNavigator() {
         <Stack.Screen name="Quizzes" component={QuizzesScreen} />
         <Stack.Screen name="QuizDetail" component={QuizDetailScreen} />
         <Stack.Screen name="CreateQuiz" component={CreateQuizScreen} />
+        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

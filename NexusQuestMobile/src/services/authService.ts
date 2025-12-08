@@ -62,3 +62,11 @@ export const getStoredUser = async (): Promise<User | null> => {
     return null;
   }
 };
+
+export const getStoredToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem('nexusquest-token');
+  } catch {
+    return null;
+  }
+};

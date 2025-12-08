@@ -1,19 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { getStoredUser, logout, User } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
+import { getUserStats, getMyLeaderboardRank, UserStats, LeaderboardMe } from '../services/statsService';
 
 export default function DashboardScreen({ navigation }: any) {
   const [user, setUser] = useState<User | null>(null);
   const { theme, toggleTheme, colors } = useTheme();
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardMe | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadUser();
+    loadData();
   }, []);
 
-  const loadUser = async () => {
-    const userData = await getStoredUser();
-    setUser(userData);
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const userData = await getStoredUser();
+      setUser(userData);
+      
+      const [userStats, leaderboardData] = await Promise.all([
+        getUserStats(),
+        getMyLeaderboardRank(),
+      ]);
+      
+      setStats(userStats);
+      setLeaderboard(leaderboardData);
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -64,24 +83,38 @@ export default function DashboardScreen({ navigation }: any) {
           >
             <Text style={styles.actionText}>💬 Chat</Text>
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Leaderboard')}
+          >
+            <Text style={styles.actionText}>🏆 Leaderboard</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>📊 Your Stats</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>Completed</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : (
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{stats?.completedTasks || 0}</Text>
+                <Text style={styles.statLabel}>Completed</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{stats?.startedTasks || 0}</Text>
+                <Text style={styles.statLabel}>In Progress</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{stats?.totalPoints || 0}</Text>
+                <Text style={styles.statLabel}>Points</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>#{leaderboard?.rank || '-'}</Text>
+                <Text style={styles.statLabel}>Global Rank</Text>
+              </View>
             </View>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>In Progress</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>Points</Text>
-            </View>
-          </View>
+          )}
         </View>
       </ScrollView>
     </View>
