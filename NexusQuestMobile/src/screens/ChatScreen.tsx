@@ -7,8 +7,10 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { fetchConversations, type Conversation } from '../services/chatService';
+import { fetchUsers, type ChatUser } from '../services/userService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 
@@ -18,6 +20,8 @@ export default function ChatScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
 
   const loadConversations = async () => {
     try {
@@ -27,8 +31,13 @@ export default function ChatScreen({ navigation }: any) {
         setCurrentUserId(user.id);
       }
       
-      const convs = await fetchConversations();
+      const [convs, users] = await Promise.all([
+        fetchConversations(),
+        fetchUsers(),
+      ]);
+      
       setConversations(convs);
+      setAllUsers(users);
     } catch (error) {
       console.error('Failed to load conversations:', error);
     } finally {
@@ -65,6 +74,14 @@ export default function ChatScreen({ navigation }: any) {
 
   const styles = getStyles(colors);
 
+  const filteredUsers = searchQuery.trim()
+    ? allUsers.filter(
+        (user) =>
+          user.id !== currentUserId &&
+          user.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
+
   const renderConversation = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
       style={styles.conversationItem}
@@ -89,6 +106,30 @@ export default function ChatScreen({ navigation }: any) {
     </TouchableOpacity>
   );
 
+  const renderUserSearchResult = ({ item }: { item: ChatUser }) => (
+    <TouchableOpacity
+      style={styles.conversationItem}
+      onPress={() => {
+        setSearchQuery('');
+        navigation.navigate('ChatDetail', {
+          userId: item.id,
+          userName: item.name,
+        });
+      }}
+    >
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+      </View>
+      
+      <View style={styles.conversationContent}>
+        <Text style={styles.conversationName}>{item.name}</Text>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleText}>{item.role}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -101,10 +142,34 @@ export default function ChatScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search users..."
+          placeholderTextColor={colors.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
 
-      {conversations.length === 0 ? (
+      {searchQuery.trim() ? (
+        filteredUsers.length > 0 ? (
+          <FlatList
+            data={filteredUsers}
+            renderItem={renderUserSearchResult}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>🔍</Text>
+            <Text style={styles.emptyTitle}>No users found</Text>
+            <Text style={styles.emptyText}>Try a different search term</Text>
+          </View>
+        )
+      ) : conversations.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>💬</Text>
           <Text style={styles.emptyTitle}>No conversations yet</Text>
@@ -149,10 +214,25 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  searchInput: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 15,
+    fontSize: 16,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   loadingText: {
     color: colors.textSecondary,
