@@ -165,6 +165,24 @@ router.post('/', async (req: AuthRequest, res: Response) => {
             });
         }
 
+        // For Python projects, also create a requirements.txt file
+        if (projectLanguage === 'python') {
+            const requirementsTxt = `# Python dependencies
+# Add your dependencies here, one per line
+# Example: requests==2.31.0
+# Example: numpy>=1.20.0
+`;
+
+            files.push({
+                _id: new mongoose.Types.ObjectId(),
+                name: 'requirements.txt',
+                content: requirementsTxt,
+                language: 'python',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+        }
+
         const project = await Project.create({
             name,
             description,
