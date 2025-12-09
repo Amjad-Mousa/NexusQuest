@@ -31,7 +31,7 @@ const languageImages: Record<string, string> = {
 function getExecutionCommand(language: string, baseDir: string, files: Array<{ name: string; content: string }>, mainFile: string): string {
     switch (language.toLowerCase()) {
         case 'python':
-            return `cd ${baseDir} && PYTHONPATH=${baseDir} python3 -u ${mainFile}`;
+            return `cd ${baseDir} && export PYTHONPATH=${baseDir}:/app/.local/lib/python3.10/site-packages && python3 -u ${mainFile}`;
 
         case 'javascript':
             return `cd ${baseDir} && node ${mainFile}`;
@@ -104,7 +104,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
 
         // Check if dependencies need to be installed (requires network access)
         const needsNetwork = dependencies && Object.keys(dependencies).length > 0;
-        
+
         // Create container
         const container = await docker.createContainer({
             Image: languageImages[language],
@@ -181,7 +181,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
         if (dependencies && Object.keys(dependencies).length > 0) {
             if (language === 'javascript') {
                 logger.info('[project-execution] Installing JavaScript dependencies');
-                
+
                 // Check if npm is available
                 const npmCheckExec = await container.exec({
                     Cmd: ['sh', '-c', 'npm --version'],
@@ -215,7 +215,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     };
                     const packageJsonContent = JSON.stringify(packageJson, null, 2);
                     const base64PackageJson = Buffer.from(packageJsonContent).toString('base64');
-                    
+
                     logger.info('[project-execution] Writing package.json to', baseDir);
                     const writePackageExec = await container.exec({
                         Cmd: ['sh', '-c', `echo "${base64PackageJson}" | base64 -d > ${baseDir}/package.json`],
@@ -229,7 +229,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         pkgStream.on('error', resolve);
                         setTimeout(resolve, 1000);
                     });
-                    
+
                     // Verify package.json was written
                     logger.info('[project-execution] Verifying package.json exists');
                     const verifyExec = await container.exec({
@@ -257,19 +257,19 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         AttachStderr: true
                     });
                     const npmStream = await npmInstallExec.start({ hijack: true });
-                    
+
                     // Wait for npm to complete - collect output to check for completion status
                     let npmOutput = '';
                     let npmCompleted = false;
                     let logCheckerInterval: NodeJS.Timeout | null = null;
-                    
+
                     await new Promise<void>((resolve) => {
                         // Consume stream data
                         npmStream.on('data', (chunk: Buffer) => {
                             const output = chunk.toString();
                             npmOutput += output;
                             logger.info('[npm exec response]:', output.trim());
-                            
+
                             // Check if we see the completion marker
                             if (output.includes('npm_install_done')) {
                                 if (!npmCompleted) {
@@ -303,7 +303,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 resolve();
                             }
                         });
-                        
+
                         // Start periodic log checking while waiting
                         let checkCount = 0;
                         logCheckerInterval = setInterval(async () => {
@@ -312,7 +312,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 if (logCheckerInterval) clearInterval(logCheckerInterval);
                                 return;
                             }
-                            
+
                             try {
                                 // Check log file for progress
                                 const progressExec = await container.exec({
@@ -339,7 +339,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 // Ignore errors in progress checking
                             }
                         }, 2000); // Check every 2 seconds
-                        
+
                         // Increased timeout to 120 seconds (2 minutes) for npm install
                         setTimeout(() => {
                             if (logCheckerInterval) clearInterval(logCheckerInterval);
@@ -350,11 +350,11 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             }
                         }, 120000);
                     });
-                    
+
                     // Poll to check if npm install actually completed
                     let installSuccess = false;
                     logger.info('[project-execution] Starting verification polling...');
-                    
+
                     // First, check if we got the completion marker from stream
                     if (npmOutput.includes('npm_install_done')) {
                         installSuccess = true;
@@ -364,11 +364,11 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         let npmStillRunning = true;
                         let maxAttempts = 30;
                         let npmFinishedAt = -1;
-                        
+
                         for (let attempt = 0; attempt < maxAttempts; attempt++) {
                             await new Promise(resolve => setTimeout(resolve, 2000));
                             logger.info(`[project-execution] Verification attempt ${attempt + 1}/${maxAttempts}`);
-                            
+
                             // Check if npm process is still running first
                             const procCheckExec = await container.exec({
                                 Cmd: ['sh', '-c', `ps aux | grep -E "[n]pm install" | wc -l`],
@@ -385,18 +385,18 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 procStream.on('error', resolve);
                                 setTimeout(resolve, 1000);
                             });
-                            
+
                             const runningCount = parseInt(procOutput.trim()) || 0;
                             const wasRunning = npmStillRunning;
                             npmStillRunning = runningCount > 0;
-                            
+
                             if (wasRunning && !npmStillRunning) {
                                 npmFinishedAt = attempt;
                                 logger.info(`[project-execution] npm process finished at attempt ${attempt + 1}`);
                             }
-                            
+
                             logger.info(`[project-execution] npm process check: ${runningCount} process(es) running`);
-                            
+
                             // Check if node_modules exists
                             const checkModulesExec = await container.exec({
                                 Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
@@ -413,20 +413,20 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 checkStream.on('error', resolve);
                                 setTimeout(resolve, 2000);
                             });
-                            
+
                             logger.info(`[project-execution] node_modules check result: ${checkOutput.trim()}`);
-                            
+
                             if (checkOutput.includes('exists')) {
                                 installSuccess = true;
                                 logger.info('[project-execution] ✓ node_modules found, npm install succeeded');
                                 break;
                             }
-                            
+
                             // If npm finished but node_modules not found yet, wait a bit more
                             if (!npmStillRunning && !checkOutput.includes('exists') && npmFinishedAt >= 0 && attempt - npmFinishedAt < 3) {
                                 logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
                                 await new Promise(resolve => setTimeout(resolve, 1000));
-                                
+
                                 // Check again
                                 const retryCheckExec = await container.exec({
                                     Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
@@ -443,7 +443,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                     retryStream.on('error', resolve);
                                     setTimeout(resolve, 2000);
                                 });
-                                
+
                                 logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
                                 if (retryOutput.includes('exists')) {
                                     installSuccess = true;
@@ -451,12 +451,12 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                     break;
                                 }
                             }
-                            
+
                             // If npm finished but node_modules not found yet, wait a bit more
                             if (!npmStillRunning && !checkOutput.includes('exists')) {
                                 logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
                                 await new Promise(resolve => setTimeout(resolve, 1000));
-                                
+
                                 // Check again
                                 const retryCheckExec = await container.exec({
                                     Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
@@ -473,7 +473,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                     retryStream.on('error', resolve);
                                     setTimeout(resolve, 2000);
                                 });
-                                
+
                                 logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
                                 if (retryOutput.includes('exists')) {
                                     installSuccess = true;
@@ -481,7 +481,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                     break;
                                 }
                             }
-                            
+
                             // Also check the log for completion indicators and errors
                             const logExec = await container.exec({
                                 Cmd: ['sh', '-c', `tail -30 ${baseDir}/npm-install.log 2>/dev/null || echo "no_log"`],
@@ -498,7 +498,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 logStream.on('error', resolve);
                                 setTimeout(resolve, 2000);
                             });
-                            
+
                             // Check for npm errors first
                             if (logOutput.includes('npm error')) {
                                 let errorMsg = 'npm install failed';
@@ -511,14 +511,14 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 } else if (logOutput.includes('ECONNREFUSED')) {
                                     errorMsg = 'Connection refused: Cannot connect to npm registry.';
                                 }
-                                
+
                                 logger.error(`[project-execution] npm install error detected: ${errorMsg}`);
                                 // Don't break here, continue to final check to get full error details
                             }
-                            
+
                             // Check for various completion indicators
-                            if (logOutput.includes('added') || 
-                                logOutput.includes('up to date') || 
+                            if (logOutput.includes('added') ||
+                                logOutput.includes('up to date') ||
                                 logOutput.includes('npm_install_done') ||
                                 logOutput.includes('packages in') ||
                                 (logOutput.includes('audited') && !logOutput.includes('npm ERR'))) {
@@ -538,20 +538,20 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                     verifyStream.on('error', resolve);
                                     setTimeout(resolve, 2000);
                                 });
-                                
+
                                 if (verifyOutput.includes('exists')) {
                                     installSuccess = true;
                                     logger.info('[project-execution] npm install completed based on log indicators');
                                     break;
                                 }
                             }
-                            
+
                             // If npm finished but we haven't found success yet, continue checking a bit more
                             if (!npmStillRunning && attempt < 5) {
                                 logger.info('[project-execution] npm process finished, continuing verification...');
                             }
                         }
-                        
+
                         if (!installSuccess && !npmStillRunning) {
                             // Final check - npm finished but we didn't detect success
                             logger.warn('[project-execution] npm process finished but success not confirmed, doing final check...');
@@ -570,14 +570,14 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 finalStream.on('error', resolve);
                                 setTimeout(resolve, 2000);
                             });
-                            
+
                             if (finalOutput.includes('exists')) {
                                 installSuccess = true;
                                 logger.info('[project-execution] npm install succeeded - node_modules found on final check');
                             }
                         }
                     }
-                    
+
                     // Final check - read full npm log for debugging and error detection
                     logger.info('[project-execution] Reading npm install log');
                     const logExec = await container.exec({
@@ -596,7 +596,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         setTimeout(resolve, 3000);
                     });
                     logger.info('[npm install log]:', logOutput.substring(0, 500));
-                    
+
                     // Check for npm errors in the log
                     let npmError = '';
                     if (logOutput.includes('npm error')) {
@@ -605,7 +605,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         if (errorMatch) {
                             npmError = errorMatch[0].trim();
                         }
-                        
+
                         // Check for specific error types
                         if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
                             npmError = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
@@ -617,7 +617,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             npmError = 'Connection refused: Cannot connect to npm registry.';
                         }
                     }
-                    
+
                     if (!installSuccess) {
                         if (npmError) {
                             logger.error('[project-execution] npm install failed:', npmError);
@@ -656,12 +656,13 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
 
                 // Run pip install
                 const pipInstallExec = await container.exec({
-                    Cmd: ['sh', '-c', `cd ${baseDir} && pip install -r requirements.txt 2>&1`],
+                    Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1`],
                     AttachStdout: true,
                     AttachStderr: true
                 });
-                const pipStream = await pipInstallExec.start({});
-                
+                const pipStream = await pipInstallExec.start({ hijack: true });
+
+                let pipOutput = '';
                 // Properly wait for completion
                 await new Promise<void>((resolve) => {
                     let completed = false;
@@ -672,14 +673,15 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             resolve();
                         }
                     });
-                    pipStream.on('error', () => {
+                    pipStream.on('error', (err: any) => {
                         if (!completed) {
                             completed = true;
+                            logger.error('[project-execution] pip stream error:', err);
                             resolve();
                         }
                     });
-                    pipStream.on('data', () => {
-                        // Consume data
+                    pipStream.on('data', (chunk: Buffer) => {
+                        pipOutput += chunk.toString();
                     });
                     // Safety timeout
                     setTimeout(() => {
@@ -690,7 +692,18 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         }
                     }, 120000);
                 });
-                logger.info('[project-execution] pip install completed');
+
+                if (pipOutput.includes('ERROR:') || pipOutput.includes('Could not find a version') || pipOutput.includes('command not found')) {
+                    logger.error('[project-execution] pip install failed:', pipOutput);
+                    res.status(500).json({
+                        success: false,
+                        error: 'Dependency installation failed',
+                        details: pipOutput
+                    });
+                    return;
+                }
+
+                logger.info('[project-execution] pip install completed successfully');
             }
         }
 
@@ -721,7 +734,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             try {
                 activeStreams.delete(sessionId);
                 stream.end();
-                
+
                 // Wait a bit before removing container
                 setTimeout(async () => {
                     try {
@@ -734,10 +747,10 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 logger.warn(`Error stopping container: ${stopErr.message}`);
                             }
                         }
-                        
+
                         // Small delay before removal
                         await new Promise(resolve => setTimeout(resolve, 500));
-                        
+
                         await container.remove({ force: true });
                         logger.info(`Container removed after client disconnect: ${containerName}`);
                     } catch (err: any) {
@@ -779,10 +792,10 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             logger.warn(`Error stopping container: ${stopErr.message}`);
                         }
                     }
-                    
+
                     // Small delay before removal
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    
+
                     await container.remove({ force: true });
                     logger.info(`Container removed after execution: ${containerName}`);
                 } catch (err: any) {
@@ -814,10 +827,10 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             logger.warn(`Error stopping container: ${stopErr.message}`);
                         }
                     }
-                    
+
                     // Small delay before removal
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    
+
                     await container.remove({ force: true });
                 } catch (err: any) {
                     // Ignore "container not found" errors as they're expected after cleanup
