@@ -121,7 +121,7 @@ function App({ user, onLogout }: AppProps) {
       const targetProjectId = urlProjectId || localStorage.getItem('nexusquest-last-project');
       const lastFileId = localStorage.getItem('nexusquest-last-file');
 
-      if (targetProjectId) {
+      if (targetProjectId && projectsData) {
         let project = projectsData.find((p: Project) => p._id === targetProjectId);
         
         // If project not found in list but we have a URL project ID, fetch it directly
@@ -228,6 +228,103 @@ function App({ user, onLogout }: AppProps) {
     }
   }, [currentFile]);
 
+  // Helper function to parse requirements.txt format
+  const parseRequirementsTxt = useCallback((content: string): Record<string, string> => {
+    const dependencies: Record<string, string> = {};
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      // Remove comments and whitespace
+      const trimmed = line.split('#')[0].trim();
+      if (!trimmed) continue;
+      
+      // Parse common formats: package==version, package>=version, package<=version, package~=version, package
+      // Match package name and optional version specifier
+      const match = trimmed.match(/^([a-zA-Z0-9_-]+[a-zA-Z0-9._-]*)(?:\s*(==|>=|<=|~=|>|<)\s*([0-9.]+[a-zA-Z0-9._-]*))?/);
+      if (match) {
+        const packageName = match[1];
+        const version = match[3] || '*';
+        dependencies[packageName] = version;
+      }
+    }
+    
+    return dependencies;
+  }, []);
+
+  // Parse dependencies from package.json when file is opened or content changes
+  useEffect(() => {
+    if (currentProject && currentFile) {
+      // Handle JavaScript package.json
+      if (currentFile.name === 'package.json' && currentProject.language === 'javascript') {
+        try {
+          const parsed = JSON.parse(code);
+          if (parsed.dependencies) {
+            const currentDepsStr = JSON.stringify(currentProject.dependencies || {});
+            const newDepsStr = JSON.stringify(parsed.dependencies);
+            if (currentDepsStr !== newDepsStr) {
+              // Update dependencies in current project state
+              const projectId = currentProject._id;
+              setCurrentProject(prev => {
+                if (!prev || prev._id !== projectId) return prev;
+                return { ...prev, dependencies: parsed.dependencies };
+              });
+              
+              // Save dependencies to the backend
+              const token = localStorage.getItem('nexusquest-token');
+              fetch(`http://localhost:9876/api/projects/${projectId}/dependencies`, {
+                method: 'PUT',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ dependencies: parsed.dependencies })
+              }).catch(err => {
+                console.error('Failed to save dependencies to backend:', err);
+              });
+            }
+          }
+        } catch (e) {
+          // Silently fail if package.json is invalid JSON
+        }
+      }
+      // Handle Python requirements.txt
+      else if (currentFile.name === 'requirements.txt' && currentProject.language === 'python') {
+        try {
+          const parsedDeps = parseRequirementsTxt(code);
+          if (Object.keys(parsedDeps).length > 0) {
+            const currentDepsStr = JSON.stringify(currentProject.dependencies || {});
+            const newDepsStr = JSON.stringify(parsedDeps);
+            if (currentDepsStr !== newDepsStr) {
+              // Update dependencies in current project state
+              const projectId = currentProject._id;
+              setCurrentProject(prev => {
+                if (!prev || prev._id !== projectId) return prev;
+                return { ...prev, dependencies: parsedDeps };
+              });
+              
+              // Save dependencies to the backend
+              const token = localStorage.getItem('nexusquest-token');
+              fetch(`http://localhost:9876/api/projects/${projectId}/dependencies`, {
+                method: 'PUT',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ dependencies: parsedDeps })
+              }).catch(err => {
+                console.error('Failed to save dependencies to backend:', err);
+              });
+            }
+          }
+        } catch (e) {
+          // Silently fail if requirements.txt parsing fails
+          console.error('Failed to parse requirements.txt:', e);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFile, code, parseRequirementsTxt]); // Intentionally exclude currentProject to avoid update loops
+
   // Console helper - defined early so saveFile can use it
   const addToConsole = useCallback((message: string, type: ConsoleOutput['type'] = 'output') => {
     setOutput(prev => [...prev, {
@@ -275,10 +372,14 @@ function App({ user, onLogout }: AppProps) {
             
             // Also save dependencies to the backend
             try {
+              const token = localStorage.getItem('nexusquest-token');
               await fetch(`http://localhost:9876/api/projects/${currentProject._id}/dependencies`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(parsed.dependencies)
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ dependencies: parsed.dependencies })
               });
               addToConsole(`✓ Saved dependencies from package.json`, 'info');
             } catch (saveErr) {
@@ -290,6 +391,35 @@ function App({ user, onLogout }: AppProps) {
           // Silently fail if package.json is invalid
         }
       }
+      // If this is requirements.txt, parse and update dependencies
+      else if (currentFile.name === 'requirements.txt' && currentProject.language === 'python') {
+        try {
+          const parsedDeps = parseRequirementsTxt(code);
+          if (Object.keys(parsedDeps).length > 0) {
+            updatedProject.dependencies = parsedDeps;
+            
+            // Also save dependencies to the backend
+            try {
+              const token = localStorage.getItem('nexusquest-token');
+              await fetch(`http://localhost:9876/api/projects/${currentProject._id}/dependencies`, {
+                method: 'PUT',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ dependencies: parsedDeps })
+              });
+              addToConsole(`✓ Saved dependencies from requirements.txt`, 'info');
+            } catch (saveErr) {
+              console.error('Failed to save dependencies to backend:', saveErr);
+              addToConsole(`⚠️ Dependencies updated locally but failed to save to backend`, 'info');
+            }
+          }
+        } catch (e) {
+          // Silently fail if requirements.txt parsing fails
+          console.error('Failed to parse requirements.txt:', e);
+        }
+      }
       
       setCurrentProject(updatedProject);
     } catch (err) {
@@ -298,7 +428,7 @@ function App({ user, onLogout }: AppProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [currentProject, currentFile, code, addToConsole]);
+  }, [currentProject, currentFile, code, addToConsole, parseRequirementsTxt]);
 
   // Keyboard shortcut: Ctrl+S to save
   useEffect(() => {
