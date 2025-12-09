@@ -30,7 +30,15 @@ function demuxStream(stream) {
     return new Promise((resolve, reject) => {
         let stdout = '';
         let stderr = '';
+        let dataReceived = false;
+        const timeout = setTimeout(() => {
+            if (!dataReceived) {
+                logger.warn('No data received from stream after 2 seconds');
+            }
+        }, 2000);
         stream.on('data', (chunk) => {
+            dataReceived = true;
+            clearTimeout(timeout);
             // Docker uses 8-byte headers for multiplexed streams
             let offset = 0;
             while (offset < chunk.length) {
@@ -51,9 +59,11 @@ function demuxStream(stream) {
             }
         });
         stream.on('end', () => {
+            clearTimeout(timeout);
             resolve({ stdout, stderr });
         });
         stream.on('error', (err) => {
+            clearTimeout(timeout);
             reject(err);
         });
     });
@@ -69,7 +79,7 @@ function getExecutionCommand(language, mainFile) {
             const baseName = mainFile.substring(mainFile.lastIndexOf('/') + 1);
             const className = baseName.replace('.java', '');
             const dir = mainFile.substring(0, mainFile.lastIndexOf('/'));
-            return `cd ${dir} && javac ${baseName} && java ${className}`;
+            return `cd ${dir} && javac ${baseName} && java -cp . ${className}`;
         }
         case 'cpp':
         case 'c++': {
@@ -86,7 +96,9 @@ function getExecutionCommand(language, mainFile) {
 export async function executeCode(code, language, input) {
     const startTime = Date.now();
     const containerName = persistentContainers[language.toLowerCase()];
+    logger.info(`[executeCode] Starting execution for language: ${language}, input: ${input ? 'yes' : 'no'}`);
     if (!containerName) {
+        logger.error(`[executeCode] Unsupported language: ${language}`);
         return {
             output: '',
             error: `Unsupported language: ${language}`,
@@ -95,23 +107,27 @@ export async function executeCode(code, language, input) {
     }
     try {
         const container = docker.getContainer(containerName);
+        logger.info(`[executeCode] Got container reference: ${containerName}`);
         // Check if container exists and is running
         try {
             const info = await container.inspect();
+            logger.info(`[executeCode] Container state: ${info.State.Status}, Running: ${info.State.Running}`);
             if (!info.State.Running) {
-                logger.info(`Starting container: ${containerName}`);
+                logger.info(`[executeCode] Starting container: ${containerName}`);
                 await container.start();
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
         catch (err) {
             if (err.statusCode === 404) {
+                logger.error(`[executeCode] Container not found: ${containerName}`);
                 return {
                     output: '',
                     error: `Container ${containerName} not found. Please run: docker-compose up -d`,
                     executionTime: Date.now() - startTime,
                 };
             }
+            logger.error(`[executeCode] Container inspect error:`, err);
             throw err;
         }
         // Determine file name based on language
@@ -134,65 +150,85 @@ export async function executeCode(code, language, input) {
             default:
                 fileName = 'main.txt';
         }
-        // Use a temp directory to avoid volume write issues
-        const tempDir = '/tmp/nexusquest-exec';
+        // Use a unique temp directory for each execution
+        const tempDir = `/tmp/nexusquest-exec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        logger.info(`[executeCode] Using temp directory: ${tempDir}`);
         // Create temp directory
+        logger.info(`[executeCode] Creating directory...`);
         const mkdirExec = await container.exec({
             Cmd: ['sh', '-c', `mkdir -p ${tempDir}`],
-            AttachStdout: false,
-            AttachStderr: false,
+            AttachStdout: true,
+            AttachStderr: true,
         });
-        const mkdirStream = await mkdirExec.start({});
+        const mkdirStream = await mkdirExec.start({ hijack: true });
         await new Promise((resolve) => {
             mkdirStream.on('end', resolve);
-            mkdirStream.on('error', resolve);
+            mkdirStream.on('error', (err) => {
+                logger.error('[executeCode] mkdir error:', err);
+                resolve(null);
+            });
         });
-        // Write code to file using heredoc for safety
-        const escapedCode = code.replace(/'/g, "'\\''");
-        const writeCmd = [
-            `cat > ${tempDir}/${fileName} << 'EOFCODE'`,
-            escapedCode,
-            'EOFCODE'
-        ].join('\n');
+        // Write code to file using base64 to preserve all characters and newlines
+        logger.info(`[executeCode] Writing code to file: ${fileName}`);
+        const base64Code = Buffer.from(code).toString('base64');
         const writeExec = await container.exec({
-            Cmd: ['sh', '-c', writeCmd],
-            AttachStdout: false,
-            AttachStderr: false,
+            Cmd: ['sh', '-c', `echo "${base64Code}" | base64 -d > ${tempDir}/${fileName}`],
+            AttachStdout: true,
+            AttachStderr: true,
         });
         const writeStream = await writeExec.start({ hijack: true });
         await new Promise((resolve) => {
             writeStream.on('end', resolve);
-            writeStream.on('error', resolve);
+            writeStream.on('error', (err) => {
+                logger.error('[executeCode] write error:', err);
+                resolve(null);
+            });
         });
-        // Execute the code - use absolute path in temp directory
-        const execCommand = getExecutionCommand(language, `${tempDir}/${fileName}`).replace(/\/app\//g, `${tempDir}/`);
-        logger.info(`Executing: ${execCommand}`);
+        // Execute the code
+        const execCommand = getExecutionCommand(language, `${tempDir}/${fileName}`);
+        logger.info(`[executeCode] Executing command: ${execCommand}`);
+        logger.info(`[executeCode] With input: "${input}"`);
         const exec = await container.exec({
             Cmd: ['sh', '-c', execCommand],
-            AttachStdin: !!input,
+            AttachStdin: true,
             AttachStdout: true,
             AttachStderr: true,
             Tty: false,
         });
         const stream = await exec.start({
             hijack: true,
-            stdin: !!input,
+            stdin: true,
         });
+        logger.info(`[executeCode] Stream started`);
         // Send input if provided
         if (input) {
-            stream.write(input + '\n');
+            logger.info(`[executeCode] Writing input to stream...`);
+            // Simple approach: write and immediately end
+            stream.write(input);
+            stream.write('\n');
+            // Give it a moment to flush
+            await new Promise(resolve => setTimeout(resolve, 100));
             stream.end();
+            logger.info(`[executeCode] Input sent and stream ended`);
+        }
+        else {
+            // No input - close stdin immediately
+            stream.end();
+            logger.info(`[executeCode] No input - stdin closed`);
         }
         // Set timeout
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => {
+                logger.error('[executeCode] TIMEOUT - destroying stream');
                 stream.destroy();
                 reject(new Error('Execution timeout (10 seconds)'));
             }, 10000);
         });
         // Get output
+        logger.info(`[executeCode] Waiting for output...`);
         const outputPromise = demuxStream(stream);
         const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
+        logger.info(`[executeCode] Got output - stdout: "${stdout}", stderr: "${stderr}"`);
         // Cleanup files
         try {
             const cleanupExec = await container.exec({
@@ -204,9 +240,10 @@ export async function executeCode(code, language, input) {
             cleanStream.resume();
         }
         catch (cleanupErr) {
-            logger.warn('Cleanup warning:', cleanupErr);
+            logger.warn('[executeCode] Cleanup warning:', cleanupErr);
         }
         const executionTime = Date.now() - startTime;
+        logger.info(`[executeCode] Execution completed in ${executionTime}ms`);
         return {
             output: stdout.trim() || 'Code executed successfully (no output)',
             error: stderr.trim(),
@@ -214,7 +251,7 @@ export async function executeCode(code, language, input) {
         };
     }
     catch (error) {
-        logger.error('Code execution error:', error);
+        logger.error('[executeCode] Code execution error:', error);
         if (error.message?.includes('timeout')) {
             return {
                 output: '',
@@ -229,10 +266,125 @@ export async function executeCode(code, language, input) {
         };
     }
 }
+// Helper to install dependencies for JavaScript projects
+async function installJavaScriptDependencies(container, baseDir, dependencies) {
+    try {
+        if (!dependencies || Object.keys(dependencies).length === 0) {
+            logger.info('[npm install] No dependencies specified');
+            return { success: true, output: 'No dependencies to install', error: '' };
+        }
+        // Create package.json with dependencies
+        const packageJson = {
+            name: 'nexusquest-project',
+            version: '1.0.0',
+            description: 'NexusQuest Project',
+            main: 'index.js',
+            dependencies,
+        };
+        const packageJsonContent = JSON.stringify(packageJson, null, 2);
+        const base64PackageJson = Buffer.from(packageJsonContent).toString('base64');
+        logger.info('[npm install] Creating package.json with dependencies');
+        const writeExec = await container.exec({
+            Cmd: ['sh', '-c', `echo "${base64PackageJson}" | base64 -d > ${baseDir}/package.json`],
+            AttachStdout: true,
+            AttachStderr: true,
+        });
+        const writeStream = await writeExec.start({ hijack: true });
+        await new Promise((resolve) => {
+            writeStream.on('end', resolve);
+            writeStream.on('error', (err) => {
+                logger.error('[npm install] write error:', err);
+                resolve(null);
+            });
+        });
+        // Run npm install
+        logger.info('[npm install] Running npm install in ' + baseDir);
+        const installExec = await container.exec({
+            Cmd: ['sh', '-c', `cd ${baseDir} && npm install --legacy-peer-deps 2>&1`],
+            AttachStdout: true,
+            AttachStderr: true,
+        });
+        const installStream = await installExec.start({ hijack: true });
+        const { stdout, stderr } = await demuxStream(installStream);
+        if (stderr && !stderr.includes('npm WARN')) {
+            logger.error('[npm install] npm install failed:', stderr);
+            return {
+                success: false,
+                output: stdout,
+                error: `npm install failed: ${stderr}`,
+            };
+        }
+        logger.info('[npm install] Dependencies installed successfully');
+        return {
+            success: true,
+            output: stdout,
+            error: stderr,
+        };
+    }
+    catch (error) {
+        logger.error('[npm install] Error installing dependencies:', error);
+        return {
+            success: false,
+            output: '',
+            error: error.message || 'Failed to install dependencies',
+        };
+    }
+}
+// Helper to install dependencies for Python projects
+async function installPythonDependencies(container, baseDir, dependencies) {
+    try {
+        if (!dependencies || Object.keys(dependencies).length === 0) {
+            logger.info('[pip install] No dependencies specified');
+            return { success: true, output: 'No dependencies to install', error: '' };
+        }
+        // Create requirements.txt with dependencies
+        const requirementsContent = Object.entries(dependencies)
+            .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
+            .join('\n');
+        const base64Requirements = Buffer.from(requirementsContent).toString('base64');
+        logger.info('[pip install] Creating requirements.txt with dependencies');
+        const writeExec = await container.exec({
+            Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
+            AttachStdout: true,
+            AttachStderr: true,
+        });
+        const writeStream = await writeExec.start({ hijack: true });
+        await new Promise((resolve) => {
+            writeStream.on('end', resolve);
+            writeStream.on('error', (err) => {
+                logger.error('[pip install] write error:', err);
+                resolve(null);
+            });
+        });
+        // Run pip install
+        logger.info('[pip install] Running pip install in ' + baseDir);
+        const installExec = await container.exec({
+            Cmd: ['sh', '-c', `cd ${baseDir} && pip install -r requirements.txt 2>&1`],
+            AttachStdout: true,
+            AttachStderr: true,
+        });
+        const installStream = await installExec.start({ hijack: true });
+        const { stdout, stderr } = await demuxStream(installStream);
+        logger.info('[pip install] Dependencies installed successfully');
+        return {
+            success: true,
+            output: stdout,
+            error: stderr,
+        };
+    }
+    catch (error) {
+        logger.error('[pip install] Error installing dependencies:', error);
+        return {
+            success: false,
+            output: '',
+            error: error.message || 'Failed to install dependencies',
+        };
+    }
+}
 // Execute multi-file project using PERSISTENT containers
 export async function executeProject(request) {
     const startTime = Date.now();
-    const { files, mainFile, language, input } = request;
+    const { files, mainFile, language, input, dependencies } = request;
     const containerName = persistentContainers[language.toLowerCase()];
     if (!containerName) {
         return {
@@ -262,8 +414,8 @@ export async function executeProject(request) {
             }
             throw err;
         }
-        // Use a temp directory to avoid volume write issues
-        const baseDir = '/tmp/nexusquest-project';
+        // Use a unique temp directory
+        const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         // Create base directory
         const mkdirExec = await container.exec({
             Cmd: ['sh', '-c', `mkdir -p ${baseDir}`],
@@ -298,42 +450,83 @@ export async function executeProject(request) {
                 mkdirStream.on('error', resolve);
             });
         }
-        // Write all files to container
+        // Write all files to container using base64 to preserve newlines
         for (const file of files) {
-            const escapedContent = file.content.replace(/'/g, "'\\''");
-            const writeCmd = [
-                `cat > ${baseDir}/${file.name} << 'EOFFILE'`,
-                escapedContent,
-                'EOFFILE'
-            ].join('\n');
+            const base64Content = Buffer.from(file.content).toString('base64');
             const writeExec = await container.exec({
-                Cmd: ['sh', '-c', writeCmd],
-                AttachStdout: false,
-                AttachStderr: false,
+                Cmd: ['sh', '-c', `echo "${base64Content}" | base64 -d > ${baseDir}/${file.name}`],
+                AttachStdout: true,
+                AttachStderr: true,
             });
             const writeStream = await writeExec.start({ hijack: true });
             await new Promise((resolve) => {
                 writeStream.on('end', resolve);
-                writeStream.on('error', resolve);
+                writeStream.on('error', (err) => {
+                    logger.error(`[executeProject] Error writing file ${file.name}:`, err);
+                    resolve(null);
+                });
             });
+            // Add a small delay to ensure file is written
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        // Verify files were written
+        logger.info('[executeProject] Verifying files were written...');
+        const verifyExec = await container.exec({
+            Cmd: ['sh', '-c', `ls -la ${baseDir}`],
+            AttachStdout: true,
+            AttachStderr: true,
+        });
+        const verifyStream = await verifyExec.start({ hijack: true });
+        const { stdout: verifyOutput } = await demuxStream(verifyStream);
+        logger.info('[executeProject] Directory contents:\n' + verifyOutput);
+        // Install dependencies if specified
+        if (dependencies && Object.keys(dependencies).length > 0) {
+            logger.info(`[executeProject] Installing dependencies for ${language}`);
+            if (language.toLowerCase() === 'javascript') {
+                const depResult = await installJavaScriptDependencies(container, baseDir, dependencies);
+                if (!depResult.success) {
+                    logger.error('[executeProject] Dependency installation failed:', depResult.error);
+                    return {
+                        output: depResult.output,
+                        error: `Dependency installation failed: ${depResult.error}`,
+                        executionTime: Date.now() - startTime,
+                    };
+                }
+            }
+            else if (language.toLowerCase() === 'python') {
+                const depResult = await installPythonDependencies(container, baseDir, dependencies);
+                if (!depResult.success) {
+                    logger.error('[executeProject] Dependency installation failed:', depResult.error);
+                    return {
+                        output: depResult.output,
+                        error: `Dependency installation failed: ${depResult.error}`,
+                        executionTime: Date.now() - startTime,
+                    };
+                }
+            }
         }
         // Execute the main file
         const execCommand = getExecutionCommand(language, `${baseDir}/${mainFile}`);
         logger.info(`Executing project: ${execCommand}`);
         const exec = await container.exec({
             Cmd: ['sh', '-c', execCommand],
-            AttachStdin: !!input,
+            AttachStdin: true,
             AttachStdout: true,
             AttachStderr: true,
             Tty: false,
         });
         const stream = await exec.start({
             hijack: true,
-            stdin: !!input,
+            stdin: true,
         });
         // Send input if provided
         if (input) {
-            stream.write(input + '\n');
+            stream.write(input);
+            stream.write('\n');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            stream.end();
+        }
+        else {
             stream.end();
         }
         // Set timeout

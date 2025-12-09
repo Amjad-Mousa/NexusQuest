@@ -27,7 +27,7 @@ codeExecutionRouter.post('/run', validateCode, async (req, res) => {
 });
 // Execute multi-file project endpoint
 codeExecutionRouter.post('/run-project', async (req, res) => {
-    const { files, mainFile, language, input } = req.body;
+    const { files, mainFile, language, input, dependencies } = req.body;
     // Validate request
     if (!files || !Array.isArray(files) || files.length === 0) {
         res.status(400).json({
@@ -69,7 +69,8 @@ codeExecutionRouter.post('/run-project', async (req, res) => {
             files,
             mainFile,
             language,
-            input
+            input,
+            dependencies
         });
         res.json({
             success: true,

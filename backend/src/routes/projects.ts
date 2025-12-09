@@ -183,6 +183,37 @@ router.post('/', async (req: AuthRequest, res: Response) => {
             });
         }
 
+        // For C++ projects, create a CMakeLists.txt file
+        if (projectLanguage === 'cpp') {
+            const cmakeListsTxt = `cmake_minimum_required(VERSION 3.15)
+project(NexusQuestProject CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+
+find_package(fmt QUIET)
+find_package(nlohmann_json QUIET)
+
+file(GLOB SOURCES "*.cpp")
+add_executable(main \${SOURCES})
+
+if(fmt_FOUND)
+    target_link_libraries(main fmt::fmt)
+endif()
+
+if(nlohmann_json_FOUND)
+    target_link_libraries(main nlohmann_json::nlohmann_json)
+endif()`;
+
+            files.push({
+                _id: new mongoose.Types.ObjectId(),
+                name: 'CMakeLists.txt',
+                content: cmakeListsTxt,
+                language: 'cmake',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+        }
+
         const project = await Project.create({
             name,
             description,

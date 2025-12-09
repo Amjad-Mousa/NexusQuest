@@ -13,6 +13,7 @@ export interface ProjectExecutionRequest {
     mainFile: string;
     language: string;
     input?: string;
+    dependencies?: Record<string, string>;
 }
 export declare function checkDockerStatus(): Promise<{
     available: boolean;
