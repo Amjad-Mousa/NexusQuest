@@ -45,8 +45,9 @@ export default function SignupScreen({ navigation }: any) {
     setLoading(false);
 
     if (result.success && result.user) {
-      // For now both roles go to Dashboard; you can later add a TeacherDashboard route
-      navigation.replace('Dashboard');
+      // Navigate based on user role
+      const dashboardRoute = role === 'teacher' ? 'TeacherDashboard' : 'Dashboard';
+      navigation.replace(dashboardRoute);
     } else {
       const raw = result.error || '';
       let msg = raw;

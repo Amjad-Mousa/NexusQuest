@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import { fetchConversations, type Conversation } from '../services/chatService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../context/ThemeContext';
 
 export default function ChatScreen({ navigation }: any) {
+  const { colors } = useTheme();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,6 +63,8 @@ export default function ChatScreen({ navigation }: any) {
     }
   };
 
+  const styles = getStyles(colors);
+
   const renderConversation = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
       style={styles.conversationItem}
@@ -88,7 +92,7 @@ export default function ChatScreen({ navigation }: any) {
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading conversations...</Text>
       </View>
     );
@@ -118,7 +122,7 @@ export default function ChatScreen({ navigation }: any) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#3b82f6"
+              tintColor={colors.primary}
             />
           }
         />
@@ -127,31 +131,31 @@ export default function ChatScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.background,
   },
   header: {
     padding: 20,
     paddingTop: 60,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.text,
   },
   loadingText: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     marginTop: 10,
     fontSize: 14,
   },
@@ -160,18 +164,18 @@ const styles = StyleSheet.create({
   },
   conversationItem: {
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.card,
     padding: 15,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.border,
   },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
@@ -191,23 +195,23 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   conversationName: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
   conversationTime: {
-    color: '#64748b',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   roleBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#334155',
+    backgroundColor: colors.surface,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   roleText: {
-    color: '#3b82f6',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'capitalize',
@@ -223,13 +227,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyTitle: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 10,
   },
   emptyText: {
-    color: '#94a3b8',
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
   },
