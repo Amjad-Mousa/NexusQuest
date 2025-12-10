@@ -15,21 +15,24 @@ RUN apk add --no-cache \
     py3-pip \
     coreutils
 
+# Install Conan globally as root (easier for Alpine)
+RUN pip3 install --break-system-packages conan
+
 # Create non-root user for security
 RUN adduser -D -u 1000 coderunner && \
     chown -R coderunner:coderunner /app
 
+# Create Conan config directory for the user
+RUN mkdir -p /home/coderunner/.conan2 && \
+    chown -R coderunner:coderunner /home/coderunner/.conan2
+
 # Switch to non-root user
 USER coderunner
 
-# Install Conan as user
-RUN pip3 install --user conan
-
-# Set environment - add user's local bin to PATH
-ENV PATH="/home/coderunner/.local/bin:${PATH}"
+# Set environment
 ENV CXX=g++
 ENV CXXFLAGS="-std=c++20 -O2"
-
+ENV CONAN_USER_HOME=/home/coderunner
 
 # Default command
 CMD ["sh"]

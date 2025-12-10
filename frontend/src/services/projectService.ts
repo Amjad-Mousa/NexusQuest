@@ -67,7 +67,7 @@ export async function createProject(
 // Update a project
 export async function updateProject(
   projectId: string,
-  updates: { name?: string; description?: string; language?: string }
+  updates: { name?: string; description?: string; language?: string; dependencies?: Record<string, string> }
 ): Promise<Project> {
   const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
     method: 'PUT',
