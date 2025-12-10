@@ -8,6 +8,7 @@ import { getMyTasks, Task } from '../services/taskService';
 import { UserSidebar } from '../components/UserSidebar';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { useProfileImages } from '../hooks/useProfileImages';
+import { getTeacherStats, TeacherStats } from '../services/teacherService';
 
 export function TeacherProfile() {
   const navigate = useNavigate();
@@ -17,15 +18,19 @@ export function TeacherProfile() {
   const { avatarImage, coverImage, handleAvatarChange, handleCoverChange } = useProfileImages();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newMessageCount, setNewMessageCount] = useState(0);
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<TeacherStats>({
     totalTasks: 0,
     totalStudents: 0,
     averageScore: 0,
-    popularTask: ''
+    popularTask: '',
+    totalAttempts: 0,
+    completedAttempts: 0,
   });
+  const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
     loadTasks();
+    loadStats();
   }, []);
 
   // Subscribe to chat for unread messages
@@ -52,16 +57,20 @@ export function TeacherProfile() {
     try {
       const tasksData = await getMyTasks();
       setTasks(tasksData);
-      
-      // Calculate stats
-      setStats({
-        totalTasks: tasksData.length,
-        totalStudents: Math.floor(Math.random() * 100) + 50, // Placeholder
-        averageScore: Math.floor(Math.random() * 30) + 70,
-        popularTask: tasksData.length > 0 ? tasksData[0].title : 'N/A'
-      });
     } catch (error) {
       console.error('Failed to load tasks:', error);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      setLoadingStats(true);
+      const statsData = await getTeacherStats();
+      setStats(statsData);
+    } catch (error) {
+      console.error('Failed to load teacher stats:', error);
+    } finally {
+      setLoadingStats(false);
     }
   };
 
@@ -193,7 +202,9 @@ export function TeacherProfile() {
               <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Total Tasks</span>
               <BookOpen className="w-5 h-5 text-blue-500" />
             </div>
-            <div className="text-3xl font-bold">{stats.totalTasks}</div>
+            <div className="text-3xl font-bold">
+              {loadingStats ? '...' : stats.totalTasks}
+            </div>
           </div>
 
           <div className={`p-6 rounded-xl ${theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'}`}>
@@ -201,23 +212,35 @@ export function TeacherProfile() {
               <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Total Students</span>
               <Users className="w-5 h-5 text-green-500" />
             </div>
-            <div className="text-3xl font-bold">{stats.totalStudents}</div>
+            <div className="text-3xl font-bold">
+              {loadingStats ? '...' : stats.totalStudents}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {loadingStats ? '' : `${stats.totalAttempts} total attempts`}
+            </p>
           </div>
 
           <div className={`p-6 rounded-xl ${theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'}`}>
             <div className="flex items-center justify-between mb-2">
-              <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Avg Score</span>
+              <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Completion Rate</span>
               <TrendingUp className="w-5 h-5 text-purple-500" />
             </div>
-            <div className="text-3xl font-bold">{stats.averageScore}%</div>
+            <div className="text-3xl font-bold">
+              {loadingStats ? '...' : `${stats.averageScore}%`}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {loadingStats ? '' : `${stats.completedAttempts} completed`}
+            </p>
           </div>
 
           <div className={`p-6 rounded-xl ${theme === 'dark' ? 'bg-gray-800/50 border border-gray-700' : 'bg-white border border-gray-200'}`}>
             <div className="flex items-center justify-between mb-2">
-              <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Achievements</span>
+              <span className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Popular Task</span>
               <Award className="w-5 h-5 text-yellow-500" />
             </div>
-            <div className="text-3xl font-bold">{Math.floor(stats.totalTasks / 5)}</div>
+            <div className="text-lg font-bold truncate" title={stats.popularTask}>
+              {loadingStats ? '...' : stats.popularTask}
+            </div>
           </div>
         </div>
 
