@@ -555,5 +555,88 @@ router.get('/leaderboard/me', authMiddleware, async (req: AuthRequest, res: Resp
   }
 });
 
+/**
+ * GET /api/auth/teacher/stats
+ * Get teacher statistics from database
+ */
+router.get('/teacher/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || user.role !== 'teacher') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Teacher role required.',
+      });
+    }
+
+    // Get all tasks created by this teacher
+    const tasks = await Task.find({ createdBy: userId });
+    const taskIds = tasks.map(t => t._id);
+
+    // Get unique students who attempted these tasks
+    const studentProgress = await UserTaskProgress.find({
+      taskId: { $in: taskIds },
+    }).distinct('userId');
+
+    // Get completed task attempts
+    const completedAttempts = await UserTaskProgress.find({
+      taskId: { $in: taskIds },
+      status: 'completed',
+    });
+
+    // Calculate average score (completion rate)
+    const totalAttempts = await UserTaskProgress.countDocuments({
+      taskId: { $in: taskIds },
+    });
+
+    const averageScore = totalAttempts > 0 
+      ? Math.round((completedAttempts.length / totalAttempts) * 100)
+      : 0;
+
+    // Find most popular task (most attempts)
+    const taskAttemptCounts = await UserTaskProgress.aggregate([
+      { $match: { taskId: { $in: taskIds } } },
+      { $group: { _id: '$taskId', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 1 },
+    ]);
+
+    let popularTask = 'N/A';
+    if (taskAttemptCounts.length > 0) {
+      const popularTaskDoc = await Task.findById(taskAttemptCounts[0]._id);
+      if (popularTaskDoc) {
+        popularTask = popularTaskDoc.title;
+      }
+    }
+
+    res.json({
+      success: true,
+      stats: {
+        totalTasks: tasks.length,
+        totalStudents: studentProgress.length,
+        averageScore,
+        popularTask,
+        totalAttempts,
+        completedAttempts: completedAttempts.length,
+      },
+    });
+  } catch (error) {
+    logger.error('Get teacher stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get teacher statistics',
+    });
+  }
+});
+
 export default router;
 
