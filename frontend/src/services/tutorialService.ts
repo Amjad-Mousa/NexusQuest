@@ -62,18 +62,75 @@ export const getTutorial = async (id: string): Promise<Tutorial> => {
 export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
   const customizations = getTutorialCustomizations();
   
-  return defaultTutorials.map((tutorial: BaseTutorial): Tutorial => ({
+  // Get default tutorials with customizations
+  const defaultTutorialsWithCustomizations = defaultTutorials.map((tutorial: BaseTutorial): Tutorial => ({
     ...tutorial,
     ...customizations[tutorial.id],
     isPublished: true, // Always visible
     isCustom: !!customizations[tutorial.id] && Object.keys(customizations[tutorial.id]).length > 0,
   }));
+  
+  // Get fully custom tutorials (not in defaultTutorials)
+  const customTutorialIds = Object.keys(customizations).filter(
+    id => customizations[id].isCustom && !defaultTutorials.find(t => t.id === id)
+  );
+  
+  const fullyCustomTutorials: Tutorial[] = customTutorialIds.map(id => ({
+    ...(customizations[id] as Tutorial),
+    isPublished: true,
+    isCustom: true,
+  }));
+  
+  return [...defaultTutorialsWithCustomizations, ...fullyCustomTutorials];
 };
 
 // Toggle tutorial visibility (disabled - all tutorials always visible)
 export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> => {
   // No-op: visibility toggle disabled
   return getTutorial(id);
+};
+
+// Save tutorial customizations
+export const saveTutorialCustomization = async (id: string, updates: Partial<Tutorial>): Promise<Tutorial> => {
+  const customizations = getTutorialCustomizations();
+  
+  customizations[id] = {
+    ...customizations[id],
+    ...updates,
+  };
+  
+  localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
+  return getTutorial(id);
+};
+
+// Create a new custom tutorial
+export const createCustomTutorial = async (tutorial: Omit<Tutorial, 'isPublished' | 'isCustom'>): Promise<Tutorial> => {
+  const customizations = getTutorialCustomizations();
+  
+  // Store the entire tutorial as a customization
+  customizations[tutorial.id] = {
+    ...tutorial,
+    isCustom: true,
+  };
+  
+  localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
+  
+  return {
+    ...tutorial,
+    isPublished: true,
+    isCustom: true,
+  };
+};
+
+// Delete a custom tutorial
+export const deleteCustomTutorial = async (id: string): Promise<void> => {
+  const customizations = getTutorialCustomizations();
+  
+  // Only allow deleting fully custom tutorials
+  if (customizations[id]?.isCustom) {
+    delete customizations[id];
+    localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
+  }
 };
 
 // Get available languages
