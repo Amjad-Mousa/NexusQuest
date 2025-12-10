@@ -40,8 +40,19 @@ function getExecutionCommand(language: string, baseDir: string, files: Array<{ n
             const mainFileContent = files.find(f => f.name === mainFile)?.content || '';
             const classMatch = mainFileContent.match(/public\s+class\s+(\w+)/);
             const className = classMatch ? classMatch[1] : 'Main';
-            const javaFiles = files.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
-            return `cd ${baseDir} && javac ${javaFiles} -d . && java -cp . ${className}`;
+
+            // Check if project uses Maven (has pom.xml)
+            const hasPomXml = files.some(f => f.name === 'pom.xml');
+
+            if (hasPomXml) {
+                // Use Maven to compile and run with dependencies
+                // Maven compiles to target/classes, so we need to set classpath properly
+                return `cd ${baseDir} && mvn compile -q && java -cp "target/classes:$(mvn dependency:build-classpath -q -DincludeScope=runtime -Dmdep.outputFile=/dev/stdout)" ${className}`;
+            } else {
+                // Plain Java without dependencies
+                const javaFiles = files.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
+                return `cd ${baseDir} && javac ${javaFiles} -d . && java -cp . ${className}`;
+            }
         }
 
         case 'cpp': {
