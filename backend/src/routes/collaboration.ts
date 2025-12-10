@@ -26,11 +26,22 @@ router.post('/sessions', authenticateToken, async (req, res) => {
 
     const sessionId = generateSessionId();
 
+    const authUser = (req as any).user;
+    const userId = (req as any).userId || authUser?._id?.toString();
+    const username = authUser?.name || authUser?.email || 'User';
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated',
+      });
+    }
+
     const session = await CollaborationSession.create({
       sessionId,
       name,
       description,
-      owner: (req as any).user.userId,
+      owner: userId,
       language,
       isPublic,
       maxParticipants,
@@ -42,8 +53,8 @@ router.post('/sessions', authenticateToken, async (req, res) => {
       },
       participants: [
         {
-          userId: (req as any).user.userId,
-          username: (req as any).user.username,
+          userId,
+          username,
           role: 'owner',
           joinedAt: new Date(),
           isActive: true,
@@ -93,7 +104,7 @@ router.get('/sessions/:sessionId', authenticateToken, async (req, res) => {
     }
 
     // Check if user has access
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId || (req as any).user?._id?.toString();
     const isParticipant = session.participants.some(
       p => p.userId.toString() === userId
     );
@@ -135,7 +146,7 @@ router.get('/sessions/:sessionId', authenticateToken, async (req, res) => {
 // Get user's sessions
 router.get('/sessions', authenticateToken, async (req, res) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).userId || (req as any).user?._id?.toString();
     const { active = 'true' } = req.query;
 
     const query: any = {

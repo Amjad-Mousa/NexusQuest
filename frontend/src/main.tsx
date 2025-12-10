@@ -22,8 +22,10 @@ import TutorialsHomePage from './pages/TutorialsHomePage.tsx'
 import { ChatPage } from './pages/ChatPage.tsx'
 import { UsersPage } from './pages/UsersPage.tsx'
 import LeaderboardPage from './pages/LeaderboardPage.tsx'
+import CollaborationPage from './pages/CollaborationPage.tsx'
 
 import { ThemeProvider } from './context/ThemeContext.tsx'
+import { CollaborationProvider } from './context/CollaborationContext.tsx'
 import './index.css'
 
 function Root() {
@@ -70,6 +72,8 @@ function Root() {
         <Route path="/users" element={user ? <UsersPage /> : <Navigate to="/" />} />
         <Route path="/leaderboard" element={user ? <LeaderboardPage /> : <Navigate to="/" />} />
         <Route path="/chat/:userId" element={user ? <ChatPage /> : <Navigate to="/" />} />
+        <Route path="/collaboration" element={user ? <CollaborationPage /> : <Navigate to="/" />} />
+        <Route path="/collaboration/:sessionId" element={user ? <CollaborationPage /> : <Navigate to="/" />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
       </Routes>
@@ -80,7 +84,9 @@ function Root() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <Root />
+      <CollaborationProvider>
+        <Root />
+      </CollaborationProvider>
     </ThemeProvider>
   </React.StrictMode>,
 )

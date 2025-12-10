@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle } from 'lucide-react';
+import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle, Users } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
@@ -374,6 +374,13 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 text-lg"
             >
               ⚡ Quick Playground
+            </Button>
+            <Button
+              onClick={() => navigate('/collaboration')}
+              className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 text-lg"
+            >
+              <Users className="w-5 h-5 mr-2 inline" />
+              Live Collaboration
             </Button>
             <Button
               onClick={() => navigate('/projects')}
