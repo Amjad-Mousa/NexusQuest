@@ -383,6 +383,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               Live Collaboration
             </Button>
             <Button
+              onClick={() => navigate('/forum')}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 text-lg"
+            >
+              💬 Q&A Forum
+            </Button>
+            <Button
               onClick={() => navigate('/projects')}
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 text-lg"
             >

@@ -18,6 +18,7 @@ import tutorialsRouter from './routes/tutorials.js';
 import notificationRouter from './routes/notification.js';
 import chatRouter from './routes/chat.js';
 import collaborationRouter from './routes/collaboration.js';
+import forumRouter from './routes/forum.js';
 import { streamExecutionRouter } from './routes/stream-execution.js';
 import { playgroundExecutionRouter } from './routes/playground-execution.js';
 import simplePlaygroundRouter from './routes/simple-playground.js';
@@ -102,6 +103,7 @@ app.use('/api/tutorials', tutorialsRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/chat', chatRouter);
 app.use('/api/collaboration', collaborationRouter);
+app.use('/api/forum', forumRouter);
 
 // Error handling
 app.use(errorHandler);

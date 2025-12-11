@@ -23,6 +23,9 @@ import { ChatPage } from './pages/ChatPage.tsx'
 import { UsersPage } from './pages/UsersPage.tsx'
 import LeaderboardPage from './pages/LeaderboardPage.tsx'
 import CollaborationPage from './pages/CollaborationPage.tsx'
+import ForumPage from './pages/ForumPage.tsx'
+import QuestionDetailPage from './pages/QuestionDetailPage.tsx'
+import AskQuestionPage from './pages/AskQuestionPage.tsx'
 
 import { ThemeProvider } from './context/ThemeContext.tsx'
 import { CollaborationProvider } from './context/CollaborationContext.tsx'
@@ -74,6 +77,9 @@ function Root() {
         <Route path="/chat/:userId" element={user ? <ChatPage /> : <Navigate to="/" />} />
         <Route path="/collaboration" element={user ? <CollaborationPage /> : <Navigate to="/" />} />
         <Route path="/collaboration/:sessionId" element={user ? <CollaborationPage /> : <Navigate to="/" />} />
+        <Route path="/forum" element={user ? <ForumPage /> : <Navigate to="/" />} />
+        <Route path="/forum/ask" element={user ? <AskQuestionPage /> : <Navigate to="/" />} />
+        <Route path="/forum/question/:id" element={user ? <QuestionDetailPage /> : <Navigate to="/" />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
       </Routes>
