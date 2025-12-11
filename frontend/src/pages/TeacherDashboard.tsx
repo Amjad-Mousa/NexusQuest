@@ -9,7 +9,7 @@ import { getStoredUser } from '../services/authService';
 import CreateTaskModal from '../components/teacher/CreateTaskModal';
 import CreateQuizModal from '../components/teacher/CreateQuizModal';
 import TutorialManagement from '../components/teacher/TutorialManagement';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 import { useTheme } from '../context/ThemeContext';
 import { NotificationsBell } from '../components/NotificationsBell';
 
@@ -228,7 +228,7 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
       </header>
 
       {/* User Sidebar */}
-      <UserSidebar
+      <UserSidePanel
         isOpen={showSidebar}
         onClose={() => setShowSidebar(false)}
         user={user}

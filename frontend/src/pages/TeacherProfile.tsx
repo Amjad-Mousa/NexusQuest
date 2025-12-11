@@ -5,7 +5,7 @@ import { BookOpen, Users, TrendingUp, Award, Camera, User, Moon, Sun, ArrowLeft,
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyTasks, Task } from '../services/taskService';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { useProfileImages } from '../hooks/useProfileImages';
 import { getTeacherStats, TeacherStats } from '../services/teacherService';
@@ -288,7 +288,7 @@ export function TeacherProfile() {
       </main>
 
       {/* User Sidebar */}
-      <UserSidebar
+      <UserSidePanel
         isOpen={showSidebar}
         onClose={() => setShowSidebar(false)}
         user={user}

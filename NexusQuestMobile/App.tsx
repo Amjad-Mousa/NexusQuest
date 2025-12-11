@@ -11,6 +11,7 @@ import TutorialDetailScreen from './src/screens/TutorialDetailScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen';
 import PlaygroundScreen from './src/screens/PlaygroundScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 import QuizzesScreen from './src/screens/QuizzesScreen';
 import QuizDetailScreen from './src/screens/QuizDetailScreen';
@@ -36,6 +37,7 @@ function AppNavigator() {
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="TeacherDashboard" component={TeacherDashboardScreen} />
         <Stack.Screen name="CreateTask" component={CreateTaskScreen} />
         <Stack.Screen name="Tutorials" component={TutorialsScreen} />

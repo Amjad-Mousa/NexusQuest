@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import quizService from '../services/quizService';
 import { Quiz, QuizDifficulty, QuizLanguage } from '../types/quiz';
 import { useTheme } from '../context/ThemeContext';
+import BottomNavigation from '../components/BottomNavigation';
 
 const QuizzesScreen = () => {
   const navigation = useNavigation();
@@ -391,6 +392,8 @@ const QuizzesScreen = () => {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}
+
+      <BottomNavigation navigation={navigation} activeRoute="Quizzes" />
     </View>
   );
 };

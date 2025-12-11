@@ -12,6 +12,8 @@ export interface IUser extends Document {
   avatarImage?: string;
   coverImage?: string;
   totalPoints: number;
+  xp: number;
+  level: number;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -57,6 +59,16 @@ const userSchema = new Schema<IUser>(
       type: Number,
       default: 0,
       min: [0, 'Total points cannot be negative'],
+    },
+    xp: {
+      type: Number,
+      default: 0,
+      min: [0, 'XP cannot be negative'],
+    },
+    level: {
+      type: Number,
+      default: 1,
+      min: [1, 'Level must be at least 1'],
     },
   },
   {

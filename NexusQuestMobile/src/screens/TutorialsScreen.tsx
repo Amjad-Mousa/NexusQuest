@@ -11,6 +11,7 @@ import {
 import api from '../services/api';
 import { getTutorials as getLocalTutorials, type Tutorial } from '../services/tutorialService';
 import { useTheme } from '../context/ThemeContext';
+import BottomNavigation from '../components/BottomNavigation';
 
 export default function TutorialsScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -170,6 +171,8 @@ export default function TutorialsScreen({ navigation }: any) {
           </View>
         }
       />
+
+      <BottomNavigation navigation={navigation} activeRoute="Tutorials" />
     </View>
   );
 }

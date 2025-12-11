@@ -1,9 +1,10 @@
 import { Router, Response } from 'express';
+import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { UserTaskProgress } from '../models/UserTaskProgress.js';
 import { Task } from '../models/Task.js';
-import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import { Notification } from '../models/Notification.js';
 import { NotificationType } from '../enums/NotificationType.js';
+import { awardXPForTask } from '../services/gamificationService.js';
 
 const router = Router();
 
@@ -115,10 +116,11 @@ router.put('/:taskId/complete', async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, error: 'Progress not found. Start the task first.' });
     }
 
-    // Fire-and-forget task completion notification
+    // Fire-and-forget task completion notification and gamification
     try {
       const task = await Task.findById(req.params.taskId);
-      if (task) {
+      if (task && req.userId) {
+        // Create notification
         await Notification.create({
           userId: req.userId,
           type: NotificationType.Task_COMPLETED,
@@ -129,9 +131,24 @@ router.put('/:taskId/complete', async (req: AuthRequest, res: Response) => {
           },
           read: false,
         });
+
+        // Award XP and check achievements
+        const gamificationResult = await awardXPForTask(
+          req.userId.toString(),
+          task.points || 10,
+          task.language
+        );
+
+        console.log(`Task completed: User ${req.userId} earned ${task.points || 10} XP`);
+        if (gamificationResult.leveledUp) {
+          console.log(`User leveled up to level ${gamificationResult.newLevel}!`);
+        }
+        if (gamificationResult.newAchievements.length > 0) {
+          console.log(`Unlocked ${gamificationResult.newAchievements.length} new achievements!`);
+        }
       }
     } catch (notifyError) {
-      console.error('Failed to create TASK_COMPLETED notification (manual complete):', notifyError);
+      console.error('Failed to create TASK_COMPLETED notification or award XP:', notifyError);
     }
 
     res.json({ success: true, data: progress });

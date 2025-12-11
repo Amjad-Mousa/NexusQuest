@@ -7,7 +7,7 @@ import { CollaborationSession, CreateSessionData } from '../types/collaboration'
 import CollaborativeEditor from '../components/CollaborativeEditor';
 import { useTheme } from '../context/ThemeContext';
 import { NotificationsBell } from '../components/NotificationsBell';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 import {
   Plus,
   Users,
@@ -238,7 +238,7 @@ export default function CollaborationPage() {
       </header>
 
       {/* User Sidebar */}
-      <UserSidebar
+      <UserSidePanel
         user={storedUser}
         onLogout={handleLogout}
         isOpen={showSidebar}

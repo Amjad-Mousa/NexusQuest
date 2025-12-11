@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getQuestions, getTags, Question } from '../services/forumService';
 import { NotificationsBell } from '../components/NotificationsBell';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 import { Button } from '../components/ui/button';
 import {
   MessageSquare,
@@ -207,7 +207,7 @@ export default function ForumPage() {
       </header>
 
       {/* User Sidebar */}
-      <UserSidebar
+      <UserSidePanel
         user={storedUser}
         onLogout={handleLogout}
         isOpen={showSidebar}

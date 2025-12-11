@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import BottomNavigation from '../components/BottomNavigation';
 import { getTopLeaderboard, getMyLeaderboardRank, LeaderboardEntry, LeaderboardMe } from '../services/statsService';
 import { getStoredUser } from '../services/authService';
 
@@ -147,6 +148,8 @@ export default function LeaderboardScreen({ navigation }: any) {
           </View>
         }
       />
+
+      <BottomNavigation navigation={navigation} activeRoute="Leaderboard" />
     </View>
   );
 }

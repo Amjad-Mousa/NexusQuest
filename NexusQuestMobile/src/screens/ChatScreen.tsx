@@ -13,6 +13,7 @@ import { fetchConversations, type Conversation } from '../services/chatService';
 import { fetchUsers, type ChatUser } from '../services/userService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
+import BottomNavigation from '../components/BottomNavigation';
 
 export default function ChatScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -192,6 +193,8 @@ export default function ChatScreen({ navigation }: any) {
           }
         />
       )}
+
+      <BottomNavigation navigation={navigation} activeRoute="Chat" />
     </View>
   );
 }

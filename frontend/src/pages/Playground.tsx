@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { ArrowLeft, Play, Code2, User, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 
 const DEFAULT_CODE: Record<string, string> = {
   python: `# Python Playground - Write and run code instantly!
@@ -206,7 +206,7 @@ export function Playground() {
       </div>
 
       {/* User Sidebar */}
-      <UserSidebar
+      <UserSidePanel
         isOpen={showSidebar}
         onClose={() => setShowSidebar(false)}
         user={user}

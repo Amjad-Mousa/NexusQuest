@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle, Users } from 'lucide-react';
+import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle, Users, Home, FileQuestion, MessageSquare } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
+import { getGamificationProfile } from '../services/gamificationService';
+import { checkGamificationUpdates, storeGamificationState, getStoredGamificationState } from '../services/gamificationEvents';
 import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { DailyChallenge } from '@/components/DailyChallenge';
@@ -29,6 +31,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const storedUser = getStoredUser();
   const isTeacher = storedUser?.role === 'teacher';
+  const [activeTab, setActiveTab] = useState('home');
 
   // Redirect teachers to their dashboard
   useEffect(() => {
@@ -113,18 +116,19 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [userStats, setUserStats] = useState<UserStats>({ totalPoints: 0, completedTasks: 0, startedTasks: 0 });
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
-  const [badgesCount, setBadgesCount] = useState(0);
+  const [achievementsCount, setAchievementsCount] = useState(0);
 
   // Load user's task progress and stats
   useEffect(() => {
     const loadProgress = async () => {
       try {
-        const [progress, completed, stats, dailyStats, leaderboard] = await Promise.all([
+        const [progress, completed, stats, dailyStats, leaderboard, gamification] = await Promise.all([
           getMyProgress('started'),
           getMyProgress('completed'),
           getUserStats(),
           getDailyChallengeStats(),
           getMyLeaderboardRank(),
+          getGamificationProfile(),
         ]);
 
         setMyTaskProgress(progress.slice(0, 4)); // Show first 4 in-progress
@@ -141,20 +145,35 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           setGlobalRank(null);
         }
 
-        const points = stats.totalPoints;
-        const completedCount = stats.completedTasks;
-        const currentStreak = dailyStats ? (dailyStats.currentStreak || 0) : 0;
+        // Set achievements count from gamification profile
+        setAchievementsCount(gamification.totalAchievements);
 
-        let computedBadges = 0;
-        if (points >= 100) computedBadges++;
-        if (points >= 500) computedBadges++;
-        if (points >= 1000) computedBadges++;
-        if (completedCount >= 5) computedBadges++;
-        if (completedCount >= 20) computedBadges++;
-        if (currentStreak >= 3) computedBadges++;
-        if (currentStreak >= 7) computedBadges++;
+        // Check for level ups and new achievements
+        const stored = getStoredGamificationState();
+        if (stored.level && stored.achievements) {
+          // Check if level increased
+          if (gamification.level > stored.level) {
+            // Trigger level up notification (will be shown by toast container)
+            // The notification will be triggered automatically by checkGamificationUpdates
+          }
 
-        setBadgesCount(computedBadges);
+          // Check for new achievements
+          const currentAchievementIds = gamification.achievements.map((a: any) => a.id);
+          const newAchievements = gamification.achievements.filter(
+            (a: any) => !stored.achievements.includes(a.id)
+          );
+
+          // Notifications will be triggered by the event system
+        }
+
+        // Store current state for next comparison
+        storeGamificationState(
+          gamification.level,
+          gamification.achievements.map((a: any) => a.id)
+        );
+
+        // Trigger notifications for any changes
+        await checkGamificationUpdates(stored.level, stored.achievements);
       } catch (err) {
         console.error('Failed to load task progress or stats:', err);
       } finally {
@@ -350,58 +369,25 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       )}
    
       
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 pb-24 md:pb-8">
         {/* Welcome Section */}
-        <div className="mb-10 flex items-center justify-between">
+        <div className="mb-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h1 className={`text-4xl font-bold mb-3 ${
+            <h1 className={`text-2xl md:text-4xl font-bold mb-2 md:mb-3 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}>
               Welcome back, <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">{user?.name?.split(' ')[0]}</span>! 👋
             </h1>
-            <p className={`text-lg ${
+            <p className={`text-sm md:text-lg ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             }`}>Here's what's happening with your learning journey</p>
           </div>
-          <div className="flex gap-3 flex-wrap">
-            <Button
-              onClick={() => navigate('/tutorials')}
-              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-5 py-2.5 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all duration-300 hover:scale-105"
-            >
-              📚 Tutorials
-            </Button>
-            <Button
-              onClick={() => navigate('/quizzes')}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-5 py-2.5 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 transition-all duration-300 hover:scale-105"
-            >
-              📝 Quizzes
-            </Button>
-            <Button
-              onClick={() => navigate('/playground')}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 transition-all duration-300 hover:scale-105"
-            >
-              ⚡ Playground
-            </Button>
-            <Button
-              onClick={() => navigate('/collaboration')}
-              className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white px-5 py-2.5 shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all duration-300 hover:scale-105"
-            >
-              <Users className="w-4 h-4 mr-2 inline" />
-              Collaborate
-            </Button>
-            <Button
-              onClick={() => navigate('/forum')}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-2.5 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-300 hover:scale-105"
-            >
-              💬 Forum
-            </Button>
-            <Button
-              onClick={() => navigate('/projects')}
-              className="bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-white px-5 py-2.5 border border-slate-500/30 transition-all duration-300 hover:scale-105"
-            >
-              + Project
-            </Button>
-          </div>
+          <Button
+            onClick={() => navigate('/playground')}
+            className="w-full md:w-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 transition-all duration-300 hover:scale-105"
+          >
+            ⚡ Start Playground
+          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -480,10 +466,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>{badgesCount}</div>
+            }`}>{achievementsCount}</div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-            }`}>Badges Earned</div>
+            }`}>Achievements</div>
           </div>
         </div>
 
@@ -714,6 +700,110 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 border-t backdrop-blur-lg z-40 ${
+        theme === 'dark'
+          ? 'bg-gray-900/95 border-gray-800'
+          : 'bg-white/95 border-gray-200'
+      }`}>
+        <div className="flex items-center justify-around h-16 px-2">
+          <button
+            onClick={() => {
+              setActiveTab('home');
+              navigate('/dashboard');
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+              activeTab === 'home'
+                ? theme === 'dark'
+                  ? 'text-blue-400'
+                  : 'text-blue-600'
+                : theme === 'dark'
+                ? 'text-gray-400 hover:text-gray-300'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Home className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Home</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('tutorials');
+              navigate('/tutorials');
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+              activeTab === 'tutorials'
+                ? theme === 'dark'
+                  ? 'text-blue-400'
+                  : 'text-blue-600'
+                : theme === 'dark'
+                ? 'text-gray-400 hover:text-gray-300'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <BookOpen className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Tutorials</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('quizzes');
+              navigate('/quizzes');
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+              activeTab === 'quizzes'
+                ? theme === 'dark'
+                  ? 'text-blue-400'
+                  : 'text-blue-600'
+                : theme === 'dark'
+                ? 'text-gray-400 hover:text-gray-300'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <FileQuestion className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Quizzes</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('forum');
+              navigate('/forum');
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+              activeTab === 'forum'
+                ? theme === 'dark'
+                  ? 'text-blue-400'
+                  : 'text-blue-600'
+                : theme === 'dark'
+                ? 'text-gray-400 hover:text-gray-300'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <MessageSquare className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Forum</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('collaborate');
+              navigate('/collaboration');
+            }}
+            className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+              activeTab === 'collaborate'
+                ? theme === 'dark'
+                  ? 'text-blue-400'
+                  : 'text-blue-600'
+                : theme === 'dark'
+                ? 'text-gray-400 hover:text-gray-300'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Users className="w-5 h-5 mb-1" />
+            <span className="text-xs font-medium">Collaborate</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

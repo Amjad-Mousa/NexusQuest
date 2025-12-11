@@ -1,33 +1,71 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, X, FolderOpen, Trophy, Settings, ChevronRight, Moon, Sun, Minus, Plus, LogOut } from 'lucide-react';
+import { User, X, FolderOpen, Trophy, Settings, ChevronRight, Moon, Sun, Minus, Plus, LogOut, BookOpen, FileQuestion, Users, MessageSquare } from 'lucide-react';
 import type { Theme, User as UserType } from '../types';
+import { useTheme } from '../context/ThemeContext';
 
 interface UserSidePanelProps {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  theme?: Theme;
+  setTheme?: (theme: Theme) => void;
   user: UserType | null;
-  avatarImage: string | null;
-  fontSize: number;
-  setFontSize: (size: number) => void;
+  avatarImage?: string | null;
+  fontSize?: number;
+  setFontSize?: (size: number) => void;
   isOpen: boolean;
   onClose: () => void;
   onLogout: () => void;
 }
 
 export function UserSidePanel({
-  theme,
-  setTheme,
+  theme: themeProp,
+  setTheme: setThemeProp,
   user,
-  avatarImage,
-  fontSize,
-  setFontSize,
+  avatarImage: avatarImageProp,
+  fontSize: fontSizeProp,
+  setFontSize: setFontSizeProp,
   isOpen,
   onClose,
   onLogout,
 }: UserSidePanelProps) {
   const navigate = useNavigate();
+  const themeContext = useTheme();
   const [showSettings, setShowSettings] = useState(false);
+  const [loadedAvatar, setLoadedAvatar] = useState<string | null>(null);
+  const [fontSize, setFontSizeState] = useState(14);
+
+  // Use provided props or fallback to context/state
+  const theme = themeProp || themeContext.theme;
+  const setTheme = setThemeProp || ((newTheme: Theme) => {
+    if (themeContext.setTheme) {
+      themeContext.setTheme(newTheme);
+    }
+  });
+  const avatarImage = avatarImageProp !== undefined ? avatarImageProp : loadedAvatar;
+  const currentFontSize = fontSizeProp || fontSize;
+  const setFontSize = setFontSizeProp || setFontSizeState;
+
+  // Load avatar if not provided
+  useEffect(() => {
+    if (avatarImageProp === undefined && isOpen) {
+      const loadUserAvatar = async () => {
+        try {
+          const token = localStorage.getItem('nexusquest-token');
+          const response = await fetch('http://localhost:9876/api/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          const data = await response.json();
+          if (data.success && data.user) {
+            setLoadedAvatar(data.user.avatarImage || null);
+          }
+        } catch (error) {
+          console.error('Failed to load user avatar:', error);
+        }
+      };
+      loadUserAvatar();
+    }
+  }, [isOpen, avatarImageProp]);
 
   if (!isOpen) return null;
 
@@ -64,7 +102,7 @@ export function UserSidePanel({
 
         {/* Menu Items */}
         <nav className="p-2">
-          <button onClick={() => { onClose(); navigate('/profile'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
+          <button onClick={() => { onClose(); navigate(user?.role === 'teacher' ? '/teacher-profile' : '/profile'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
             <User className="w-5 h-5" /><span>Profile</span>
           </button>
 
@@ -78,6 +116,22 @@ export function UserSidePanel({
 
           <button onClick={() => { onClose(); navigate('/leaderboard'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
             <Trophy className="w-5 h-5" /><span>Leaderboard</span>
+          </button>
+
+          <button onClick={() => { onClose(); navigate('/tutorials'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
+            <BookOpen className="w-5 h-5" /><span>Tutorials</span>
+          </button>
+
+          <button onClick={() => { onClose(); navigate('/quizzes'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
+            <FileQuestion className="w-5 h-5" /><span>Quizzes</span>
+          </button>
+
+          <button onClick={() => { onClose(); navigate('/collaboration'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
+            <Users className="w-5 h-5" /><span>Collaborate</span>
+          </button>
+
+          <button onClick={() => { onClose(); navigate('/forum'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}>
+            <MessageSquare className="w-5 h-5" /><span>Forum</span>
           </button>
 
           {/* Settings Section */}
@@ -99,19 +153,21 @@ export function UserSidePanel({
                   </button>
                 </div>
 
-                {/* Font Size Control */}
-                <div className="flex items-center justify-between py-2">
-                  <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Font Size</span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setFontSize(Math.max(10, fontSize - 2))} className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}>
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className={`w-8 text-center text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{fontSize}</span>
-                    <button onClick={() => setFontSize(Math.min(24, fontSize + 2))} className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}>
-                      <Plus className="w-3 h-3" />
-                    </button>
+                {/* Font Size Control - only show if fontSize prop is provided */}
+                {fontSizeProp !== undefined && (
+                  <div className="flex items-center justify-between py-2">
+                    <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Font Size</span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setFontSize(Math.max(10, currentFontSize - 2))} className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}>
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className={`w-8 text-center text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{currentFontSize}</span>
+                      <button onClick={() => setFontSize(Math.min(24, currentFontSize + 2))} className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}>
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
