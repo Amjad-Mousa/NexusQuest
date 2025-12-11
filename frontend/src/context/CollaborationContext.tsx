@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getStoredUser } from '../services/authService';
 import {
   CollaborationSession,
   CollaborationParticipant,
@@ -178,11 +179,12 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
     (message: string, type: 'text' | 'code' = 'text', metadata?: any) => {
       if (!currentSession) return;
 
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = getStoredUser();
+      if (!user) return;
       socket?.emit('chat-message', {
         sessionId: currentSession.sessionId,
         userId: user.id,
-        username: user.username,
+        username: user.name,
         message,
         type,
         metadata,
@@ -195,7 +197,8 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
     (code: string, language: string) => {
       if (!currentSession) return;
 
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = getStoredUser();
+      if (!user) return;
       socket?.emit('execute-code', {
         sessionId: currentSession.sessionId,
         userId: user.id,

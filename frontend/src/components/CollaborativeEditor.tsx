@@ -2,9 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { useCollaboration } from '../context/CollaborationContext';
 import { useTheme } from '../context/ThemeContext';
-import { Users, MessageSquare, Settings, X, Send, UserX } from 'lucide-react';
+import { getStoredUser } from '../services/authService';
+import { Users, MessageSquare, X, Send, Play, Square, Terminal as TerminalIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import type { editor } from 'monaco-editor';
+
+interface TerminalLine {
+  type: 'output' | 'error';
+  content: string;
+}
 
 interface CollaborativeEditorProps {
   sessionId: string;
@@ -37,10 +43,14 @@ export default function CollaborativeEditor({
   const [chatMessage, setChatMessage] = useState('');
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(true);
+  const [showTerminal, setShowTerminal] = useState(true);
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const isRemoteChange = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
   // Handle editor mount
   const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
@@ -50,11 +60,12 @@ export default function CollaborativeEditor({
     editor.onDidChangeCursorPosition((e) => {
       if (!currentSession || isRemoteChange.current) return;
 
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = getStoredUser();
+      if (!user) return;
       sendCursorMove({
         sessionId: currentSession.sessionId,
         userId: user.id,
-        username: user.username,
+        username: user.name,
         cursor: {
           line: e.position.lineNumber,
           column: e.position.column,
@@ -74,11 +85,12 @@ export default function CollaborativeEditor({
 
     if (!currentSession) return;
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = getStoredUser();
+    if (!user) return;
     sendCodeChange({
       sessionId: currentSession.sessionId,
       userId: user.id,
-      username: user.username,
+      username: user.name,
       changes: {
         from: { line: 0, ch: 0 },
         to: { line: 0, ch: 0 },
@@ -114,7 +126,7 @@ export default function CollaborativeEditor({
 
       // Add new cursor decorations for all participants
       const newDecorations = participants
-        .filter((p) => p.cursor && p.userId !== JSON.parse(localStorage.getItem('user') || '{}').id)
+        .filter((p) => p.cursor && p.userId !== getStoredUser()?.id)
         .map((p) => ({
           range: new (window as any).monaco.Range(
             p.cursor!.line,
@@ -162,8 +174,102 @@ export default function CollaborativeEditor({
     }
   };
 
+  // Scroll terminal to bottom
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [terminalLines]);
+
+  // Map language to backend format
+  const getBackendLanguage = (lang: string) => {
+    const langMap: Record<string, string> = {
+      javascript: 'javascript',
+      typescript: 'javascript',
+      python: 'python',
+      java: 'java',
+      cpp: 'cpp',
+      'c++': 'cpp',
+      c: 'cpp',
+    };
+    return langMap[lang.toLowerCase()] || 'javascript';
+  };
+
+  // Run code
+  const handleRunCode = async () => {
+    if (isRunning || !code.trim()) return;
+
+    setIsRunning(true);
+    setTerminalLines([{ type: 'output', content: `▶️ Running ${language} code...\n` }]);
+
+    try {
+      const response = await fetch('http://localhost:9876/api/playground/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          language: getBackendLanguage(language),
+          sessionId: `collab-${Date.now()}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts[parts.length - 1];
+
+        for (let i = 0; i < parts.length - 1; i++) {
+          const message = parts[i];
+          if (message.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(message.substring(6));
+              
+              if (data.type === 'stdout' || data.type === 'output') {
+                setTerminalLines(prev => [...prev, { type: 'output', content: data.data || data.content }]);
+              } else if (data.type === 'stderr' || data.type === 'error') {
+                setTerminalLines(prev => [...prev, { type: 'error', content: data.data || data.content }]);
+              } else if (data.type === 'end') {
+                setTerminalLines(prev => [...prev, { type: 'output', content: '\n✓ Program finished\n' }]);
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (error) {
+      setTerminalLines(prev => [...prev, { 
+        type: 'error', 
+        content: `Error: ${error instanceof Error ? error.message : 'Failed to execute code'}\n` 
+      }]);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  // Stop code execution
+  const handleStopCode = () => {
+    setIsRunning(false);
+    setTerminalLines(prev => [...prev, { type: 'error', content: '\n⏹ Execution stopped\n' }]);
+  };
+
   return (
-    <div className="flex h-full">
+    <div className={`flex h-full ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
       {/* Main Editor Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
@@ -188,6 +294,35 @@ export default function CollaborativeEditor({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Run/Stop Button */}
+            {isRunning ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleStopCode}
+              >
+                <Square className="w-4 h-4 mr-1" />
+                Stop
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRunCode}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Play className="w-4 h-4 mr-1" />
+                Run
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowTerminal(!showTerminal)}
+              className={showTerminal ? (theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200') : ''}
+            >
+              <TerminalIcon className="w-4 h-4" />
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -211,24 +346,80 @@ export default function CollaborativeEditor({
           </div>
         </div>
 
-        {/* Editor */}
-        <div className="flex-1">
-          <Editor
-            height="100%"
-            language={language}
-            value={code}
-            onChange={handleCodeChange}
-            onMount={handleEditorDidMount}
-            theme={theme === 'dark' ? 'vs-dark' : 'light'}
-            options={{
-              minimap: { enabled: true },
-              fontSize: 14,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: 2,
-            }}
-          />
+        {/* Editor and Terminal Container */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Editor */}
+          <div className={showTerminal ? 'h-[60%]' : 'flex-1'}>
+            <Editor
+              height="100%"
+              language={language}
+              value={code}
+              onChange={handleCodeChange}
+              onMount={handleEditorDidMount}
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
+              options={{
+                minimap: { enabled: true },
+                fontSize: 14,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                tabSize: 2,
+              }}
+            />
+          </div>
+
+          {/* Terminal */}
+          {showTerminal && (
+            <div
+              className={`h-[40%] border-t flex flex-col ${
+                theme === 'dark'
+                  ? 'bg-gray-900 border-gray-700'
+                  : 'bg-gray-100 border-gray-300'
+              }`}
+            >
+              <div
+                className={`flex items-center justify-between px-3 py-1 border-b ${
+                  theme === 'dark' ? 'border-gray-700' : 'border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <TerminalIcon className="w-4 h-4" />
+                  <span className="text-sm font-medium">Output</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTerminalLines([])}
+                  className="h-6 px-2 text-xs"
+                >
+                  Clear
+                </Button>
+              </div>
+              <div
+                className={`flex-1 overflow-y-auto p-3 font-mono text-sm ${
+                  theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+                }`}
+              >
+                {terminalLines.length === 0 ? (
+                  <span className="text-gray-500">
+                    Click "Run" to execute your code...
+                  </span>
+                ) : (
+                  terminalLines.map((line, index) => (
+                    <div
+                      key={index}
+                      className={`whitespace-pre-wrap ${
+                        line.type === 'error' ? 'text-red-400' : ''
+                      }`}
+                    >
+                      {line.content}
+                    </div>
+                  ))
+                )}
+                <div ref={terminalEndRef} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -284,7 +475,7 @@ export default function CollaborativeEditor({
               : 'bg-white border-gray-200'
           }`}
         >
-          <div className="p-4 border-b">
+          <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
             <h3 className="font-semibold flex items-center gap-2">
               <MessageSquare className="w-4 h-4" />
               Chat
@@ -330,7 +521,7 @@ export default function CollaborativeEditor({
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t">
+          <div className={`p-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
             <div className="flex gap-2">
               <input
                 type="text"

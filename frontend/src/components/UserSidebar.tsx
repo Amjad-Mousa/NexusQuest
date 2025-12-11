@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, FolderOpen, Settings, Moon, Sun, LogOut, X, User as UserIcon } from 'lucide-react';
+import { Trophy, FolderOpen, Settings, Moon, Sun, LogOut, X, User as UserIcon, Users, MessageSquare } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 interface UserSidebarProps {
@@ -179,6 +179,36 @@ export function UserSidebar({ user, onLogout, isOpen, onClose }: UserSidebarProp
               >
                 <Trophy className="w-5 h-5" />
                 <span>Leaderboard</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate('/collaboration');
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-orange-600/10 border border-orange-600/20 ${
+                  theme === 'dark'
+                    ? 'hover:bg-orange-600/20 text-orange-400'
+                    : 'hover:bg-orange-100 text-orange-600'
+                }`}
+              >
+                <Users className="w-5 h-5" />
+                <span>🤝 Live Collaboration</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  navigate('/forum');
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors bg-purple-600/10 border border-purple-600/20 ${
+                  theme === 'dark'
+                    ? 'hover:bg-purple-600/20 text-purple-400'
+                    : 'hover:bg-purple-100 text-purple-600'
+                }`}
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span>💬 Q&A Forum</span>
               </button>
 
               <div className={`pt-4 border-t mt-4 ${
