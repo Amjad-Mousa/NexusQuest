@@ -12,8 +12,11 @@ import {
   type ChatMessage,
 } from '../services/chatService';
 import { getStoredUser } from '../services/authService';
+import { useTheme } from '../context/ThemeContext';
+import { ArrowLeft, Send, MessageCircle } from 'lucide-react';
 
 export function ChatPage() {
+  const { theme } = useTheme();
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,62 +118,107 @@ export function ChatPage() {
             className={`flex w-full mb-3 ${isMine ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[70%] rounded-2xl px-4 py-2.5 shadow-lg ${{
-                true: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white',
-                false: 'bg-gray-800/90 text-gray-50 border border-gray-700/50',
-              }[String(isMine) as 'true' | 'false']}`}
+              className={`max-w-[70%] rounded-2xl px-4 py-2.5 shadow-lg ${
+                isMine
+                  ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+                  : theme === 'dark'
+                    ? 'bg-gray-800/90 text-gray-50 border border-gray-700/50'
+                    : 'bg-white text-gray-900 border border-gray-200 shadow-md'
+              }`}
             >
               <div className="text-sm leading-relaxed break-words">{m.content}</div>
-              <div className={`text-[10px] mt-1.5 ${isMine ? 'text-emerald-100/70' : 'text-gray-400'}`}>
+              <div className={`text-[10px] mt-1.5 ${
+                isMine
+                  ? 'text-emerald-100/70'
+                  : theme === 'dark'
+                    ? 'text-gray-400'
+                    : 'text-gray-500'
+              }`}>
                 {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           </div>
         );
       }),
-    [messages, currentUserId]
+    [messages, currentUserId, theme]
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950 text-white">
+    <div className={`min-h-screen flex flex-col relative ${
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white'
+        : 'bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-900'
+    }`}>
+      {/* Subtle Background */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
+      
       {/* Header */}
-      <header className="sticky top-0 z-10 px-6 py-4 border-b border-gray-800/50 flex items-center justify-between bg-gray-900/95 backdrop-blur-xl shadow-lg">
+      <header className={`sticky top-0 z-10 px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
+        theme === 'dark'
+          ? 'border-gray-800/50 bg-gray-950/80'
+          : 'border-gray-200 bg-white/80'
+      }`}>
         <button
           type="button"
-          className="text-sm text-gray-400 hover:text-white transition-colors font-medium"
+          className={`flex items-center gap-2 text-sm font-medium transition-colors ${
+            theme === 'dark'
+              ? 'text-gray-400 hover:text-white'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
           onClick={() => navigate(-1)}
         >
-          ← Back
+          <ArrowLeft className="w-4 h-4" />
+          Back
         </button>
         <div className="flex flex-col items-center">
-          <h1 className="text-base font-semibold">{otherUserName}</h1>
-          <span className="text-xs text-gray-500">Online</span>
+          <h1 className={`text-base font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+            {otherUserName}
+          </h1>
+          <span className={`text-xs flex items-center gap-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+            Online
+          </span>
         </div>
         <div className="w-16" />
       </header>
 
       {/* Messages Area */}
-      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="flex-1 overflow-y-auto py-6">
           {renderedMessages}
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center px-4">
-              <div className="w-16 h-16 rounded-full bg-gray-800/50 flex items-center justify-center mb-4">
-                <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+            <div className="flex flex-col items-center justify-center h-full text-center px-4 py-20">
+              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mb-4 ${
+                theme === 'dark'
+                  ? 'bg-emerald-500/10 border border-emerald-500/20'
+                  : 'bg-emerald-50 border border-emerald-200'
+              }`}>
+                <MessageCircle className={`w-10 h-10 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`} />
               </div>
-              <p className="text-sm text-gray-400">No messages yet</p>
-              <p className="text-xs text-gray-600 mt-1">Start the conversation!</p>
+              <p className={`text-lg font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                No messages yet
+              </p>
+              <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+                Start the conversation!
+              </p>
             </div>
           )}
           {isOtherUserTyping && (
             <div className="flex w-full mb-3 justify-start">
-              <div className="max-w-[70%] rounded-2xl px-4 py-2.5 bg-gray-800/90 border border-gray-700/50">
+              <div className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+                theme === 'dark'
+                  ? 'bg-gray-800/90 border border-gray-700/50'
+                  : 'bg-white border border-gray-200 shadow-sm'
+              }`}>
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                  <span className={`w-2 h-2 rounded-full animate-bounce ${theme === 'dark' ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }}></span>
+                  <span className={`w-2 h-2 rounded-full animate-bounce ${theme === 'dark' ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }}></span>
+                  <span className={`w-2 h-2 rounded-full animate-bounce ${theme === 'dark' ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }}></span>
                 </div>
               </div>
             </div>
@@ -179,11 +227,19 @@ export function ChatPage() {
         </div>
 
         {/* Input Area */}
-        <div className="sticky bottom-0 py-4 bg-gradient-to-t from-gray-950 via-gray-950 to-transparent">
+        <div className={`sticky bottom-0 py-4 ${
+          theme === 'dark'
+            ? 'bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent'
+            : 'bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent'
+        }`}>
           <div className="flex gap-3 items-end">
             <div className="flex-1 relative">
               <input
-                className="w-full px-5 py-3.5 rounded-3xl bg-gray-900/90 border border-gray-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-gray-500 shadow-lg"
+                className={`w-full px-5 py-3.5 rounded-2xl text-sm outline-none transition-all shadow-lg ${
+                  theme === 'dark'
+                    ? 'bg-gray-900/90 border border-gray-800 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500'
+                    : 'bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 shadow-md'
+                }`}
                 placeholder="Type your message..."
                 value={input}
                 onChange={(e) => {
@@ -209,10 +265,11 @@ export function ChatPage() {
             </div>
             <button
               type="button"
-              className="px-6 py-3.5 rounded-3xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-sm font-semibold shadow-lg shadow-emerald-600/30 transition-all hover:shadow-emerald-600/40 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white text-sm font-semibold shadow-lg shadow-emerald-600/30 transition-all duration-300 hover:shadow-emerald-600/40 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
               onClick={handleSend}
               disabled={!input.trim()}
             >
+              <Send className="w-4 h-4" />
               Send
             </button>
           </div>
