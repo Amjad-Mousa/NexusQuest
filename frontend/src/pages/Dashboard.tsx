@@ -199,19 +199,26 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
    
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100'}`}>
+    <div className={`min-h-screen relative ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100'}`}>
+      {/* Subtle Background Elements */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 left-0 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
       {/* Header */}
       <header className={`border-b sticky top-0 z-50 ${
         theme === 'dark' 
-          ? 'border-gray-800 bg-gray-950/80' 
+          ? 'border-gray-800/50 bg-gray-950/80' 
           : 'border-gray-200 bg-white/80'
-      } backdrop-blur-md`}>
+      } backdrop-blur-xl shadow-sm`}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => navigate('/dashboard')}>
+            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 transition-all duration-300 group-hover:scale-105">
               <Code2 className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
               NexusQuest
             </span>
           </div>
@@ -345,80 +352,84 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       
       <div className="container mx-auto px-4 py-8">
         {/* Welcome Section */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-10 flex items-center justify-between">
           <div>
-            <h1 className={`text-4xl font-bold mb-2 ${
+            <h1 className={`text-4xl font-bold mb-3 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}>
-              Welcome back, {user?.name?.split(' ')[0]}! 👋
+              Welcome back, <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">{user?.name?.split(' ')[0]}</span>! 👋
             </h1>
             <p className={`text-lg ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             }`}>Here's what's happening with your learning journey</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <Button
               onClick={() => navigate('/tutorials')}
-              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-3 text-lg"
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white px-5 py-2.5 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transition-all duration-300 hover:scale-105"
             >
               📚 Tutorials
             </Button>
             <Button
               onClick={() => navigate('/quizzes')}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 text-lg"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-5 py-2.5 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 transition-all duration-300 hover:scale-105"
             >
               📝 Quizzes
             </Button>
             <Button
               onClick={() => navigate('/playground')}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 text-lg"
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white px-5 py-2.5 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 transition-all duration-300 hover:scale-105"
             >
-              ⚡ Quick Playground
+              ⚡ Playground
             </Button>
             <Button
               onClick={() => navigate('/collaboration')}
-              className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 text-lg"
+              className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white px-5 py-2.5 shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all duration-300 hover:scale-105"
             >
-              <Users className="w-5 h-5 mr-2 inline" />
-              Live Collaboration
+              <Users className="w-4 h-4 mr-2 inline" />
+              Collaborate
             </Button>
             <Button
               onClick={() => navigate('/forum')}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-6 py-3 text-lg"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-2.5 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all duration-300 hover:scale-105"
             >
-              💬 Q&A Forum
+              💬 Forum
             </Button>
             <Button
               onClick={() => navigate('/projects')}
-              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 text-lg"
+              className="bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600 text-white px-5 py-2.5 border border-slate-500/30 transition-all duration-300 hover:scale-105"
             >
-              + New Project
+              + Project
             </Button>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-          <div className={`rounded-xl p-6 border ${
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+          <div className={`group rounded-2xl p-6 border transition-all duration-300 hover:scale-105 cursor-pointer ${
             theme === 'dark'
-              ? 'bg-gray-900/50 border-blue-500/20'
-              : 'bg-white border-blue-200'
-          }`}>
-            <Trophy className="w-8 h-8 text-blue-400 mb-2" />
+              ? 'bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/10'
+              : 'bg-white border-blue-200 hover:border-blue-300 hover:shadow-lg'
+          }`} onClick={() => navigate('/leaderboard')}>
+            <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <Trophy className="w-6 h-6 text-blue-400" />
+            </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>{stats.points}</div>
+            }`}>{stats.points.toLocaleString()}</div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             }`}>Total Points</div>
           </div>
 
-          <div className={`rounded-xl p-6 border ${
+          <div className={`group rounded-2xl p-6 border transition-all duration-300 hover:scale-105 cursor-pointer ${
             theme === 'dark'
-              ? 'bg-gray-900/50 border-purple-500/20'
-              : 'bg-white border-purple-200'
-          }`}>
-            <Target className="w-8 h-8 text-purple-400 mb-2" />
+              ? 'bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/10'
+              : 'bg-white border-purple-200 hover:border-purple-300 hover:shadow-lg'
+          }`} onClick={() => navigate('/tasks')}>
+            <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <Target className="w-6 h-6 text-purple-400" />
+            </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}>{stats.completedChallenges}</div>
@@ -427,12 +438,14 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             }`}>Completed</div>
           </div>
 
-          <div className={`rounded-xl p-6 border ${
+          <div className={`group rounded-2xl p-6 border transition-all duration-300 hover:scale-105 cursor-pointer ${
             theme === 'dark'
-              ? 'bg-gray-900/50 border-yellow-500/20'
-              : 'bg-white border-yellow-200'
-          }`}>
-            <Star className="w-8 h-8 text-yellow-400 mb-2" />
+              ? 'bg-gradient-to-br from-yellow-500/10 to-amber-600/5 border-yellow-500/20 hover:border-yellow-500/40 hover:shadow-lg hover:shadow-yellow-500/10'
+              : 'bg-white border-yellow-200 hover:border-yellow-300 hover:shadow-lg'
+          }`} onClick={() => navigate('/leaderboard')}>
+            <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <Star className="w-6 h-6 text-yellow-400" />
+            </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}>{stats.rank > 0 ? `#${stats.rank}` : '-'}</div>
@@ -441,26 +454,30 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             }`}>Global Rank</div>
           </div>
 
-          <div className={`rounded-xl p-6 border ${
+          <div className={`group rounded-2xl p-6 border transition-all duration-300 hover:scale-105 ${
             theme === 'dark'
-              ? 'bg-gray-900/50 border-orange-500/20'
-              : 'bg-white border-orange-200'
+              ? 'bg-gradient-to-br from-orange-500/10 to-red-600/5 border-orange-500/20 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/10'
+              : 'bg-white border-orange-200 hover:border-orange-300 hover:shadow-lg'
           }`}>
-            <TrendingUp className="w-8 h-8 text-orange-400 mb-2" />
+            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <TrendingUp className="w-6 h-6 text-orange-400" />
+            </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>{stats.streak} days</div>
+            }`}>{stats.streak} <span className="text-lg">days</span></div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
             }`}>Streak 🔥</div>
           </div>
 
-          <div className={`rounded-xl p-6 border ${
+          <div className={`group rounded-2xl p-6 border transition-all duration-300 hover:scale-105 cursor-pointer ${
             theme === 'dark'
-              ? 'bg-gray-900/50 border-green-500/20'
-              : 'bg-white border-green-200'
-          }`}>
-            <Award className="w-8 h-8 text-green-400 mb-2" />
+              ? 'bg-gradient-to-br from-green-500/10 to-emerald-600/5 border-green-500/20 hover:border-green-500/40 hover:shadow-lg hover:shadow-green-500/10'
+              : 'bg-white border-green-200 hover:border-green-300 hover:shadow-lg'
+          }`} onClick={() => navigate('/profile')}>
+            <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <Award className="w-6 h-6 text-green-400" />
+            </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
             }`}>{badgesCount}</div>
@@ -571,10 +588,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
 
             {/* Completed Tasks Section */}
-            <div className={`rounded-xl p-6 mb-6 border ${
+            <div className={`rounded-2xl p-6 mb-6 border transition-all duration-300 ${
               theme === 'dark'
-                ? 'bg-gray-900/50 border-gray-800'
-                : 'bg-white border-gray-200 shadow-sm'
+                ? 'bg-gray-900/50 border-gray-800 hover:border-gray-700'
+                : 'bg-white border-gray-200 shadow-sm hover:shadow-md'
             }`}>
               <div className="flex items-center justify-between mb-6">
                 <h2 className={`text-2xl font-bold flex items-center gap-2 ${
@@ -650,7 +667,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
 
             {/* Learning Paths */}
-            <div className={`${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200 shadow-sm'} border rounded-xl p-6`}>
+            <div className={`${theme === 'dark' ? 'bg-gray-900/50 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'} border rounded-2xl p-6 transition-all duration-300`}>
               <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} flex items-center gap-2 mb-6`}>
                 <BookOpen className="w-6 h-6 text-purple-400" />
                 Learning Paths

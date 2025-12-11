@@ -81,16 +81,25 @@ export default function TutorialsPage() {
   }
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`min-h-screen relative ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white' : 'bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-900'}`}>
+      {/* Subtle Background */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 left-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
       {/* Header */}
-      <header className={`border-b sticky top-0 z-50 ${theme === 'dark' ? 'border-gray-800 bg-gray-900/95' : 'border-gray-200 bg-white/95'} backdrop-blur-sm`}>
+      <header className={`border-b sticky top-0 z-50 ${theme === 'dark' ? 'border-gray-800/50 bg-gray-950/80' : 'border-gray-200 bg-white/80'} backdrop-blur-xl shadow-sm`}>
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <BookOpen className="w-8 h-8 text-blue-500" />
+            <div className="flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                <BookOpen className="w-6 h-6 text-white" />
+              </div>
               <h1 className="text-2xl font-bold">Tutorials</h1>
             </div>
-            <Button variant="outline" onClick={() => navigate('/dashboard')}>
+            <Button variant="outline" onClick={() => navigate('/dashboard')} className="hover:bg-gray-800/50">
               Back to Dashboard
             </Button>
           </div>
@@ -99,7 +108,7 @@ export default function TutorialsPage() {
 
       <div className="container mx-auto px-4 py-8">
         {/* Filters */}
-        <div className={`rounded-xl p-6 mb-8 ${theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+        <div className={`rounded-2xl p-6 mb-8 transition-all duration-300 ${theme === 'dark' ? 'bg-gray-900/50 border border-gray-800 hover:border-gray-700' : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'}`}>
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-5 h-5 text-blue-500" />
             <h2 className="text-lg font-semibold">Filters</h2>
@@ -160,8 +169,10 @@ export default function TutorialsPage() {
 
         {/* Tutorials by Language */}
         {filteredLanguages.length === 0 ? (
-          <div className="text-center py-12">
-            <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+              <BookOpen className="w-8 h-8 text-blue-400" />
+            </div>
             <p className="text-gray-400 text-lg">No tutorials found</p>
           </div>
         ) : (
@@ -186,10 +197,10 @@ export default function TutorialsPage() {
                       <div
                         key={tutorial.id}
                         onClick={() => navigate(`/tutorials/${tutorial.id}`)}
-                        className={`p-6 rounded-xl cursor-pointer transition-all hover:scale-105 ${
+                        className={`group p-6 rounded-2xl cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 ${
                           theme === 'dark'
-                            ? 'bg-gray-900 border border-gray-800 hover:border-blue-500'
-                            : 'bg-white border border-gray-200 hover:border-blue-500 hover:shadow-lg'
+                            ? 'bg-gray-900/50 border border-gray-800 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5'
+                            : 'bg-white border border-gray-200 hover:border-blue-500 shadow-sm hover:shadow-lg'
                         }`}
                       >
                         <div className="flex items-start justify-between mb-3">

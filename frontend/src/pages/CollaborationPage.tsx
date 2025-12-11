@@ -175,16 +175,23 @@ export default function CollaborationPage() {
 
   return (
     <div
-      className={`min-h-screen ${
+      className={`min-h-screen relative ${
         theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100 text-gray-900'
       }`}
     >
+      {/* Subtle Background */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-0 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
       {/* Top Header/Navbar */}
       <header className={`border-b sticky top-0 z-50 ${
         theme === 'dark' 
-          ? 'border-gray-800 bg-gray-950/80' 
+          ? 'border-gray-800/50 bg-gray-950/80' 
           : 'border-gray-200 bg-white/80'
-      } backdrop-blur-md`}>
+      } backdrop-blur-xl shadow-sm`}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -195,12 +202,12 @@ export default function CollaborationPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30">
                 <Code2 className="w-6 h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">
-                NexusQuest
+              <span className="text-2xl font-bold bg-gradient-to-r from-orange-400 via-red-400 to-orange-500 bg-clip-text text-transparent">
+                Live Collaboration
               </span>
             </div>
           </div>
@@ -247,7 +254,10 @@ export default function CollaborationPage() {
               Code together in real-time
             </p>
           </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button 
+            onClick={() => setShowCreateDialog(true)}
+            className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 transition-all duration-300 hover:scale-105"
+          >
             <Plus className="w-4 h-4 mr-2" />
             New Session
           </Button>
@@ -295,11 +305,11 @@ export default function CollaborationPage() {
             {(activeTab === 'my-sessions' ? sessions : publicSessions).map((session) => (
               <div
                 key={session.sessionId}
-                className={`p-6 rounded-lg border ${
+                className={`group p-6 rounded-2xl border transition-all duration-300 ${
                   theme === 'dark'
-                    ? 'bg-gray-800 border-gray-700'
-                    : 'bg-white border-gray-200'
-                } hover:shadow-lg transition-shadow`}
+                    ? 'bg-gray-900/50 border-gray-800 hover:border-orange-500/40 hover:shadow-lg hover:shadow-orange-500/5'
+                    : 'bg-white border-gray-200 hover:border-orange-300 shadow-sm hover:shadow-md'
+                } hover:-translate-y-1`}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">

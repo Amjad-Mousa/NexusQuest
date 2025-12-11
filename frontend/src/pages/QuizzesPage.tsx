@@ -83,11 +83,11 @@ export default function QuizzesPage() {
       <div
         key={quiz._id}
         onClick={() => navigate(`/quiz/${quiz._id}`)}
-        className={`rounded-xl p-5 cursor-pointer transition-all border ${
+        className={`group rounded-2xl p-5 cursor-pointer transition-all duration-300 border ${
           theme === 'dark'
-            ? 'bg-gray-900 border-gray-800 hover:border-purple-500/50'
-            : 'bg-white border-gray-200 hover:border-purple-300'
-        }`}
+            ? 'bg-gray-900/50 border-gray-800 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/5'
+            : 'bg-white border-gray-200 hover:border-purple-300 shadow-sm hover:shadow-md'
+        } hover:-translate-y-1`}
       >
         {/* Status Badge */}
         <div className="flex justify-between items-start mb-3">
@@ -226,17 +226,26 @@ export default function QuizzesPage() {
   };
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`min-h-screen relative ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white' : 'bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-900'}`}>
+      {/* Subtle Background */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
       {/* Header */}
-      <header className={`border-b ${theme === 'dark' ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'}`}>
+      <header className={`border-b sticky top-0 z-50 ${theme === 'dark' ? 'border-gray-800/50 bg-gray-950/80' : 'border-gray-200 bg-white/80'} backdrop-blur-xl shadow-sm`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="hover:bg-gray-800/50">
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
-              <div className="flex items-center gap-2">
-                <Clock className="w-6 h-6 text-purple-500" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                  <Clock className="w-5 h-5 text-white" />
+                </div>
                 <h1 className="text-xl font-bold">Quizzes</h1>
               </div>
             </div>
@@ -247,13 +256,18 @@ export default function QuizzesPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading quizzes...</div>
+          <div className="text-center py-16">
+            <div className="animate-spin w-10 h-10 border-3 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading quizzes...</p>
+          </div>
         ) : quizzes.length === 0 ? (
-          <div className="text-center py-12">
-            <Clock className="w-12 h-12 mx-auto mb-4 text-gray-500" />
-            <h3 className="text-lg font-medium mb-2">No quizzes available</h3>
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-purple-400" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No quizzes available</h3>
             <p className="text-gray-500">Check back later for upcoming quizzes</p>
           </div>
         ) : (

@@ -111,31 +111,33 @@ export function Playground() {
   ];
 
   return (
-    <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'}`}>
+    <div className={`h-screen flex flex-col ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-50 via-white to-gray-50'}`}>
       {/* Header */}
-      <header className={`border-b ${theme === 'dark' ? 'bg-gray-900/80 border-gray-800' : 'bg-white border-gray-200'} backdrop-blur-sm z-40`}>
+      <header className={`border-b ${theme === 'dark' ? 'bg-gray-950/80 border-gray-800/50' : 'bg-white/80 border-gray-200'} backdrop-blur-xl z-40 shadow-sm`}>
         <div className="px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate('/dashboard')} className="p-2">
+            <Button variant="ghost" onClick={() => navigate('/dashboard')} className="p-2 hover:bg-gray-800/50">
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="flex items-center gap-2">
-              <Code2 className="w-6 h-6 text-blue-500" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/25">
+                <Code2 className="w-5 h-5 text-white" />
+              </div>
               <span className="text-xl font-bold">Quick Playground</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Language Selector */}
-            <div className="flex items-center gap-2 border rounded-lg p-1 bg-gray-800/50">
+            <div className={`flex items-center gap-1 border rounded-xl p-1 ${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-100 border-gray-200'}`}>
               {languageOptions.map((lang) => (
                 <button
                   key={lang.value}
                   onClick={() => handleLanguageChange(lang.value as any)}
-                  className={`px-3 py-1.5 rounded transition-all ${
+                  className={`px-4 py-2 rounded-lg transition-all duration-300 font-medium text-sm ${
                     language === lang.value
-                      ? 'bg-blue-600 text-white'
-                      : `${lang.color} hover:bg-gray-700`
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
+                      : `${lang.color} hover:bg-gray-800/50`
                   }`}
                 >
                   {lang.label}
@@ -146,7 +148,7 @@ export function Playground() {
             {/* Run Button */}
             <Button
               onClick={handleRunCode}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all duration-300 hover:scale-105"
             >
               <Play className="w-4 h-4 mr-2" />
               Run Code

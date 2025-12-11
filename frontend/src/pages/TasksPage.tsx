@@ -95,17 +95,26 @@ export default function TasksPage(_props: TasksPageProps) {
   } outline-none`;
 
   return (
-    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`min-h-screen relative ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white' : 'bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-900'}`}>
+      {/* Subtle Background */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
       {/* Header */}
-      <header className={`border-b ${theme === 'dark' ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-white'}`}>
+      <header className={`border-b sticky top-0 z-50 ${theme === 'dark' ? 'border-gray-800/50 bg-gray-950/80' : 'border-gray-200 bg-white/80'} backdrop-blur-xl shadow-sm`}>
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="hover:bg-gray-800/50">
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-6 h-6 text-blue-500" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                  <BookOpen className="w-5 h-5 text-white" />
+                </div>
                 <h1 className="text-xl font-bold">Browse Tasks</h1>
               </div>
             </div>
@@ -118,7 +127,7 @@ export default function TasksPage(_props: TasksPageProps) {
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* Search and Filters */}
-        <div className={`rounded-xl p-4 mb-6 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} border ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+        <div className={`rounded-2xl p-5 mb-8 transition-all duration-300 ${theme === 'dark' ? 'bg-gray-900/50 border-gray-800 hover:border-gray-700' : 'bg-white hover:shadow-md'} border ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200 shadow-sm'}`}>
           <div className="flex flex-wrap gap-4 items-center">
             {/* Search */}
             <div className="flex-1 min-w-[250px] relative">
@@ -167,11 +176,16 @@ export default function TasksPage(_props: TasksPageProps) {
 
         {/* Task Grid */}
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading tasks...</div>
+          <div className="text-center py-16">
+            <div className="animate-spin w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading tasks...</p>
+          </div>
         ) : filteredTasks.length === 0 ? (
-          <div className="text-center py-12">
-            <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-500" />
-            <h3 className="text-lg font-medium mb-2">No tasks found</h3>
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+              <BookOpen className="w-8 h-8 text-blue-400" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No tasks found</h3>
             <p className="text-gray-500">Try adjusting your search or filters</p>
           </div>
         ) : (
@@ -182,11 +196,11 @@ export default function TasksPage(_props: TasksPageProps) {
                 <div
                   key={task._id}
                   onClick={() => navigate(`/task/${task._id}`)}
-                  className={`rounded-xl p-5 cursor-pointer transition-all border ${
+                  className={`group rounded-2xl p-5 cursor-pointer transition-all duration-300 border ${
                     theme === 'dark'
-                      ? 'bg-gray-900 border-gray-800 hover:border-blue-500/50'
-                      : 'bg-white border-gray-200 hover:border-blue-300'
-                  } ${status === 'completed' ? 'opacity-75' : ''}`}
+                      ? 'bg-gray-900/50 border-gray-800 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5'
+                      : 'bg-white border-gray-200 hover:border-blue-300 shadow-sm hover:shadow-md'
+                  } ${status === 'completed' ? 'opacity-75' : ''} hover:-translate-y-1`}
                 >
                   {/* Status Badge */}
                   {status && (
@@ -224,7 +238,7 @@ export default function TasksPage(_props: TasksPageProps) {
                   </div>
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-800">
+                  <div className={`flex items-center justify-between pt-3 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
                     <div className="flex items-center gap-2">
                       <Award className="w-4 h-4 text-yellow-500" />
                       <span className="text-sm font-medium">{task.points} pts</span>

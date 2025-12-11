@@ -138,19 +138,26 @@ export default function ForumPage() {
 
   return (
     <div
-      className={`min-h-screen ${
+      className={`min-h-screen relative ${
         theme === 'dark'
           ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white'
           : 'bg-gradient-to-br from-gray-100 via-white to-gray-100 text-gray-900'
       }`}
     >
+      {/* Subtle Background Elements */}
+      {theme === 'dark' && (
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-pink-500/5 rounded-full blur-3xl" />
+        </div>
+      )}
       {/* Header */}
       <header
         className={`border-b sticky top-0 z-50 ${
           theme === 'dark'
-            ? 'border-gray-800 bg-gray-950/80'
+            ? 'border-gray-800/50 bg-gray-950/80'
             : 'border-gray-200 bg-white/80'
-        } backdrop-blur-md`}
+        } backdrop-blur-xl shadow-sm`}
       >
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -164,11 +171,11 @@ export default function ForumPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-gradient-to-br from-purple-500 via-purple-600 to-pink-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
                 <MessageSquare className="w-6 h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+              <span className="text-2xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-purple-500 bg-clip-text text-transparent">
                 Q&A Forum
               </span>
             </div>
@@ -212,7 +219,7 @@ export default function ForumPage() {
           {/* Main Content */}
           <div className="flex-1">
             {/* Page Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className="text-3xl font-bold mb-2">Community Forum</h1>
                 <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
@@ -221,7 +228,7 @@ export default function ForumPage() {
               </div>
               <Button
                 onClick={() => navigate('/forum/ask')}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-300 hover:scale-105"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Ask Question
@@ -230,10 +237,10 @@ export default function ForumPage() {
 
             {/* Search and Filters */}
             <div
-              className={`rounded-xl p-4 mb-6 ${
+              className={`rounded-2xl p-5 mb-6 transition-all duration-300 ${
                 theme === 'dark'
-                  ? 'bg-gray-900/50 border border-gray-800'
-                  : 'bg-white border border-gray-200'
+                  ? 'bg-gray-900/50 border border-gray-800 hover:border-gray-700'
+                  : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
               }`}
             >
               <form onSubmit={handleSearch} className="flex gap-4 mb-4">
@@ -313,20 +320,25 @@ export default function ForumPage() {
 
             {/* Questions List */}
             {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+              <div className="text-center py-16">
+                <div className="animate-spin w-10 h-10 border-3 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
                 <p className="text-gray-500">Loading questions...</p>
               </div>
             ) : questions.length === 0 ? (
               <div
-                className={`text-center py-12 rounded-xl ${
-                  theme === 'dark' ? 'bg-gray-900/50' : 'bg-white'
+                className={`text-center py-16 rounded-2xl border ${
+                  theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200'
                 }`}
               >
-                <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-500" />
-                <h3 className="text-lg font-semibold mb-2">No questions yet</h3>
-                <p className="text-gray-500 mb-4">Be the first to ask a question!</p>
-                <Button onClick={() => navigate('/forum/ask')}>
+                <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
+                  <MessageCircle className="w-8 h-8 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">No questions yet</h3>
+                <p className="text-gray-500 mb-6">Be the first to ask a question!</p>
+                <Button 
+                  onClick={() => navigate('/forum/ask')}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 shadow-lg shadow-purple-500/25"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Ask Question
                 </Button>
@@ -337,10 +349,10 @@ export default function ForumPage() {
                   <div
                     key={question._id}
                     onClick={() => navigate(`/forum/question/${question._id}`)}
-                    className={`rounded-xl p-5 cursor-pointer transition-all ${
+                    className={`group rounded-2xl p-5 cursor-pointer transition-all duration-300 ${
                       theme === 'dark'
-                        ? 'bg-gray-900/50 border border-gray-800 hover:border-purple-500/30'
-                        : 'bg-white border border-gray-200 hover:border-purple-300 shadow-sm'
+                        ? 'bg-gray-900/50 border border-gray-800 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5'
+                        : 'bg-white border border-gray-200 hover:border-purple-300 shadow-sm hover:shadow-md'
                     }`}
                   >
                     <div className="flex gap-4">
@@ -466,10 +478,10 @@ export default function ForumPage() {
           <div className="hidden lg:block w-72">
             {/* Popular Tags */}
             <div
-              className={`rounded-xl p-4 mb-6 ${
+              className={`rounded-2xl p-5 mb-6 transition-all duration-300 ${
                 theme === 'dark'
-                  ? 'bg-gray-900/50 border border-gray-800'
-                  : 'bg-white border border-gray-200'
+                  ? 'bg-gray-900/50 border border-gray-800 hover:border-gray-700'
+                  : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
               }`}
             >
               <h3 className="font-semibold mb-3 flex items-center gap-2">
@@ -501,10 +513,10 @@ export default function ForumPage() {
 
             {/* Quick Links */}
             <div
-              className={`rounded-xl p-4 ${
+              className={`rounded-2xl p-5 transition-all duration-300 ${
                 theme === 'dark'
-                  ? 'bg-gray-900/50 border border-gray-800'
-                  : 'bg-white border border-gray-200'
+                  ? 'bg-gray-900/50 border border-gray-800 hover:border-gray-700'
+                  : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
               }`}
             >
               <h3 className="font-semibold mb-3">Quick Links</h3>
