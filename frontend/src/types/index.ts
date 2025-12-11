@@ -18,6 +18,7 @@ export interface ConsoleOutput {
 export interface User {
   name: string;
   email: string;
+  role?: string;
 }
 
 // App props passed to main components

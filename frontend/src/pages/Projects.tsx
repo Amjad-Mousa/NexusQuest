@@ -5,7 +5,7 @@ import { FolderOpen, Plus, Trash2, Code, Calendar, FileCode, Home, ArrowRight, U
 import * as projectService from '../services/projectService';
 import type { Project } from '../services/projectService';
 import { useTheme } from '../context/ThemeContext';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 
 interface ProjectsProps {
     user: { name: string; email: string; avatarImage?: string } | null;
@@ -115,7 +115,7 @@ export function Projects({ user, onLogout }: ProjectsProps) {
     return (
         <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100'}`}>
             {/* User Sidebar */}
-            <UserSidebar
+            <UserSidePanel
                 user={user}
                 onLogout={onLogout}
                 isOpen={showSidePanel}

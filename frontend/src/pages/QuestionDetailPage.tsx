@@ -14,7 +14,7 @@ import {
   Answer,
 } from '../services/forumService';
 import { NotificationsBell } from '../components/NotificationsBell';
-import { UserSidebar } from '../components/UserSidebar';
+import { UserSidePanel } from '../components/UserSidePanel';
 import { Button } from '../components/ui/button';
 import Editor from '@monaco-editor/react';
 import {
@@ -305,7 +305,7 @@ export default function QuestionDetailPage() {
       </header>
 
       {/* User Sidebar */}
-      <UserSidebar
+      <UserSidePanel
         user={storedUser}
         onLogout={handleLogout}
         isOpen={showSidebar}
