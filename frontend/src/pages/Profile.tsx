@@ -7,6 +7,7 @@ import { ProfileHeader, ProfileCard, StatsGrid, ProfileTabs, EditProfileModal } 
 import { getUserStats, getMyProgress, TaskProgress } from '../services/taskService';
 import { getMyLeaderboardRank } from '../services/userService';
 import { getDailyChallengeStats } from '../services/dailyChallengeService';
+import { getGamificationProfile, GamificationProfile } from '../services/gamificationService';
 
 interface ProfileProps {
   user: { name: string; email: string } | null;
@@ -29,21 +30,24 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const [completedTasks, setCompletedTasks] = useState<TaskProgress[]>([]);
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
+  const [gamificationProfile, setGamificationProfile] = useState<GamificationProfile | null>(null);
 
   // Load real stats from API
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const [stats, completed, leaderboard, dailyStats] = await Promise.all([
+        const [stats, completed, leaderboard, dailyStats, gamification] = await Promise.all([
           getUserStats(),
           getMyProgress('completed'),
           getMyLeaderboardRank(),
           getDailyChallengeStats(),
+          getGamificationProfile(),
         ]);
 
         setTotalPoints(stats.totalPoints);
         setCompletedCount(stats.completedTasks);
         setCompletedTasks(completed);
+        setGamificationProfile(gamification);
 
         if (leaderboard && typeof leaderboard.rank === 'number') {
           setGlobalRank(leaderboard.rank);
@@ -111,14 +115,14 @@ export function Profile({ user, onLogout }: ProfileProps) {
 
 
 
-  // Mock data
+  // Profile data with real gamification
   const profileData = {
     joinDate: 'January 2024',
     location: 'Amman, Jordan',
     bio: 'Passionate developer learning to code and solve problems',
-    level: 12,
-    experience: 2450,
-    nextLevelXP: 3000,
+    level: gamificationProfile?.level || 1,
+    experience: gamificationProfile?.xpProgress || 0,
+    nextLevelXP: gamificationProfile?.xpNeeded || 100,
     github: 'github.com/username',
     linkedin: 'linkedin.com/in/username',
     website: 'myportfolio.com'
@@ -131,13 +135,23 @@ export function Profile({ user, onLogout }: ProfileProps) {
     { label: 'Current Streak', value: `${streak} days`, icon: Zap, color: 'blue' }
   ];
 
-  const skills = [
-    { name: 'Python', level: 85, color: 'blue' },
-    { name: 'JavaScript', level: 70, color: 'yellow' },
-    { name: 'C++', level: 60, color: 'purple' },
-    { name: 'Data Structures', level: 75, color: 'green' },
-    { name: 'Algorithms', level: 65, color: 'red' }
-  ];
+  // Map real skills from gamification profile
+  const getCategoryColor = (category: string) => {
+    const colors: Record<string, string> = {
+      python: 'blue',
+      javascript: 'yellow',
+      java: 'red',
+      cpp: 'purple',
+      general: 'green'
+    };
+    return colors[category] || 'gray';
+  };
+
+  const skills = gamificationProfile?.skills.map(skill => ({
+    name: skill.name,
+    level: Math.min(100, Math.floor((skill.xp / (skill.level * 100)) * 100)),
+    color: getCategoryColor(skill.category)
+  })) || [];
 
   // Generate recent activity from completed tasks
   const recentActivity = completedTasks.slice(0, 4).map((progress, index) => {
@@ -159,14 +173,14 @@ export function Profile({ user, onLogout }: ProfileProps) {
     };
   });
 
-  const achievements = [
-    { id: 1, title: 'First Steps', description: 'Solve your first problem', earned: true, icon: '🎯' },
-    { id: 2, title: 'Speed Demon', description: 'Solve 5 problems in one day', earned: true, icon: '⚡' },
-    { id: 3, title: 'Week Warrior', description: 'Maintain 7-day streak', earned: true, icon: '🔥' },
-    { id: 4, title: 'Century Club', description: 'Solve 100 problems', earned: false, icon: '💯' },
-    { id: 5, title: 'Language Master', description: 'Master 3 languages', earned: false, icon: '🌟' },
-    { id: 6, title: 'Code Legend', description: 'Reach level 50', earned: false, icon: '👑' }
-  ];
+  // Map real achievements from gamification profile
+  const achievements = gamificationProfile?.achievements.map((ach, index) => ({
+    id: index + 1,
+    title: ach.title,
+    description: ach.description,
+    earned: true,
+    icon: ach.icon
+  })) || [];
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-50 via-white to-gray-50'}`}>

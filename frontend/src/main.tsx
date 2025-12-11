@@ -31,6 +31,7 @@ import EditQuestionPage from './pages/EditQuestionPage.tsx'
 
 import { ThemeProvider } from './context/ThemeContext.tsx'
 import { CollaborationProvider } from './context/CollaborationContext.tsx'
+import { GamificationToastContainer } from './components/GamificationToast.tsx'
 import './index.css'
 
 function Root() {
@@ -56,6 +57,7 @@ function Root() {
 
   return (
     <BrowserRouter>
+      <GamificationToastContainer />
       <Routes>
         <Route path="/" element={getDefaultRoute()} />
         <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />

@@ -5,6 +5,8 @@ import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, 
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
+import { getGamificationProfile } from '../services/gamificationService';
+import { checkGamificationUpdates, storeGamificationState, getStoredGamificationState } from '../services/gamificationEvents';
 import { UserSidePanel } from '@/components/UserSidePanel';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { DailyChallenge } from '@/components/DailyChallenge';
@@ -114,18 +116,19 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [userStats, setUserStats] = useState<UserStats>({ totalPoints: 0, completedTasks: 0, startedTasks: 0 });
   const [globalRank, setGlobalRank] = useState<number | null>(null);
   const [streak, setStreak] = useState(0);
-  const [badgesCount, setBadgesCount] = useState(0);
+  const [achievementsCount, setAchievementsCount] = useState(0);
 
   // Load user's task progress and stats
   useEffect(() => {
     const loadProgress = async () => {
       try {
-        const [progress, completed, stats, dailyStats, leaderboard] = await Promise.all([
+        const [progress, completed, stats, dailyStats, leaderboard, gamification] = await Promise.all([
           getMyProgress('started'),
           getMyProgress('completed'),
           getUserStats(),
           getDailyChallengeStats(),
           getMyLeaderboardRank(),
+          getGamificationProfile(),
         ]);
 
         setMyTaskProgress(progress.slice(0, 4)); // Show first 4 in-progress
@@ -142,20 +145,35 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           setGlobalRank(null);
         }
 
-        const points = stats.totalPoints;
-        const completedCount = stats.completedTasks;
-        const currentStreak = dailyStats ? (dailyStats.currentStreak || 0) : 0;
+        // Set achievements count from gamification profile
+        setAchievementsCount(gamification.totalAchievements);
 
-        let computedBadges = 0;
-        if (points >= 100) computedBadges++;
-        if (points >= 500) computedBadges++;
-        if (points >= 1000) computedBadges++;
-        if (completedCount >= 5) computedBadges++;
-        if (completedCount >= 20) computedBadges++;
-        if (currentStreak >= 3) computedBadges++;
-        if (currentStreak >= 7) computedBadges++;
+        // Check for level ups and new achievements
+        const stored = getStoredGamificationState();
+        if (stored.level && stored.achievements) {
+          // Check if level increased
+          if (gamification.level > stored.level) {
+            // Trigger level up notification (will be shown by toast container)
+            // The notification will be triggered automatically by checkGamificationUpdates
+          }
 
-        setBadgesCount(computedBadges);
+          // Check for new achievements
+          const currentAchievementIds = gamification.achievements.map((a: any) => a.id);
+          const newAchievements = gamification.achievements.filter(
+            (a: any) => !stored.achievements.includes(a.id)
+          );
+
+          // Notifications will be triggered by the event system
+        }
+
+        // Store current state for next comparison
+        storeGamificationState(
+          gamification.level,
+          gamification.achievements.map((a: any) => a.id)
+        );
+
+        // Trigger notifications for any changes
+        await checkGamificationUpdates(stored.level, stored.achievements);
       } catch (err) {
         console.error('Failed to load task progress or stats:', err);
       } finally {
@@ -448,10 +466,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
             <div className={`text-3xl font-bold mb-1 ${
               theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>{badgesCount}</div>
+            }`}>{achievementsCount}</div>
             <div className={`text-sm ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-            }`}>Badges Earned</div>
+            }`}>Achievements</div>
           </div>
         </div>
 
