@@ -147,9 +147,8 @@ CollaborationSessionSchema.index({ isActive: 1, lastActivity: -1 });
 CollaborationSessionSchema.index({ owner: 1, isActive: 1 });
 
 // Update lastActivity on save
-CollaborationSessionSchema.pre('save', function (next) {
+CollaborationSessionSchema.pre('save', function () {
   this.lastActivity = new Date();
-  next();
 });
 
 export const CollaborationSession = mongoose.model<ICollaborationSession>(

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { useCollaboration } from '../context/CollaborationContext';
 import { useTheme } from '../context/ThemeContext';
-import { Users, MessageSquare, Settings, X, Send, UserX } from 'lucide-react';
+import { getStoredUser } from '../services/authService';
+import { Users, MessageSquare, X, Send } from 'lucide-react';
 import { Button } from './ui/button';
 import type { editor } from 'monaco-editor';
 
@@ -50,11 +51,12 @@ export default function CollaborativeEditor({
     editor.onDidChangeCursorPosition((e) => {
       if (!currentSession || isRemoteChange.current) return;
 
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = getStoredUser();
+      if (!user) return;
       sendCursorMove({
         sessionId: currentSession.sessionId,
         userId: user.id,
-        username: user.username,
+        username: user.name,
         cursor: {
           line: e.position.lineNumber,
           column: e.position.column,
@@ -74,11 +76,12 @@ export default function CollaborativeEditor({
 
     if (!currentSession) return;
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = getStoredUser();
+    if (!user) return;
     sendCodeChange({
       sessionId: currentSession.sessionId,
       userId: user.id,
-      username: user.username,
+      username: user.name,
       changes: {
         from: { line: 0, ch: 0 },
         to: { line: 0, ch: 0 },
@@ -114,7 +117,7 @@ export default function CollaborativeEditor({
 
       // Add new cursor decorations for all participants
       const newDecorations = participants
-        .filter((p) => p.cursor && p.userId !== JSON.parse(localStorage.getItem('user') || '{}').id)
+        .filter((p) => p.cursor && p.userId !== getStoredUser()?.id)
         .map((p) => ({
           range: new (window as any).monaco.Range(
             p.cursor!.line,
