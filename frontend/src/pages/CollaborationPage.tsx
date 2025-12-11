@@ -6,6 +6,8 @@ import { getStoredUser } from '../services/authService';
 import { CollaborationSession, CreateSessionData } from '../types/collaboration';
 import CollaborativeEditor from '../components/CollaborativeEditor';
 import { useTheme } from '../context/ThemeContext';
+import { NotificationsBell } from '../components/NotificationsBell';
+import { UserSidebar } from '../components/UserSidebar';
 import {
   Plus,
   Users,
@@ -15,7 +17,10 @@ import {
   Loader2,
   Play,
   Code,
+  Code2,
   X,
+  User,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -24,6 +29,9 @@ export default function CollaborationPage() {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
   const { joinSession, currentSession } = useCollaboration();
+  const storedUser = getStoredUser();
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const [sessions, setSessions] = useState<CollaborationSession[]>([]);
   const [publicSessions, setPublicSessions] = useState<CollaborationSession[]>([]);
@@ -42,6 +50,25 @@ export default function CollaborationPage() {
 
   useEffect(() => {
     loadSessions();
+  }, []);
+
+  // Load user avatar
+  useEffect(() => {
+    const loadUserAvatar = async () => {
+      try {
+        const token = localStorage.getItem('nexusquest-token');
+        const response = await fetch('http://localhost:9876/api/auth/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (data.success && data.user) {
+          setAvatarImage(data.user.avatarImage || null);
+        }
+      } catch (error) {
+        console.error('Failed to load user avatar:', error);
+      }
+    };
+    loadUserAvatar();
   }, []);
 
   useEffect(() => {
@@ -128,6 +155,12 @@ export default function CollaborationPage() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('nexusquest-token');
+    localStorage.removeItem('nexusquest-user');
+    navigate('/');
+  };
+
   if (currentSession) {
     return (
       <div className="h-screen">
@@ -143,11 +176,70 @@ export default function CollaborationPage() {
   return (
     <div
       className={`min-h-screen ${
-        theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'
+        theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100 text-gray-900'
       }`}
     >
+      {/* Top Header/Navbar */}
+      <header className={`border-b sticky top-0 z-50 ${
+        theme === 'dark' 
+          ? 'border-gray-800 bg-gray-950/80' 
+          : 'border-gray-200 bg-white/80'
+      } backdrop-blur-md`}>
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className={`flex items-center gap-2 ${
+                theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+              } transition-colors`}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Code2 className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-500 bg-clip-text text-transparent">
+                NexusQuest
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <NotificationsBell theme={theme} />
+            <Button
+              onClick={() => setShowSidebar(true)}
+              variant="outline"
+              className={`flex items-center gap-2 ${
+                theme === 'dark'
+                  ? 'border-gray-700 text-gray-300 hover:bg-gray-800'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {avatarImage ? (
+                <img 
+                  src={avatarImage} 
+                  alt="Avatar" 
+                  className="w-6 h-6 rounded-full object-cover" 
+                />
+              ) : (
+                <User className="w-4 h-4" />
+              )}
+              {storedUser?.name || 'Profile'}
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* User Sidebar */}
+      <UserSidebar
+        user={storedUser}
+        onLogout={handleLogout}
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+      />
+
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Page Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold mb-2">Live Collaboration</h1>

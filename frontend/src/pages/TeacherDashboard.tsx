@@ -179,6 +179,9 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
             <Button onClick={() => setShowQuizModal(true)} className="bg-purple-600 hover:bg-purple-700">
               <Plus className="w-4 h-4 mr-2" /> Create Quiz
             </Button>
+            <Button onClick={() => navigate('/collaboration')} className="bg-orange-600 hover:bg-orange-700">
+              <Users className="w-4 h-4 mr-2" /> Live Collaboration
+            </Button>
 
             {/* Chat Button */}
             <Button
