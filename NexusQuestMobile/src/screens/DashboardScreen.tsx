@@ -53,12 +53,6 @@ export default function DashboardScreen({ navigation }: any) {
           >
             <Text style={styles.iconText}>👤</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('Chat')} 
-            style={styles.iconButton}
-          >
-            <Text style={styles.iconText}>💬</Text>
-          </TouchableOpacity>
         </View>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={toggleTheme} style={styles.themeButton}>

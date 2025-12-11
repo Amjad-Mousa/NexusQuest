@@ -15,7 +15,7 @@ export default function BottomNavigation({ navigation, activeRoute }: BottomNavi
     { name: 'Dashboard', icon: '🏠', label: 'Home' },
     { name: 'Tutorials', icon: '📚', label: 'Tutorials' },
     { name: 'Quizzes', icon: '📝', label: 'Quizzes' },
-    { name: 'Chat', icon: '💬', label: 'Forum' },
+    { name: 'Chat', icon: '💬', label: 'Chat' },
     { name: 'Leaderboard', icon: '🏆', label: 'Rank' },
   ];
 
