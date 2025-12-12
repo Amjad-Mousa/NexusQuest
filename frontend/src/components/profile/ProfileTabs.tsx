@@ -1,4 +1,5 @@
-import { Target, Clock, Award, Settings, CheckCircle } from 'lucide-react';
+import { Target, Clock, Award, Settings, CheckCircle, Plus, X } from 'lucide-react';
+import { useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { getStatColor } from './StatsGrid';
 
@@ -34,10 +35,15 @@ interface ProfileTabsProps {
   showSettings?: boolean;
   isPublic?: boolean;
   onPrivacyChange?: (isPublic: boolean) => void;
+  customSkills?: string[];
+  onAddSkill?: (skill: string) => void;
+  onRemoveSkill?: (skill: string) => void;
 }
 
-export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, achievements, showSettings = true, isPublic = true, onPrivacyChange }: ProfileTabsProps) {
+export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, achievements, showSettings = true, isPublic = true, onPrivacyChange, customSkills = [], onAddSkill, onRemoveSkill }: ProfileTabsProps) {
   const { theme } = useTheme();
+  const [newSkill, setNewSkill] = useState('');
+  const [addingSkill, setAddingSkill] = useState(false);
 
   const tabs = (showSettings
     ? (['overview', 'activity', 'achievements', 'settings'] as const)
@@ -81,6 +87,24 @@ export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, ac
                     </div>
                   </div>
                 ))}
+                
+                {customSkills.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-gray-700">
+                    <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mb-3 uppercase tracking-wide`}>
+                      Additional Skills
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {customSkills.map((skill, index) => (
+                        <div
+                          key={index}
+                          className={`px-3 py-1.5 rounded-full ${theme === 'dark' ? 'bg-blue-900/30 border-blue-700 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'} border text-sm font-medium`}
+                        >
+                          {skill}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -161,6 +185,73 @@ export function ProfileTabs({ activeTab, onTabChange, skills, recentActivity, ac
                   </label>
                   <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'} mt-2`}>
                     {isPublic ? 'Your profile is visible to everyone' : 'Your profile is private and only visible to you'}
+                  </p>
+                </div>
+
+                <div className={`${theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4`}>
+                  <h4 className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'} mb-2`}>Custom Skills</h4>
+                  <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'} mb-3`}>Add languages, frameworks, and technologies you know</p>
+                  
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={newSkill}
+                      onChange={(e) => setNewSkill(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && newSkill.trim()) {
+                          setAddingSkill(true);
+                          onAddSkill?.(newSkill.trim());
+                          setNewSkill('');
+                          setTimeout(() => setAddingSkill(false), 500);
+                        }
+                      }}
+                      placeholder="e.g., React, Python, Docker..."
+                      maxLength={50}
+                      className={`flex-1 px-3 py-2 rounded-lg border ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                    <button
+                      onClick={() => {
+                        if (newSkill.trim()) {
+                          setAddingSkill(true);
+                          onAddSkill?.(newSkill.trim());
+                          setNewSkill('');
+                          setTimeout(() => setAddingSkill(false), 500);
+                        }
+                      }}
+                      disabled={!newSkill.trim() || addingSkill}
+                      className={`px-4 py-2 rounded-lg ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {customSkills.length === 0 ? (
+                      <p className={`text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'} italic`}>
+                        No custom skills added yet. Add your first skill above!
+                      </p>
+                    ) : (
+                      customSkills.map((skill, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${theme === 'dark' ? 'bg-blue-900/30 border-blue-700' : 'bg-blue-50 border-blue-200'} border`}
+                        >
+                          <span className={`text-sm ${theme === 'dark' ? 'text-blue-300' : 'text-blue-700'}`}>
+                            {skill}
+                          </span>
+                          <button
+                            onClick={() => onRemoveSkill?.(skill)}
+                            className={`${theme === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'} mt-2`}>
+                    {customSkills.length}/20 skills added
                   </p>
                 </div>
               </div>

@@ -26,6 +26,7 @@ export interface GamificationProfile {
     xpProgress: number;
     xpNeeded: number;
     xpPercentage: number;
+    customSkills: string[];
     skills: Skill[];
     achievements: Achievement[];
     totalAchievements: number;
@@ -98,4 +99,56 @@ export async function getAllAchievementsWithStatus(): Promise<AchievementWithSta
             unlockedAt: unlocked?.unlockedAt,
         };
     });
+}
+
+export async function addCustomSkill(skill: string): Promise<string[]> {
+    const token = localStorage.getItem('nexusquest-token');
+    const response = await fetch(`${API_URL}/gamification/profile/skills`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ skill }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to add skill');
+    }
+
+    return data.customSkills;
+}
+
+export async function removeCustomSkill(skill: string): Promise<string[]> {
+    const token = localStorage.getItem('nexusquest-token');
+    const response = await fetch(`${API_URL}/gamification/profile/skills/${encodeURIComponent(skill)}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to remove skill');
+    }
+
+    return data.customSkills;
+}
+
+export async function getCustomSkills(): Promise<string[]> {
+    const token = localStorage.getItem('nexusquest-token');
+    const response = await fetch(`${API_URL}/gamification/profile/skills`, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch skills');
+    }
+
+    return data.customSkills;
 }

@@ -15,6 +15,7 @@ export interface IUser extends Document {
   xp: number;
   level: number;
   isPublic: boolean;
+  customSkills: string[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -74,6 +75,10 @@ const userSchema = new Schema<IUser>(
     isPublic: {
       type: Boolean,
       default: true,
+    },
+    customSkills: {
+      type: [String],
+      default: [],
     },
   },
   {
