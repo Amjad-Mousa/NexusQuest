@@ -157,5 +157,28 @@ router.put('/:taskId/complete', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Get another user's task progress (for viewing their profile)
+router.get('/user/:userId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.query;
+
+    const filter: Record<string, unknown> = { userId };
+    if (status) filter.status = status;
+
+    const progress = await UserTaskProgress.find(filter)
+      .populate({
+        path: 'taskId',
+        populate: { path: 'createdBy', select: 'name email' }
+      })
+      .sort({ updatedAt: -1 })
+      .limit(10); // Limit to recent 10 activities
+
+    res.json({ success: true, data: progress });
+  } catch {
+    res.status(500).json({ success: false, error: 'Failed to fetch user progress' });
+  }
+});
+
 export default router;
 

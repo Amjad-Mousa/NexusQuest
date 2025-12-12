@@ -117,14 +117,48 @@ export interface TaskProgress {
   completedAt?: string;
 }
 
-export async function getMyProgress(status?: TaskStatus): Promise<TaskProgress[]> {
-  const params = new URLSearchParams();
-  if (status) params.append('status', status);
+export async function getMyProgress(status?: string): Promise<TaskProgress[]> {
+  const token = localStorage.getItem('nexusquest-token');
+  if (!token) return [];
 
-  const res = await authFetch(`${API_URL}/api/task-progress/my-progress?${params.toString()}`);
-  const data = await res.json();
-  if (!data.success) throw new Error(data.error);
-  return data.data;
+  const url = status
+    ? `${API_URL}/api/task-progress/my-progress?status=${status}`
+    : `${API_URL}/api/task-progress/my-progress`;
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch progress');
+  }
+
+  const data = await response.json();
+  return data.data || [];
+}
+
+export async function getUserProgress(userId: string, status?: string): Promise<TaskProgress[]> {
+  const token = localStorage.getItem('nexusquest-token');
+  if (!token) return [];
+
+  const url = status
+    ? `${API_URL}/api/task-progress/user/${userId}?status=${status}`
+    : `${API_URL}/api/task-progress/user/${userId}`;
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch user progress');
+  }
+
+  const data = await response.json();
+  return data.data || [];
 }
 
 export async function getTaskProgress(taskId: string): Promise<TaskProgress | null> {

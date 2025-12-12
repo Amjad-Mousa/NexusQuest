@@ -7,7 +7,8 @@ import { UserSidePanel } from '../components/UserSidePanel';
 import { ProfileHeader, ProfileCard, StatsGrid, ProfileTabs } from '../components/profile';
 import { Star, CheckCircle, Trophy, Zap, Lock } from 'lucide-react';
 import { getUserDailyChallengeStats } from '../services/dailyChallengeService';
-import { getGamificationProfile, GamificationProfile, getAllAchievementsWithStatus, AchievementWithStatus } from '../services/gamificationService';
+import { getGamificationProfile, GamificationProfile, getAvailableAchievements, AchievementWithStatus } from '../services/gamificationService';
+import { getUserProgress, TaskProgress } from '../services/taskService';
 
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -30,6 +31,7 @@ export function UserProfilePage() {
   const [gamificationProfile, setGamificationProfile] = useState<GamificationProfile | null>(null);
   const [allAchievements, setAllAchievements] = useState<AchievementWithStatus[]>([]);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [completedTasks, setCompletedTasks] = useState<TaskProgress[]>([]);
 
   useEffect(() => {
     if (!viewer) {
@@ -72,12 +74,24 @@ export function UserProfilePage() {
 
         // Try to fetch gamification profile
         try {
-          const gamification = await getGamificationProfile(userId);
+          const [gamification, availableAchievements, userTasks] = await Promise.all([
+            getGamificationProfile(userId),
+            getAvailableAchievements(),
+            getUserProgress(userId, 'completed'),
+          ]);
           setGamificationProfile(gamification);
           setIsPrivate(false);
+          setCompletedTasks(userTasks);
 
-          // Fetch achievements for this user
-          const achievementsWithStatus = await getAllAchievementsWithStatus();
+          // Map available achievements with the target user's unlock status
+          const achievementsWithStatus: AchievementWithStatus[] = availableAchievements.map(achievement => {
+            const unlocked = gamification.achievements.find(a => a.id === achievement.id);
+            return {
+              ...achievement,
+              earned: !!unlocked,
+              unlockedAt: unlocked?.unlockedAt,
+            };
+          });
           setAllAchievements(achievementsWithStatus);
         } catch (gamError: any) {
           // If profile is private, we'll get an error
@@ -205,8 +219,25 @@ export function UserProfilePage() {
     color: getCategoryColor(skill.category)
   })) || [];
 
-  // Recent activity - empty for now since we're viewing another user's profile
-  const recentActivity: { id: number; type: string; title: string; time: string; points: number }[] = [];
+  // Recent activity from completed tasks
+  const recentActivity = completedTasks.slice(0, 4).map((progress, index) => {
+    const task = progress.taskId;
+    const completedDate = progress.completedAt ? new Date(progress.completedAt) : new Date();
+    const now = new Date();
+    const diffMs = now.getTime() - completedDate.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    const timeAgo = diffDays > 0 ? `${diffDays} day${diffDays > 1 ? 's' : ''} ago` : 
+                   diffHours > 0 ? `${diffHours} hour${diffHours > 1 ? 's' : ''} ago` : 'Just now';
+    
+    return {
+      id: index + 1,
+      type: 'solved' as const,
+      title: typeof task === 'object' ? task.title : 'Completed Task',
+      time: timeAgo,
+      points: typeof task === 'object' ? task.points : 0
+    };
+  });
 
   const achievements = allAchievements.map((ach, index) => ({
     id: index + 1,
@@ -262,6 +293,7 @@ export function UserProfilePage() {
           recentActivity={recentActivity}
           achievements={achievements}
           showSettings={false}
+          customSkills={gamificationProfile?.customSkills || []}
         />
       </div>
     </div>
