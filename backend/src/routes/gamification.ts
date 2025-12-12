@@ -29,12 +29,18 @@ const calculateLevel = (totalXP: number): number => {
 /**
  * GET /api/gamification/profile
  * Get user's gamification profile (XP, level, skills, achievements)
+ * Respects privacy settings - only shows public profiles to other users
  */
 router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.userId;
+        const { targetUserId } = req.query;
 
-        const user = await User.findById(userId);
+        // If viewing another user's profile, check privacy settings
+        const viewingUserId = targetUserId ? targetUserId.toString() : userId;
+        const isOwnProfile = viewingUserId === userId;
+
+        const user = await User.findById(viewingUserId);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -42,8 +48,20 @@ router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
             });
         }
 
-        const skills = await UserSkill.find({ userId }).sort({ totalXp: -1 });
-        const achievements = await Achievement.find({ userId }).sort({ unlockedAt: -1 });
+        // Check privacy settings - if profile is private and not own profile, return limited info
+        if (!user.isPublic && !isOwnProfile) {
+            return res.status(403).json({
+                success: false,
+                error: 'This profile is private',
+                profile: {
+                    name: user.name,
+                    isPublic: false,
+                },
+            });
+        }
+
+        const skills = await UserSkill.find({ userId: viewingUserId }).sort({ totalXp: -1 });
+        const achievements = await Achievement.find({ userId: viewingUserId }).sort({ unlockedAt: -1 });
 
         // Calculate current level progress
         const currentLevel = user.level;
@@ -55,12 +73,15 @@ router.get('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({
             success: true,
             profile: {
+                name: user.name,
                 xp: user.xp,
                 totalXp: user.xp,
                 level: user.level,
                 xpProgress,
                 xpNeeded,
                 xpPercentage: Math.floor((xpProgress / xpNeeded) * 100),
+                isPublic: user.isPublic,
+                customSkills: user.customSkills || [],
                 skills: skills.map(skill => ({
                     name: skill.skillName,
                     level: skill.level,
@@ -228,18 +249,20 @@ router.post('/unlock-achievement', authMiddleware, async (req: AuthRequest, res:
 router.get('/available-achievements', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const achievements = [
-            { id: 'first_task', title: 'First Steps', description: 'Complete your first task', icon: '🎯', category: 'tasks', requirement: 1 },
-            { id: 'task_master_5', title: 'Task Master', description: 'Complete 5 tasks', icon: '⭐', category: 'tasks', requirement: 5 },
-            { id: 'task_legend_10', title: 'Task Legend', description: 'Complete 10 tasks', icon: '🏆', category: 'tasks', requirement: 10 },
-            { id: 'first_quiz', title: 'Quiz Beginner', description: 'Complete your first quiz', icon: '📝', category: 'quizzes', requirement: 1 },
-            { id: 'quiz_expert_5', title: 'Quiz Expert', description: 'Complete 5 quizzes', icon: '🎓', category: 'quizzes', requirement: 5 },
-            { id: 'first_tutorial', title: 'Learning Journey', description: 'Complete your first tutorial', icon: '📚', category: 'tutorials', requirement: 1 },
-            { id: 'tutorial_scholar_5', title: 'Tutorial Scholar', description: 'Complete 5 tutorials', icon: '🧠', category: 'tutorials', requirement: 5 },
-            { id: 'streak_3', title: 'On Fire!', description: '3 day streak', icon: '🔥', category: 'streak', requirement: 3 },
-            { id: 'streak_7', title: 'Week Warrior', description: '7 day streak', icon: '💪', category: 'streak', requirement: 7 },
-            { id: 'social_butterfly', title: 'Social Butterfly', description: 'Send 10 messages', icon: '💬', category: 'social', requirement: 10 },
-            { id: 'level_5', title: 'Rising Star', description: 'Reach level 5', icon: '⭐', category: 'special', requirement: 5 },
-            { id: 'level_10', title: 'Elite Coder', description: 'Reach level 10', icon: '👑', category: 'special', requirement: 10 },
+            { id: 'first_task', title: 'First Steps', description: 'Complete your first task', icon: '🎯', category: 'tasks', requirement: 1, hidden: false },
+            { id: 'task_master_5', title: 'Task Master', description: 'Complete 5 tasks', icon: '⭐', category: 'tasks', requirement: 5, hidden: false },
+            { id: 'task_legend_10', title: 'Task Legend', description: 'Complete 10 tasks', icon: '🏆', category: 'tasks', requirement: 10, hidden: false },
+            { id: 'first_project', title: 'Project Pioneer', description: 'Create your first project', icon: '🚀', category: 'projects', requirement: 1, hidden: false },
+            { id: 'project_creator_5', title: 'Project Creator', description: 'Create 5 projects', icon: '📁', category: 'projects', requirement: 5, hidden: true },
+            { id: 'project_master_10', title: 'Project Master', description: 'Create 10 projects', icon: '🗂️', category: 'projects', requirement: 10, hidden: true },
+            { id: 'polyglot', title: 'Polyglot Programmer', description: 'Create a project in all available languages', icon: '🌐', category: 'special', requirement: 4, hidden: true },
+            { id: 'first_quiz', title: 'Quiz Beginner', description: 'Complete your first quiz', icon: '📝', category: 'quizzes', requirement: 1, hidden: false },
+            { id: 'quiz_expert_5', title: 'Quiz Expert', description: 'Complete 5 quizzes', icon: '🎓', category: 'quizzes', requirement: 5, hidden: true },
+            { id: 'streak_3', title: 'On Fire!', description: '3 day streak', icon: '🔥', category: 'streak', requirement: 3, hidden: true },
+            { id: 'streak_7', title: 'Week Warrior', description: '7 day streak', icon: '💪', category: 'streak', requirement: 7, hidden: true },
+            { id: 'social_butterfly', title: 'Social Butterfly', description: 'Send 10 messages', icon: '💬', category: 'social', requirement: 10, hidden: true },
+            { id: 'level_5', title: 'Rising Star', description: 'Reach level 5', icon: '⭐', category: 'special', requirement: 5, hidden: false },
+            { id: 'level_10', title: 'Elite Coder', description: 'Reach level 10', icon: '👑', category: 'special', requirement: 10, hidden: false },
         ];
 
         res.json({
@@ -251,6 +274,189 @@ router.get('/available-achievements', authMiddleware, async (req: AuthRequest, r
         res.status(500).json({
             success: false,
             error: 'Failed to fetch available achievements',
+        });
+    }
+});
+
+/**
+ * PUT /api/gamification/profile/settings
+ * Update user profile settings (privacy, etc.)
+ */
+router.put('/profile/settings', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.userId;
+        const { isPublic } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found',
+            });
+        }
+
+        // Update privacy setting
+        if (typeof isPublic === 'boolean') {
+            user.isPublic = isPublic;
+        }
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Profile settings updated successfully',
+            settings: {
+                isPublic: user.isPublic,
+            },
+        });
+    } catch (error) {
+        console.error('Error updating profile settings:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update profile settings',
+        });
+    }
+});
+
+/**
+ * POST /api/gamification/profile/skills
+ * Add a custom skill to user profile
+ */
+router.post('/profile/skills', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.userId;
+        const { skill } = req.body;
+
+        if (!skill || typeof skill !== 'string' || skill.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Skill name is required',
+            });
+        }
+
+        const trimmedSkill = skill.trim();
+        if (trimmedSkill.length > 50) {
+            return res.status(400).json({
+                success: false,
+                error: 'Skill name cannot exceed 50 characters',
+            });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found',
+            });
+        }
+
+        // Check if skill already exists (case-insensitive)
+        const skillExists = user.customSkills.some(
+            s => s.toLowerCase() === trimmedSkill.toLowerCase()
+        );
+
+        if (skillExists) {
+            return res.status(400).json({
+                success: false,
+                error: 'Skill already exists',
+            });
+        }
+
+        // Limit to 20 custom skills
+        if (user.customSkills.length >= 20) {
+            return res.status(400).json({
+                success: false,
+                error: 'Maximum of 20 custom skills allowed',
+            });
+        }
+
+        user.customSkills.push(trimmedSkill);
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Skill added successfully',
+            customSkills: user.customSkills,
+        });
+    } catch (error) {
+        console.error('Error adding custom skill:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to add skill',
+        });
+    }
+});
+
+/**
+ * DELETE /api/gamification/profile/skills/:skill
+ * Remove a custom skill from user profile
+ */
+router.delete('/profile/skills/:skill', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.userId;
+        const { skill } = req.params;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found',
+            });
+        }
+
+        const initialLength = user.customSkills.length;
+        user.customSkills = user.customSkills.filter(
+            s => s.toLowerCase() !== decodeURIComponent(skill).toLowerCase()
+        );
+
+        if (user.customSkills.length === initialLength) {
+            return res.status(404).json({
+                success: false,
+                error: 'Skill not found',
+            });
+        }
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: 'Skill removed successfully',
+            customSkills: user.customSkills,
+        });
+    } catch (error) {
+        console.error('Error removing custom skill:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to remove skill',
+        });
+    }
+});
+
+/**
+ * GET /api/gamification/profile/skills
+ * Get user's custom skills
+ */
+router.get('/profile/skills', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.userId;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found',
+            });
+        }
+
+        res.json({
+            success: true,
+            customSkills: user.customSkills || [],
+        });
+    } catch (error) {
+        console.error('Error fetching custom skills:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch skills',
         });
     }
 });

@@ -6,7 +6,7 @@ export interface IAchievement extends Document {
     title: string;
     description: string;
     icon: string;
-    category: 'tasks' | 'quizzes' | 'tutorials' | 'social' | 'streak' | 'special';
+    category: 'tasks' | 'quizzes' | 'tutorials' | 'projects' | 'social' | 'streak' | 'special';
     unlockedAt: Date;
     progress?: number;
     maxProgress?: number;
@@ -37,7 +37,7 @@ const AchievementSchema = new Schema({
     },
     category: {
         type: String,
-        enum: ['tasks', 'quizzes', 'tutorials', 'social', 'streak', 'special'],
+        enum: ['tasks', 'quizzes', 'tutorials', 'projects', 'social', 'streak', 'special'],
         required: true,
     },
     unlockedAt: {

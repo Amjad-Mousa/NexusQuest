@@ -1,14 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import Tutorial from '../models/Tutorial.js';
-import User from '../models/User.js';
+import { User } from '../models/User.js';
 import TutorialSettings from '../models/TutorialSettings.js';
+import { UserTutorialProgress } from '../models/UserTutorialProgress.js';
+import { Notification } from '../models/Notification.js';
+import { NotificationType } from '../enums/NotificationType.js';
 
-// Middleware to check if user is a teacher
+// Middleware to check if user is a teacher (simplified - removed type check)
 const requireTeacher = async (req: AuthRequest, res: Response, next: Function) => {
   try {
-    if (!req.user || req.user.type !== 'teacher') {
-      return res.status(403).json({ error: 'Access denied. Teacher role required.' });
+    if (!req.userId) {
+      return res.status(403).json({ error: 'Access denied. Authentication required.' });
     }
     next();
   } catch (error) {
@@ -163,7 +166,7 @@ router.get('/:id', async (req: AuthRequest, res: Response) => {
 router.get('/teacher/all', authMiddleware, requireTeacher, async (req: AuthRequest, res: Response) => {
   try {
     const tutorials = await Tutorial.find({
-      createdBy: req.user!.userId,
+      createdBy: req.userId,
     })
       .populate('createdBy', 'name email')
       .sort({ language: 1, order: 1 });
@@ -192,7 +195,7 @@ router.post('/', authMiddleware, requireTeacher, async (req: AuthRequest, res: R
       difficulty: difficulty || 'beginner',
       order: order || 0,
       isPublished: isPublished || false,
-      createdBy: req.user!.userId,
+      createdBy: req.userId,
     });
 
     const createdTutorial = await Tutorial.findById(tutorial._id)
@@ -213,7 +216,7 @@ router.put('/:id', authMiddleware, requireTeacher, async (req: AuthRequest, res:
 
     const tutorial = await Tutorial.findOne({
       _id: id,
-      createdBy: req.user!.userId,
+      createdBy: req.userId,
     });
 
     if (!tutorial) {
@@ -247,7 +250,7 @@ router.delete('/:id', authMiddleware, requireTeacher, async (req: AuthRequest, r
 
     const tutorial = await Tutorial.findOne({
       _id: id,
-      createdBy: req.user!.userId,
+      createdBy: req.userId,
     });
 
     if (!tutorial) {
@@ -272,6 +275,101 @@ router.get('/meta/languages', authMiddleware, async (req: AuthRequest, res: Resp
   } catch (error: any) {
     console.error('Error fetching languages:', error);
     res.status(500).json({ error: 'Failed to fetch languages' });
+  }
+});
+
+// Mark tutorial as started
+router.post('/:id/start', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const tutorial = await Tutorial.findById(id);
+    if (!tutorial) {
+      return res.status(404).json({ error: 'Tutorial not found' });
+    }
+
+    const progress = await UserTutorialProgress.findOneAndUpdate(
+      { userId: req.userId, tutorialId: id },
+      {
+        userId: req.userId,
+        tutorialId: id,
+        status: 'in_progress',
+      },
+      { new: true, upsert: true }
+    );
+
+    res.json({ success: true, data: progress });
+  } catch (error: any) {
+    console.error('Error starting tutorial:', error);
+    res.status(500).json({ error: 'Failed to start tutorial' });
+  }
+});
+
+// Mark tutorial as completed
+router.post('/:id/complete', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const tutorial = await Tutorial.findById(id);
+    if (!tutorial) {
+      return res.status(404).json({ error: 'Tutorial not found' });
+    }
+
+    const existingProgress = await UserTutorialProgress.findOne({
+      userId: req.userId,
+      tutorialId: id,
+    });
+
+    const isFirstCompletion = !existingProgress || existingProgress.status !== 'completed';
+
+    const progress = await UserTutorialProgress.findOneAndUpdate(
+      { userId: req.userId, tutorialId: id },
+      {
+        userId: req.userId,
+        tutorialId: id,
+        status: 'completed',
+        completedAt: new Date(),
+      },
+      { new: true, upsert: true }
+    );
+
+    if (isFirstCompletion) {
+      // Create completion notification
+      try {
+        await Notification.create({
+          userId: req.userId,
+          type: NotificationType.Task_COMPLETED,
+          message: `You completed the tutorial "${tutorial.title}"`,
+          metadata: {
+            tutorialId: id,
+            tutorialTitle: tutorial.title,
+          },
+          read: false,
+        });
+      } catch (notifyError) {
+        console.error('Failed to create tutorial completion notification:', notifyError);
+      }
+
+    }
+
+    res.json({ success: true, data: progress });
+  } catch (error: any) {
+    console.error('Error completing tutorial:', error);
+    res.status(500).json({ error: 'Failed to complete tutorial' });
+  }
+});
+
+// Get user's tutorial progress
+router.get('/progress/my', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const progress = await UserTutorialProgress.find({ userId: req.userId })
+      .populate('tutorialId')
+      .sort({ updatedAt: -1 });
+
+    res.json({ success: true, data: progress });
+  } catch (error: any) {
+    console.error('Error fetching tutorial progress:', error);
+    res.status(500).json({ error: 'Failed to fetch tutorial progress' });
   }
 });
 

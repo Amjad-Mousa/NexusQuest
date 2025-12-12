@@ -7,7 +7,7 @@ import { ProfileHeader, ProfileCard, StatsGrid, ProfileTabs, EditProfileModal } 
 import { getUserStats, getMyProgress, TaskProgress } from '../services/taskService';
 import { getMyLeaderboardRank } from '../services/userService';
 import { getDailyChallengeStats } from '../services/dailyChallengeService';
-import { getGamificationProfile, GamificationProfile, getAllAchievementsWithStatus, AchievementWithStatus } from '../services/gamificationService';
+import { getGamificationProfile, GamificationProfile, getAllAchievementsWithStatus, AchievementWithStatus, addCustomSkill, removeCustomSkill } from '../services/gamificationService';
 
 interface ProfileProps {
   user: { name: string; email: string } | null;
@@ -32,6 +32,8 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const [streak, setStreak] = useState(0);
   const [gamificationProfile, setGamificationProfile] = useState<GamificationProfile | null>(null);
   const [allAchievements, setAllAchievements] = useState<AchievementWithStatus[]>([]);
+  const [isPublic, setIsPublic] = useState(true);
+  const [customSkills, setCustomSkills] = useState<string[]>([]);
 
   // Load real stats from API
   useEffect(() => {
@@ -51,6 +53,8 @@ export function Profile({ user, onLogout }: ProfileProps) {
         setCompletedTasks(completed);
         setGamificationProfile(gamification);
         setAllAchievements(achievementsWithStatus);
+        setIsPublic(gamification.isPublic ?? true);
+        setCustomSkills(gamification.customSkills || []);
 
         if (leaderboard && typeof leaderboard.rank === 'number') {
           setGlobalRank(leaderboard.rank);
@@ -67,6 +71,51 @@ export function Profile({ user, onLogout }: ProfileProps) {
     };
     loadStats();
   }, []);
+
+  const handlePrivacyChange = async (newIsPublic: boolean) => {
+    try {
+      const token = localStorage.getItem('nexusquest-token');
+      const response = await fetch('http://localhost:9876/api/gamification/profile/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isPublic: newIsPublic }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setIsPublic(newIsPublic);
+      } else {
+        console.error('Failed to update privacy settings:', data.error);
+        alert('Failed to update privacy settings');
+      }
+    } catch (error) {
+      console.error('Error updating privacy settings:', error);
+      alert('Failed to update privacy settings');
+    }
+  };
+
+  const handleAddSkill = async (skill: string) => {
+    try {
+      const updatedSkills = await addCustomSkill(skill);
+      setCustomSkills(updatedSkills);
+    } catch (error: any) {
+      console.error('Error adding skill:', error);
+      alert(error.message || 'Failed to add skill');
+    }
+  };
+
+  const handleRemoveSkill = async (skill: string) => {
+    try {
+      const updatedSkills = await removeCustomSkill(skill);
+      setCustomSkills(updatedSkills);
+    } catch (error: any) {
+      console.error('Error removing skill:', error);
+      alert(error.message || 'Failed to remove skill');
+    }
+  };
 
   const saveProfileChanges = async () => {
     if (editPassword && editPassword !== editConfirmPassword) {
@@ -183,6 +232,7 @@ export function Profile({ user, onLogout }: ProfileProps) {
     description: ach.description,
     earned: ach.earned,
     icon: ach.icon,
+    hidden: ach.hidden,
     unlockedAt: ach.unlockedAt,
   }));
 
@@ -225,6 +275,11 @@ export function Profile({ user, onLogout }: ProfileProps) {
           skills={skills}
           recentActivity={recentActivity}
           achievements={achievements}
+          isPublic={isPublic}
+          onPrivacyChange={handlePrivacyChange}
+          customSkills={customSkills}
+          onAddSkill={handleAddSkill}
+          onRemoveSkill={handleRemoveSkill}
         />
       </div>
 

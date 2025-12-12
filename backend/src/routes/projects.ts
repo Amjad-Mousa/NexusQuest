@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { Project } from '../models/Project.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import mongoose from 'mongoose';
+import { checkProjectAchievements } from '../services/gamificationService.js';
 
 const router = Router();
 
@@ -290,6 +291,21 @@ endif()`;
             owner: req.userId,
             files,
         });
+
+        // Check and unlock project-related achievements
+        try {
+            if (req.userId) {
+                const newAchievements = await checkProjectAchievements(req.userId.toString());
+                if (newAchievements.length > 0) {
+                    console.log(`🏆 Unlocked ${newAchievements.length} new achievements:`);
+                    newAchievements.forEach((ach: any) => {
+                        console.log(`   - ${ach.icon} ${ach.title}`);
+                    });
+                }
+            }
+        } catch (achievementError) {
+            console.error('Failed to check project achievements:', achievementError);
+        }
 
         res.status(201).json({
             success: true,

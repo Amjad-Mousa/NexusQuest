@@ -298,28 +298,31 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
 
         // Award XP and check achievements
         try {
-          const gamificationResult = await awardXPForTask(
-            userId.toString(),
-            task.points || 10,
-            task.language || 'python'
-          );
+          if (userId) {
+            const gamificationResult = await awardXPForTask(
+              userId.toString(),
+              task.points || 10,
+              task.language || 'python'
+            );
 
-          console.log(`✅ Task completed: User ${userId} earned ${task.points || 10} XP`);
-          if (gamificationResult.leveledUp) {
-            console.log(`🎉 User leveled up to level ${gamificationResult.newLevel}!`);
-          }
-          if (gamificationResult.newAchievements.length > 0) {
-            console.log(`🏆 Unlocked ${gamificationResult.newAchievements.length} new achievements:`);
-            gamificationResult.newAchievements.forEach((ach: any) => {
-              console.log(`   - ${ach.icon} ${ach.title}`);
-            });
+            console.log(`✅ Task completed: User ${userId} earned ${task.points || 10} XP`);
+            if (gamificationResult.leveledUp) {
+              console.log(`🎉 User leveled up to level ${gamificationResult.newLevel}!`);
+            }
+            if (gamificationResult.newAchievements.length > 0) {
+              console.log(`🏆 Unlocked ${gamificationResult.newAchievements.length} new achievements:`);
+              gamificationResult.newAchievements.forEach((ach: any) => {
+                console.log(`   - ${ach.icon} ${ach.title}`);
+              });
+            }
           }
         } catch (gamificationError) {
           console.error('Failed to award XP or check achievements:', gamificationError);
         }
+
+        completionUpdated = true;
       }
 
-      completionUpdated = true;
     }
 
     res.json({

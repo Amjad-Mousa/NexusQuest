@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Code, Loader2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code, Loader2, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
-import { getTutorial, Tutorial } from '../services/tutorialService';
+import { getTutorial, Tutorial, completeTutorial, startTutorial } from '../services/tutorialService';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -16,9 +16,15 @@ export default function TutorialDetailPage() {
   const [tutorial, setTutorial] = useState<Tutorial | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
     loadTutorial();
+    // Mark tutorial as started when user opens it
+    if (id) {
+      startTutorial(id).catch(console.error);
+    }
   }, [id]);
 
   const loadTutorial = async () => {
@@ -140,8 +146,38 @@ export default function TutorialDetailPage() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <div className="mt-8 flex justify-center">
+        {/* Completion Button */}
+        <div className="mt-8 flex justify-center gap-4">
+          {!completed ? (
+            <Button 
+              onClick={async () => {
+                if (!id) return;
+                setCompleting(true);
+                try {
+                  await completeTutorial(id);
+                  setCompleted(true);
+                } catch (error) {
+                  console.error('Failed to mark tutorial as complete:', error);
+                } finally {
+                  setCompleting(false);
+                }
+              }}
+              disabled={completing}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {completing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              {completing ? 'Completing...' : 'Mark as Complete'}
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2 text-green-500">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">Tutorial Completed!</span>
+            </div>
+          )}
           <Button onClick={() => navigate('/tutorials')} variant="outline">
             <BookOpen className="w-4 h-4 mr-2" />
             Back to All Tutorials

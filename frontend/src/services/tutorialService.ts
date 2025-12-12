@@ -16,7 +16,7 @@ const getTutorialCustomizations = (): Record<string, Partial<Tutorial>> => {
 // Get all tutorials (students) - all visible
 export const getTutorials = async (language?: string, difficulty?: string): Promise<Tutorial[]> => {
   const customizations = getTutorialCustomizations();
-  
+
   let tutorials: Tutorial[] = defaultTutorials.map((tutorial: BaseTutorial) => ({
     ...tutorial,
     ...customizations[tutorial.id],
@@ -44,9 +44,9 @@ export const getTutorialsByLanguage = async (language: string): Promise<Tutorial
 // Get single tutorial
 export const getTutorial = async (id: string): Promise<Tutorial> => {
   const customizations = getTutorialCustomizations();
-  
+
   const tutorial = defaultTutorials.find((t: BaseTutorial) => t.id === id);
-  
+
   if (!tutorial) {
     throw new Error('Tutorial not found');
   }
@@ -61,7 +61,7 @@ export const getTutorial = async (id: string): Promise<Tutorial> => {
 // Get all tutorials for teacher
 export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
   const customizations = getTutorialCustomizations();
-  
+
   // Get default tutorials with customizations
   const defaultTutorialsWithCustomizations = defaultTutorials.map((tutorial: BaseTutorial): Tutorial => ({
     ...tutorial,
@@ -69,18 +69,18 @@ export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
     isPublished: true, // Always visible
     isCustom: !!customizations[tutorial.id] && Object.keys(customizations[tutorial.id]).length > 0,
   }));
-  
+
   // Get fully custom tutorials (not in defaultTutorials)
   const customTutorialIds = Object.keys(customizations).filter(
     id => customizations[id].isCustom && !defaultTutorials.find(t => t.id === id)
   );
-  
+
   const fullyCustomTutorials: Tutorial[] = customTutorialIds.map(id => ({
     ...(customizations[id] as Tutorial),
     isPublished: true,
     isCustom: true,
   }));
-  
+
   return [...defaultTutorialsWithCustomizations, ...fullyCustomTutorials];
 };
 
@@ -93,12 +93,12 @@ export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> =>
 // Save tutorial customizations
 export const saveTutorialCustomization = async (id: string, updates: Partial<Tutorial>): Promise<Tutorial> => {
   const customizations = getTutorialCustomizations();
-  
+
   customizations[id] = {
     ...customizations[id],
     ...updates,
   };
-  
+
   localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
   return getTutorial(id);
 };
@@ -106,15 +106,15 @@ export const saveTutorialCustomization = async (id: string, updates: Partial<Tut
 // Create a new custom tutorial
 export const createCustomTutorial = async (tutorial: Omit<Tutorial, 'isPublished' | 'isCustom'>): Promise<Tutorial> => {
   const customizations = getTutorialCustomizations();
-  
+
   // Store the entire tutorial as a customization
   customizations[tutorial.id] = {
     ...tutorial,
     isCustom: true,
   };
-  
+
   localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
-  
+
   return {
     ...tutorial,
     isPublished: true,
@@ -125,7 +125,7 @@ export const createCustomTutorial = async (tutorial: Omit<Tutorial, 'isPublished
 // Delete a custom tutorial
 export const deleteCustomTutorial = async (id: string): Promise<void> => {
   const customizations = getTutorialCustomizations();
-  
+
   // Only allow deleting fully custom tutorials
   if (customizations[id]?.isCustom) {
     delete customizations[id];
@@ -138,4 +138,52 @@ export const getAvailableLanguages = async (): Promise<string[]> => {
   const tutorials = await getTutorials();
   const languages = [...new Set(tutorials.map((t: Tutorial) => t.language))];
   return languages.sort();
+};
+
+// Mark tutorial as started
+export const startTutorial = async (tutorialId: string): Promise<void> => {
+  const token = localStorage.getItem('nexusquest-token');
+  if (!token) return;
+
+  try {
+    const response = await fetch(`http://localhost:9876/api/tutorials/${tutorialId}/start`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to start tutorial');
+    }
+  } catch (error) {
+    console.error('Error starting tutorial:', error);
+  }
+};
+
+// Mark tutorial as completed
+export const completeTutorial = async (tutorialId: string): Promise<void> => {
+  const token = localStorage.getItem('nexusquest-token');
+  if (!token) return;
+
+  try {
+    const response = await fetch(`http://localhost:9876/api/tutorials/${tutorialId}/complete`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to complete tutorial');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error completing tutorial:', error);
+    throw error;
+  }
 };

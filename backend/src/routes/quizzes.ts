@@ -5,6 +5,7 @@ import { User } from '../models/User.js';
 import { executeCode } from '../services/dockerService.js';
 import { Notification } from '../models/Notification.js';
 import { NotificationType } from '../enums/NotificationType.js';
+import { checkQuizAchievements } from '../services/gamificationService.js';
 
 const router = Router();
 
@@ -37,13 +38,13 @@ router.get('/public', async (req: AuthRequest, res: Response) => {
     console.log('👉 GET /api/quizzes/public hit');
     try {
         const { language, difficulty } = req.query;
-        
+
         const filter: any = {};
-        
+
         if (language) {
             filter.language = language;
         }
-        
+
         if (difficulty) {
             filter.difficulty = difficulty;
         }
@@ -573,6 +574,21 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
         }
 
         await submission.save();
+
+        // Check and unlock quiz achievements
+        try {
+            if (req.userId) {
+                const newAchievements = await checkQuizAchievements(req.userId.toString());
+                if (newAchievements.length > 0) {
+                    console.log(`🏆 Unlocked ${newAchievements.length} new achievements:`);
+                    newAchievements.forEach((ach: any) => {
+                        console.log(`   - ${ach.icon} ${ach.title}`);
+                    });
+                }
+            }
+        } catch (achievementError) {
+            console.error('Failed to check quiz achievements:', achievementError);
+        }
 
         res.json({
             success: true,
