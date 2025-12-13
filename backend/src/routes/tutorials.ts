@@ -201,6 +201,27 @@ router.post('/', authMiddleware, requireTeacher, async (req: AuthRequest, res: R
     const createdTutorial = await Tutorial.findById(tutorial._id)
       .populate('createdBy', 'name email');
 
+    // Award points to teacher for creating content
+    const teacherPoints = 30; // Points for creating a tutorial
+    await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: teacherPoints } });
+
+    try {
+      await Notification.create({
+        userId: req.userId,
+        type: NotificationType.POINTS_EARNED,
+        message: `You earned ${teacherPoints} points for creating tutorial "${title}"`,
+        metadata: {
+          tutorialId: tutorial._id,
+          tutorialTitle: title,
+          points: teacherPoints,
+          reason: 'tutorial_creation',
+        },
+        read: false,
+      });
+    } catch (notifyError) {
+      console.error('Failed to create tutorial creation notification:', notifyError);
+    }
+
     res.status(201).json(createdTutorial);
   } catch (error: any) {
     console.error('Error creating tutorial:', error);

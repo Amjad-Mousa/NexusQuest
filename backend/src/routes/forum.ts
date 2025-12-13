@@ -48,15 +48,16 @@ router.get('/questions', async (req, res) => {
       sort = { createdAt: -1 };
     }
 
-    const [questions, total] = await Promise.all([
+    const [questionsRaw, total] = await Promise.all([
       Question.find(filter)
         .populate('author', 'name email role')
         .sort(sort)
         .skip(skip)
-        .limit(limit)
-        .lean(),
+        .limit(limit),
       Question.countDocuments(filter),
     ]);
+
+    const questions = questionsRaw.map(q => q.toJSON());
 
     res.json({
       success: true,
@@ -83,8 +84,7 @@ router.get('/questions/:id', async (req, res) => {
       { new: true }
     )
       .populate('author', 'name email role')
-      .populate('acceptedAnswer')
-      .lean();
+      .populate('acceptedAnswer');
 
     if (!question) {
       return res.status(404).json({ success: false, message: 'Question not found' });
@@ -92,10 +92,9 @@ router.get('/questions/:id', async (req, res) => {
 
     const answers = await Answer.find({ question: req.params.id })
       .populate('author', 'name email role')
-      .sort({ isAccepted: -1, createdAt: -1 })
-      .lean();
+      .sort({ isAccepted: -1, createdAt: -1 });
 
-    res.json({ success: true, question, answers });
+    res.json({ success: true, question: question.toJSON(), answers: answers.map(a => a.toJSON()) });
   } catch (error) {
     console.error('Error fetching question:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch question' });
@@ -197,14 +196,18 @@ router.post('/questions/:id/vote', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Question not found' });
     }
 
+    // Check if user already voted
+    const hasUpvoted = question.upvotes.some(id => id.equals(userId));
+    const hasDownvoted = question.downvotes.some(id => id.equals(userId));
+
     // Remove existing votes
     question.upvotes = question.upvotes.filter(id => !id.equals(userId));
     question.downvotes = question.downvotes.filter(id => !id.equals(userId));
 
-    // Add new vote
-    if (type === 'up') {
+    // Toggle logic: only add vote if it's different from existing vote
+    if (type === 'up' && !hasUpvoted) {
       question.upvotes.push(userId);
-    } else if (type === 'down') {
+    } else if (type === 'down' && !hasDownvoted) {
       question.downvotes.push(userId);
     }
 
@@ -329,12 +332,18 @@ router.post('/answers/:id/vote', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Answer not found' });
     }
 
+    // Check if user already voted
+    const hasUpvoted = answer.upvotes.some(id => id.equals(userId));
+    const hasDownvoted = answer.downvotes.some(id => id.equals(userId));
+
+    // Remove existing votes
     answer.upvotes = answer.upvotes.filter(id => !id.equals(userId));
     answer.downvotes = answer.downvotes.filter(id => !id.equals(userId));
 
-    if (type === 'up') {
+    // Toggle logic: only add vote if it's different from existing vote
+    if (type === 'up' && !hasUpvoted) {
       answer.upvotes.push(userId);
-    } else if (type === 'down') {
+    } else if (type === 'down' && !hasDownvoted) {
       answer.downvotes.push(userId);
     }
 
@@ -408,10 +417,11 @@ router.get('/tags', async (_req, res) => {
 // Get user's questions
 router.get('/my-questions', authMiddleware, async (req, res) => {
   try {
-    const questions = await Question.find({ author: (req as any).user.id })
+    const questionsRaw = await Question.find({ author: (req as any).user.id })
       .populate('author', 'name email role')
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ createdAt: -1 });
+
+    const questions = questionsRaw.map(q => q.toJSON());
 
     res.json({ success: true, questions });
   } catch (error) {

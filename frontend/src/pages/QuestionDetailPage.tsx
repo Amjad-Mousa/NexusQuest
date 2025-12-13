@@ -91,8 +91,6 @@ export default function QuestionDetailPage() {
       if (response.success) {
         setQuestion({
           ...question,
-          upvotes: Array(response.upvotes).fill(''),
-          downvotes: Array(response.downvotes).fill(''),
           voteScore: response.voteScore,
         });
       }
@@ -110,8 +108,6 @@ export default function QuestionDetailPage() {
             a._id === answerId
               ? {
                   ...a,
-                  upvotes: Array(response.upvotes).fill(''),
-                  downvotes: Array(response.downvotes).fill(''),
                   voteScore: response.voteScore,
                 }
               : a

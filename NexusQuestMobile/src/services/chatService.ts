@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
 
 // Must match the backend host/port used by the web chat service
-const CHAT_URL = 'http://192.168.1.9:9876';
+const CHAT_URL = 'http://192.168.1.7:9876';
 
 let socket: Socket | null = null;
 

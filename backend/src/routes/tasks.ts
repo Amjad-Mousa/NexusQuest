@@ -105,6 +105,27 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
       testCases,
     });
 
+    // Award points to teacher for creating content
+    const teacherPoints = 20; // Points for creating a task
+    await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: teacherPoints } });
+
+    try {
+      await Notification.create({
+        userId: req.userId,
+        type: NotificationType.POINTS_EARNED,
+        message: `You earned ${teacherPoints} points for creating task "${title}"`,
+        metadata: {
+          taskId: task._id,
+          taskTitle: title,
+          points: teacherPoints,
+          reason: 'task_creation',
+        },
+        read: false,
+      });
+    } catch (notifyError) {
+      console.error('Failed to create task creation notification:', notifyError);
+    }
+
     res.status(201).json({ success: true, data: task });
   } catch (error: unknown) {
     const err = error as Error;

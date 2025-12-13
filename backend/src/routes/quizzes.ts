@@ -321,6 +321,29 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
             }
         }
 
+        await quiz.save();
+
+        // Award points to teacher for creating content
+        const teacherPoints = 25; // Points for creating a quiz
+        await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: teacherPoints } });
+
+        try {
+            await Notification.create({
+                userId: req.userId,
+                type: NotificationType.POINTS_EARNED,
+                message: `You earned ${teacherPoints} points for creating quiz "${title}"`,
+                metadata: {
+                    quizId: quiz._id,
+                    quizTitle: title,
+                    points: teacherPoints,
+                    reason: 'quiz_creation',
+                },
+                read: false,
+            });
+        } catch (notifyError) {
+            console.error('Failed to create quiz creation notification:', notifyError);
+        }
+
         res.status(201).json({ success: true, data: quiz });
     } catch (error: unknown) {
         const err = error as Error;
