@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, BookOpen, Award, BarChart3, User, Moon, Sun, Clock, Calendar, Users, Book, MessageCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, BookOpen, Award, BarChart3, User, Clock, Calendar, Users, Book, MessageCircle, Code2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Task, getMyTasks, deleteTask } from '../services/taskService';
 import { Quiz, getMyQuizzes, deleteQuiz } from '../services/quizService';
@@ -165,24 +165,16 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
       {/* Header */}
       <header className={`border-b ${theme === 'dark' ? 'bg-gray-900/80 border-gray-800' : 'bg-white border-gray-200'} backdrop-blur-sm sticky top-0 z-40`}>
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-6 h-6 text-blue-500" />
-              <span className="text-xl font-bold">Teacher Dashboard</span>
+          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => navigate('/teacher')}>
+            <div className="w-11 h-11 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25 group-hover:shadow-blue-500/40 transition-all duration-300 group-hover:scale-105">
+              <Code2 className="w-6 h-6 text-white" />
             </div>
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent">
+              NexusQuest
+            </span>
           </div>
           
           <div className="flex items-center gap-3">
-            <Button onClick={() => setShowCreateModal(true)} className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" /> Create Task
-            </Button>
-            <Button onClick={() => setShowQuizModal(true)} className="bg-purple-600 hover:bg-purple-700">
-              <Plus className="w-4 h-4 mr-2" /> Create Quiz
-            </Button>
-            <Button onClick={() => navigate('/collaboration')} className="bg-orange-600 hover:bg-orange-700">
-              <Users className="w-4 h-4 mr-2" /> Live Collaboration
-            </Button>
-
             {/* Chat Button */}
             <Button
               variant="ghost"
@@ -196,16 +188,6 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
                   {newMessageCount > 9 ? '9+' : newMessageCount}
                 </span>
               )}
-            </Button>
-
-            {/* Theme Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="rounded-full"
-            >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
             <NotificationsBell theme={theme} />
@@ -316,8 +298,11 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
         {/* Tasks Tab */}
         {activeTab === 'tasks' && (
           <div className={`rounded-xl border ${theme === 'dark' ? 'bg-gray-900/50 border-gray-800' : 'bg-white border-gray-200'}`}>
-            <div className="p-4 border-b border-gray-800">
+            <div className={`p-4 border-b ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} flex items-center justify-between`}>
               <h2 className="text-lg font-semibold">Your Tasks</h2>
+              <Button onClick={() => setShowCreateModal(true)} className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" /> Create Task
+              </Button>
             </div>
           {loading ? (
             <div className="p-8 text-center text-gray-400">Loading tasks...</div>
@@ -367,9 +352,14 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
                 <Clock className="w-5 h-5 text-purple-400" />
                 Your Quizzes
               </h2>
-              <span className={`text-sm px-2 py-1 rounded ${theme === 'dark' ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
-                {quizzes.length} quizzes
-              </span>
+              <div className="flex items-center gap-3">
+                <span className={`text-sm px-2 py-1 rounded ${theme === 'dark' ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600'}`}>
+                  {quizzes.length} quizzes
+                </span>
+                <Button onClick={() => setShowQuizModal(true)} className="bg-purple-600 hover:bg-purple-700">
+                  <Plus className="w-4 h-4 mr-2" /> Create Quiz
+                </Button>
+              </div>
             </div>
           </div>
           {quizzes.length === 0 ? (
