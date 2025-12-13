@@ -126,12 +126,52 @@
 
 ### Prerequisites
 
+- **Docker** and **Docker Compose**
+- **Git**
+
+### Quick Start with Docker
+
+The easiest way to get NexusQuest up and running is using Docker Compose:
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/yourusername/NexusQuest.git
+cd NexusQuest
+```
+
+2. **Start all services**
+```bash
+docker-compose up -d
+```
+
+That's it! Docker Compose will automatically:
+- Build and start the backend server
+- Build and start the frontend application
+- Set up MongoDB database
+- Configure all networking between services
+- Install all dependencies
+
+3. **Access the Application**
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:3001`
+- API Health Check: `http://localhost:3001/health`
+- MongoDB: `mongodb://localhost:27017`
+
+4. **Stop all services**
+```bash
+docker-compose down
+```
+
+### Manual Installation (Without Docker)
+
+If you prefer to run without Docker:
+
+**Prerequisites:**
 - **Node.js** (v18 or higher)
 - **MongoDB** (v6 or higher)
 - **npm** or **yarn**
-- **Git**
 
-### Installation
+**Steps:**
 
 1. **Clone the repository**
 ```bash
@@ -180,11 +220,7 @@ VITE_API_URL=http://localhost:3001
 
 5. **Start MongoDB**
 ```bash
-# Using MongoDB service
 mongod
-
-# Or using Docker
-docker run -d -p 27017:27017 --name mongodb mongo:latest
 ```
 
 6. **Start the Backend Server**
@@ -199,20 +235,13 @@ cd frontend
 npm run dev
 ```
 
-8. **Access the Application**
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:3001`
-- API Health Check: `http://localhost:3001/health`
+### First Time Setup
 
-### Default Accounts
-
-**Teacher Account:**
-- Email: `teacher@nexusquest.com`
-- Password: `teacher123`
-
-**Student Account:**
-- Email: `student@nexusquest.com`
-- Password: `student123`
+After starting the application:
+1. Navigate to `http://localhost:5173`
+2. Click "Sign Up" to create your account
+3. Choose your role (Student or Teacher)
+4. Start learning or creating content!
 
 ---
 
@@ -329,6 +358,67 @@ GET  /api/gamification/leaderboard  # Get global leaderboard
 GET  /api/gamification/achievements # Get all achievements
 POST /api/gamification/claim        # Claim achievement reward
 ```
+
+---
+
+## 📦 Installing Custom Dependencies
+
+### For JavaScript/Node.js Projects
+
+You can install any npm package in your projects using `package.json`:
+
+1. **Create a `package.json` in your project directory:**
+```json
+{
+  "name": "my-project",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "lodash": "^4.17.21",
+    "moment": "^2.29.4"
+  }
+}
+```
+
+2. **Install dependencies:**
+```bash
+npm install
+```
+
+3. **Use in your code:**
+```javascript
+const axios = require('axios');
+const _ = require('lodash');
+const moment = require('moment');
+
+// Your code here
+```
+
+### For Python Projects
+
+Use `requirements.txt` to manage Python dependencies:
+
+1. **Create a `requirements.txt` file:**
+```txt
+requests==2.31.0
+numpy==1.24.3
+pandas==2.0.3
+```
+
+2. **Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+### For Java Projects
+
+Use Maven (`pom.xml`) or Gradle (`build.gradle`) for dependency management.
+
+### For C++ Projects
+
+Use CMake or package managers like vcpkg or Conan.
+
+**Note:** The code execution environment supports standard libraries for all languages. Custom dependencies can be installed in your local development environment.
 
 ---
 
