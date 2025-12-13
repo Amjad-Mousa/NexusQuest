@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Code2, Trophy, Target, BookOpen, Clock, Star, TrendingUp, Award, User, MessageCircle, Users, Home, FileQuestion, MessageSquare } from 'lucide-react';
+import { Code2, Trophy, Target, Clock, Star, TrendingUp, Award, User, MessageCircle, Users, Home, FileQuestion, MessageSquare } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { getMyProgress, TaskProgress, getUserStats, UserStats } from '../services/taskService';
@@ -207,15 +207,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       hasMore: matches.length > maxSuggestions,
     };
   }, [allUsers, userSearch]);
-
-  const learningPaths = [
-    { id: 1, title: 'Python Basics', progress: 75, total: 20 },
-    { id: 2, title: 'Data Structures', progress: 40, total: 30 },
-    { id: 3, title: 'Algorithms', progress: 20, total: 25 }
-  ];
-
-
-   
 
   return (
     <div className={`min-h-screen relative ${theme === 'dark' ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' : 'bg-gradient-to-br from-gray-100 via-white to-gray-100'}`}>
@@ -652,31 +643,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               </div>
             </div>
 
-            {/* Learning Paths */}
-            <div className={`${theme === 'dark' ? 'bg-gray-900/50 border-gray-800 hover:border-gray-700' : 'bg-white border-gray-200 shadow-sm hover:shadow-md'} border rounded-2xl p-6 transition-all duration-300`}>
-              <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'} flex items-center gap-2 mb-6`}>
-                <BookOpen className="w-6 h-6 text-purple-400" />
-                Learning Paths
-              </h2>
-
-              <div className="space-y-4">
-                {learningPaths.map((path) => (
-                  <div key={path.id} className={`${theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'} border rounded-lg p-4`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{path.title}</h3>
-                      <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{path.progress}%</span>
-                    </div>
-                    <div className={`w-full ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-2 mb-2`}>
-                      <div
-                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all"
-                        style={{ width: `${path.progress}%` }}
-                      />
-                    </div>
-                    <span className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{Math.round(path.total * path.progress / 100)} of {path.total} lessons</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Sidebar with Daily Challenge and Projects */}
