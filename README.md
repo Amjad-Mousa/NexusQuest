@@ -525,7 +525,7 @@ npm run test:e2e
 ## 👥 Authors
 
 - **Amjad Mousa** - - [GitHub](https://github.com/Amjad-Mousa)
-- **Mphammed Jaddou* -  - [GitHub](https://github.com/JADDOU3).
+- **Mohammed Jaddou** -  - [GitHub](https://github.com/JADDOU3).
 ---
 
 ## 🙏 Acknowledgments
