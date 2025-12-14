@@ -7,8 +7,10 @@ import { getTutorial, Tutorial, completeTutorial, startTutorial } from '../servi
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TutorialDetailPage() {
+  usePageTitle('Tutorial');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { theme } = useTheme();

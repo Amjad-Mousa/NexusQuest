@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button';
 import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface LanguageFolder {
   language: string;
@@ -18,6 +19,7 @@ interface LanguageFolder {
 }
 
 export default function TutorialsHomePage() {
+  usePageTitle('Tutorials');
   const { theme } = useTheme();
   const navigate = useNavigate();
   

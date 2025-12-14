@@ -3,12 +3,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { LogIn, Mail, Lock, Eye, EyeOff, Code2, Sparkles } from 'lucide-react';
 import * as authService from '../services/authService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface LoginProps {
   onLogin: (user: authService.User) => void;
 }
 
 export function Login({ onLogin }: LoginProps) {
+  usePageTitle('Login');
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

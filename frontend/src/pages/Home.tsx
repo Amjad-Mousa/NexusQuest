@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Code2, Play, Terminal, Shield, Globe, Trophy, Target, BookOpen, Users, Star, CheckCircle2, ArrowRight, Sparkles, Rocket, Award } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function Home() {
   const navigate = useNavigate();
+  usePageTitle('Home');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 overflow-hidden">

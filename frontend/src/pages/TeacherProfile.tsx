@@ -77,7 +77,7 @@ export function TeacherProfile() {
   const handleLogout = () => {
     localStorage.removeItem('nexusquest-token');
     localStorage.removeItem('nexusquest-user');
-    navigate('/');
+    navigate('/login');
   };
 
   return (

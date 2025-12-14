@@ -28,8 +28,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function CollaborationPage() {
+  usePageTitle('Collaboration');
   const { theme } = useTheme();
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
@@ -163,7 +165,7 @@ export default function CollaborationPage() {
   const handleLogout = () => {
     localStorage.removeItem('nexusquest-token');
     localStorage.removeItem('nexusquest-user');
-    navigate('/');
+    navigate('/login');
   };
 
   if (currentSession) {

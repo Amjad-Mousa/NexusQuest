@@ -4,8 +4,10 @@ import { ArrowLeft, Clock, Play, CheckCircle2, XCircle, Loader2, AlertTriangle, 
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { Quiz, getQuiz, startQuiz, submitQuiz, QuizSubmitResponse } from '../services/quizService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function QuizPage() {
+  usePageTitle('Quiz');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { theme } = useTheme();

@@ -14,8 +14,10 @@ import {
 import { getStoredUser } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowLeft, Send, MessageCircle } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export function ChatPage() {
+  usePageTitle('Chat');
   const { theme } = useTheme();
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();

@@ -8,6 +8,7 @@ import { getUserStats, getMyProgress, TaskProgress } from '../services/taskServi
 import { getMyLeaderboardRank } from '../services/userService';
 import { getDailyChallengeStats } from '../services/dailyChallengeService';
 import { getGamificationProfile, GamificationProfile, getAllAchievementsWithStatus, AchievementWithStatus, addCustomSkill, removeCustomSkill } from '../services/gamificationService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface ProfileProps {
   user: { name: string; email: string } | null;
@@ -15,6 +16,7 @@ interface ProfileProps {
 }
 
 export function Profile({ user, onLogout }: ProfileProps) {
+  usePageTitle('Profile');
   const { theme, setTheme } = useTheme();
   const { avatarImage, coverImage, handleAvatarChange, handleCoverChange } = useProfileImages();
 

@@ -5,8 +5,10 @@ import { getStoredUser } from '../services/authService';
 import { getTopLeaderboard, getMyLeaderboardRank, type LeaderboardEntry } from '../services/userService';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { Trophy, Star, User as UserIcon } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export function LeaderboardPage() {
+  usePageTitle('Leaderboard');
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [viewer] = useState(() => getStoredUser());
