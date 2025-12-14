@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, BookOpen, Award, BarChart3, Clock, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Search, Filter, BookOpen, Award, BarChart3, Clock, CheckCircle2, ArrowLeft, User } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { getTasks, Task, TaskDifficulty, TaskLanguage, getMyProgress, TaskProgress } from '../services/taskService';
+import { getStoredUser } from '../services/authService';
+import { UserSidePanel } from '../components/UserSidePanel';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 interface TasksPageProps {
@@ -14,6 +16,8 @@ export default function TasksPage(_props: TasksPageProps) {
   usePageTitle('Tasks');
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const storedUser = getStoredUser();
+  const [showSidebar, setShowSidebar] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -120,8 +124,19 @@ export default function TasksPage(_props: TasksPageProps) {
                 <h1 className="text-xl font-bold">Browse Tasks</h1>
               </div>
             </div>
-            <div className="text-sm text-gray-500">
-              {filteredTasks.length} tasks available
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">
+                {filteredTasks.length} tasks available
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSidebar(true)}
+                className="flex items-center gap-2"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">{storedUser?.name}</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -258,6 +273,18 @@ export default function TasksPage(_props: TasksPageProps) {
           </div>
         )}
       </div>
+
+      {/* User Sidebar */}
+      <UserSidePanel
+        user={storedUser}
+        onLogout={() => {
+          localStorage.removeItem('nexusquest-token');
+          localStorage.removeItem('nexusquest-user');
+          navigate('/login');
+        }}
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+      />
     </div>
   );
 }

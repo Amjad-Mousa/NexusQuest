@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Calendar, ArrowLeft, Trophy, CheckCircle2, Play } from 'lucide-react';
+import { Clock, Calendar, ArrowLeft, Trophy, CheckCircle2, Play, User } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { Quiz, getQuizzes } from '../services/quizService';
+import { getStoredUser } from '../services/authService';
+import { UserSidePanel } from '../components/UserSidePanel';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function QuizzesPage() {
   usePageTitle('Quizzes');
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const storedUser = getStoredUser();
+  const [showSidebar, setShowSidebar] = useState(false);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -251,8 +255,19 @@ export default function QuizzesPage() {
                 <h1 className="text-xl font-bold">Quizzes</h1>
               </div>
             </div>
-            <div className="text-sm text-gray-500">
-              {quizzes.filter(q => q.status === 'active').length} active quizzes
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">
+                {quizzes.filter(q => q.status === 'active').length} active quizzes
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSidebar(true)}
+                className="flex items-center gap-2"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">{storedUser?.name}</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -311,6 +326,18 @@ export default function QuizzesPage() {
           </>
         )}
       </div>
+
+      {/* User Sidebar */}
+      <UserSidePanel
+        user={storedUser}
+        onLogout={() => {
+          localStorage.removeItem('nexusquest-token');
+          localStorage.removeItem('nexusquest-user');
+          navigate('/login');
+        }}
+        isOpen={showSidebar}
+        onClose={() => setShowSidebar(false)}
+      />
     </div>
   );
 }
