@@ -168,7 +168,7 @@ export default function CollaborationPage() {
 
   if (currentSession) {
     return (
-      <div className="h-screen">
+      <div className="h-screen w-screen flex overflow-hidden">
         <CollaborativeEditor
           sessionId={currentSession.sessionId}
           initialCode={currentSession.code}
