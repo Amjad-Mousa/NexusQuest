@@ -39,7 +39,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Use the container-forwarded port by default and bind to 0.0.0.0 so Docker can route traffic
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '9876', 10);
 
 // Security middleware
 app.use(helmet());
