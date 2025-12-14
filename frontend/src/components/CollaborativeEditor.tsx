@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react';
 import { useCollaboration } from '../context/CollaborationContext';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
-import { Users, MessageSquare, Send, Play, Square, Terminal as TerminalIcon, Crown, Circle, ArrowLeft, Code2 } from 'lucide-react';
+import { Users, MessageSquare, Send, Play, Square, Terminal as TerminalIcon, Crown, Circle, ArrowLeft, Code2, Link2, Copy, Check, X } from 'lucide-react';
 import { Button } from './ui/button';
 import type { editor } from 'monaco-editor';
 
@@ -46,6 +46,8 @@ export default function CollaborativeEditor({
   const [showTerminal, setShowTerminal] = useState(true);
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const isRemoteChange = useRef(false);
@@ -270,9 +272,6 @@ export default function CollaborativeEditor({
 
   const currentUser = getStoredUser();
 
-  // Debug logging
-  console.log('Render state:', { showParticipants, showChat, showTerminal });
-
   return (
     <div className={`flex h-full w-full ${theme === 'dark' ? 'bg-gray-950 text-white' : 'bg-white text-gray-900'}`}>
       {/* Main Editor Area */}
@@ -339,6 +338,15 @@ export default function CollaborativeEditor({
                 Run
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowInviteDialog(true)}
+              className="text-blue-500 hover:text-blue-400"
+              title="Invite to session"
+            >
+              <Link2 className="w-4 h-4" />
+            </Button>
             <div className={`h-6 w-px ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-300'}`} />
             <Button
               variant="ghost"
@@ -644,6 +652,87 @@ export default function CollaborativeEditor({
               >
                 <Send className="w-4 h-4" />
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Dialog */}
+      {showInviteDialog && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div
+            className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden ${
+              theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+            }`}
+          >
+            <div className={`px-6 py-4 border-b ${
+              theme === 'dark' ? 'border-gray-800' : 'border-gray-100'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                    <Link2 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold">Invite to Session</h2>
+                    <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Share this link with others
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowInviteDialog(false)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className={`mb-4 p-4 rounded-xl ${
+                theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
+              }`}>
+                <p className={`text-sm mb-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Session Link
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/collaboration/${currentSession?.sessionId}`}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-mono ${
+                      theme === 'dark'
+                        ? 'bg-gray-900 text-gray-300 border border-gray-700'
+                        : 'bg-white text-gray-700 border border-gray-300'
+                    }`}
+                  />
+                  <Button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/collaboration/${currentSession?.sessionId}`);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    size="sm"
+                    className={copied 
+                      ? 'bg-green-600 hover:bg-green-600' 
+                      : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-400 hover:to-purple-500'
+                    }
+                  >
+                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                <p className="flex items-center gap-2 mb-2">
+                  <Users className="w-4 h-4" />
+                  <span>Anyone with this link can join the session</span>
+                </p>
+                <p className={`text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                  Session ID: <span className="font-mono">{currentSession?.sessionId}</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
