@@ -38,7 +38,6 @@ export async function checkGamificationUpdates(previousLevel?: number, previousA
 
         // Check for new achievements
         if (previousAchievements) {
-            const currentAchievementIds = profile.achievements.map((a: any) => a.id);
             const newAchievements = profile.achievements.filter(
                 (a: any) => !previousAchievements.includes(a.id)
             );

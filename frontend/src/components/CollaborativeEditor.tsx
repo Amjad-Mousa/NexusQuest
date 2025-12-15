@@ -29,7 +29,7 @@ interface CollaborativeEditorProps {
 }
 
 export default function CollaborativeEditor({
-  sessionId,
+  sessionId: _sessionId,
   initialCode = '',
   language = 'javascript',
   onCodeChange,
@@ -73,20 +73,22 @@ export default function CollaborativeEditor({
 
     // Listen for cursor position changes
     editor.onDidChangeCursorPosition((e) => {
-      if (!currentSession || isRemoteChange.current) return;
-
-      const user = getStoredUser();
-      if (!user) return;
-      sendCursorMove({
-        sessionId: currentSession.sessionId,
-        userId: user.id,
-        username: user.name,
-        cursor: {
-          line: e.position.lineNumber,
-          column: e.position.column,
-        },
-        color: userColor,
-      });
+      if (!isRemoteChange.current && currentSession) {
+        const position = e.position;
+        const user = getStoredUser();
+        if (!user) return;
+        
+        sendCursorMove({
+          sessionId: currentSession.sessionId,
+          userId: user.id,
+          username: user.name,
+          cursor: {
+            line: position.lineNumber,
+            column: position.column,
+          },
+          color: userColor,
+        });
+      }
     });
   };
 
@@ -130,7 +132,7 @@ export default function CollaborativeEditor({
 
   // Handle remote cursor movements
   useEffect(() => {
-    const unsubscribe = onRemoteCursorMove((cursor) => {
+    const unsubscribe = onRemoteCursorMove((_cursor) => {
       if (!editorRef.current) return;
 
       // Remove old decorations

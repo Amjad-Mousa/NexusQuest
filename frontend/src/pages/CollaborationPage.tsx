@@ -23,8 +23,6 @@ import {
   ArrowLeft,
   Sparkles,
   Zap,
-  Copy,
-  Share2,
   Trash2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';

@@ -28,7 +28,7 @@ export function ChatPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
   const navState = (location.state as { userName?: string; userEmail?: string } | null) || null;
   const [otherUserName] = useState<string>(navState?.userName || 'Direct Messages');
 

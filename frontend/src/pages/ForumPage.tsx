@@ -15,7 +15,6 @@ import {
   ThumbsUp,
   CheckCircle,
   Clock,
-  Code2,
   User,
   ArrowLeft,
   Tag,

@@ -185,7 +185,7 @@ export function LeaderboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((entry, idx) => {
+                  {entries.map((entry) => {
                     const isMe = viewer && entry.email === viewer.email;
                     const isTop3 = entry.rank <= 3;
                     const medalColor = entry.rank === 1 ? 'from-yellow-400 to-amber-500' : 
