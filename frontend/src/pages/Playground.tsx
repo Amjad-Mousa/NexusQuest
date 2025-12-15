@@ -7,6 +7,7 @@ import { ArrowLeft, Play, Code2, User, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { UserSidePanel } from '../components/UserSidePanel';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 const DEFAULT_CODE: Record<string, string> = {
   python: `# Python Playground - Write and run code instantly!
@@ -60,6 +61,7 @@ int main() {
 };
 
 export function Playground() {
+  usePageTitle('Playground');
   const navigate = useNavigate();
   const user = getStoredUser();
   const { theme, setTheme } = useTheme();
@@ -100,7 +102,7 @@ export function Playground() {
   const handleLogout = () => {
     localStorage.removeItem('nexusquest-token');
     localStorage.removeItem('nexusquest-user');
-    navigate('/');
+    navigate('/login');
   };
 
   const languageOptions = [

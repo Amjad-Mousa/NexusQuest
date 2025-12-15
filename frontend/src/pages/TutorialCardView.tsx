@@ -11,8 +11,10 @@ import { getStoredUser } from '../services/authService';
 import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TutorialCardView() {
+  usePageTitle('Tutorial');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();

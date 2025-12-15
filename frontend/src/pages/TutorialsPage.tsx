@@ -4,8 +4,10 @@ import { BookOpen, Code, Filter, Loader2, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { getTutorials, getAvailableLanguages, Tutorial } from '../services/tutorialService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TutorialsPage() {
+  usePageTitle('Tutorials');
   const { theme } = useTheme();
   const navigate = useNavigate();
 

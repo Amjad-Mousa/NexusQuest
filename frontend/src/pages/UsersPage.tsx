@@ -5,8 +5,10 @@ import { getStoredUser } from '../services/authService';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { useTheme } from '../context/ThemeContext';
 import { ArrowLeft, Search, Users, MessageCircle, ChevronRight } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export function UsersPage() {
+  usePageTitle('Users');
   const { theme } = useTheme();
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [conversations, setConversations] = useState<ChatUser[]>([]);

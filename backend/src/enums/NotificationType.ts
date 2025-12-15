@@ -5,5 +5,6 @@ export enum NotificationType {
     REMINDER = 'reminder',
     NEW_QUIZ = 'new_quiz',
     ACHIEVEMENT_UNLOCKED = 'achievement_unlocked',
-    LEVEL_UP = 'level_up'
+    LEVEL_UP = 'level_up',
+    COLLABORATION_INVITE = 'collaboration_invite'
 }

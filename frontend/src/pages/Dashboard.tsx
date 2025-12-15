@@ -14,6 +14,7 @@ import { NotificationsBell } from '../components/NotificationsBell';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { fetchUsers, type ChatUser, getMyLeaderboardRank } from '../services/userService';
 import { getDailyChallengeStats } from '../services/dailyChallengeService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -21,6 +22,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
+  usePageTitle('Dashboard');
   const navigate = useNavigate();
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [avatarImage, setAvatarImage] = useState<string | null>(null);

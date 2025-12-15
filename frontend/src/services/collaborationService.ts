@@ -89,4 +89,32 @@ export const collaborationService = {
   async removeParticipant(sessionId: string, userId: string): Promise<void> {
     await api.delete(`/sessions/${sessionId}/participants/${userId}`);
   },
+
+  // Get available users for invitation
+  async getAvailableUsers(sessionId: string): Promise<{
+    id: string;
+    name: string;
+    email: string;
+    avatarImage?: string;
+    level: number;
+  }[]> {
+    const response = await api.get(`/sessions/${sessionId}/available-users`);
+    return response.data.users;
+  },
+
+  // Send invitations to users
+  async sendInvitations(sessionId: string, userIds: string[]): Promise<{ invitedCount: number }> {
+    const response = await api.post(`/sessions/${sessionId}/invite`, { userIds });
+    return { invitedCount: response.data.invitedCount };
+  },
+
+  // Accept invitation
+  async acceptInvitation(sessionId: string, notificationId: string): Promise<void> {
+    await api.post(`/sessions/${sessionId}/accept-invite`, { notificationId });
+  },
+
+  // Reject invitation
+  async rejectInvitation(sessionId: string, notificationId: string): Promise<void> {
+    await api.post(`/sessions/${sessionId}/reject-invite`, { notificationId });
+  },
 };

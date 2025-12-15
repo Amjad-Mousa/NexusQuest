@@ -21,8 +21,10 @@ import {
   Tag,
   MessageCircle,
 } from 'lucide-react';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function ForumPage() {
+  usePageTitle('Forum');
   const navigate = useNavigate();
   const { theme } = useTheme();
   const storedUser = getStoredUser();
@@ -105,7 +107,7 @@ export default function ForumPage() {
   const handleLogout = () => {
     localStorage.removeItem('nexusquest-token');
     localStorage.removeItem('nexusquest-user');
-    navigate('/');
+    navigate('/login');
   };
 
   const formatDate = (dateStr: string) => {

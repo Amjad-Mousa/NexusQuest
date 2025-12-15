@@ -4,12 +4,14 @@ import { Button } from '../components/ui/button';
 import { Mail, Lock, User, Eye, EyeOff, GraduationCap, Code2, Sparkles, Rocket } from 'lucide-react';
 import * as authService from '../services/authService';
 import { UserRole } from '../services/authService';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface SignupProps {
   onSignup: (user: authService.User) => void;
 }
 
 export function Signup({ onSignup }: SignupProps) {
+  usePageTitle('Sign Up');
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

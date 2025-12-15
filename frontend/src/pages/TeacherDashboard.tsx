@@ -12,6 +12,7 @@ import TutorialManagement from '../components/teacher/TutorialManagement';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { useTheme } from '../context/ThemeContext';
 import { NotificationsBell } from '../components/NotificationsBell';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface TeacherDashboardProps {
   user: { name: string; email: string } | null;
@@ -19,6 +20,7 @@ interface TeacherDashboardProps {
 }
 
 export default function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
+  usePageTitle('Teacher Dashboard');
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);

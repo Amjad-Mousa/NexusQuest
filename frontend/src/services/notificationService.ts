@@ -7,7 +7,8 @@ export type NotificationType =
     | 'points_earned'
     | 'grade_updated'
     | 'reminder'
-    | 'new_quiz';
+    | 'new_quiz'
+    | 'collaboration_invite';
 
 export interface NotificationItem {
     _id: string;

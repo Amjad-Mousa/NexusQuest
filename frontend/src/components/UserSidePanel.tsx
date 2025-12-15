@@ -147,7 +147,7 @@ export function UserSidePanel({
 
         {/* Logout */}
         <div className={`absolute bottom-0 left-0 right-0 p-4 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
-          <button onClick={() => { onClose(); onLogout(); navigate('/'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-red-50 text-red-600'}`}>
+          <button onClick={() => { onClose(); onLogout(); navigate('/login'); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-red-50 text-red-600'}`}>
             <LogOut className="w-5 h-5" /><span>Sign out</span>
           </button>
         </div>

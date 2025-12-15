@@ -6,6 +6,7 @@ import * as projectService from '../services/projectService';
 import type { Project } from '../services/projectService';
 import { useTheme } from '../context/ThemeContext';
 import { UserSidePanel } from '../components/UserSidePanel';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface ProjectsProps {
     user: { name: string; email: string; avatarImage?: string } | null;
@@ -13,6 +14,7 @@ interface ProjectsProps {
 }
 
 export function Projects({ user, onLogout }: ProjectsProps) {
+    usePageTitle('Projects');
     const navigate = useNavigate();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);

@@ -7,6 +7,7 @@ import { Terminal } from '../components/Terminal';
 import { Button } from '../components/ui/button';
 import { Task, getTask, startTask, saveTaskCode, runTaskTests, TaskTestResultItem } from '../services/taskService';
 import type { Language, Theme, ConsoleOutput } from '../types';
+import { usePageTitle } from '../hooks/usePageTitle';
 
 interface TaskPageProps {
   user: { name: string; email: string } | null;
@@ -14,6 +15,7 @@ interface TaskPageProps {
 }
 
 export default function TaskPage({ user }: TaskPageProps) {
+  usePageTitle('Task');
   const navigate = useNavigate();
   const { taskId } = useParams<{ taskId: string }>();
 

@@ -186,7 +186,7 @@ export default function QuestionDetailPage() {
   const handleLogout = () => {
     localStorage.removeItem('nexusquest-token');
     localStorage.removeItem('nexusquest-user');
-    navigate('/');
+    navigate('/login');
   };
 
   const formatDate = (dateStr: string) => {

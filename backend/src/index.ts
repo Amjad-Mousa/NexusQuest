@@ -39,7 +39,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Use the container-forwarded port by default and bind to 0.0.0.0 so Docker can route traffic
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '9876', 10);
 
 // Security middleware
 app.use(helmet());
@@ -57,6 +57,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'http://192.168.1.100:5173',
 ];
 
 app.use(cors({
