@@ -27,12 +27,3 @@ export const getQuizStatusColor = (status: string): string => {
         default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
     }
 };
-
-export const formatDateTime = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-};

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchUsers, fetchConversations, type ChatUser } from '../services/userService';
+import { getUnreadMessages, incrementUnreadCount, clearUnreadCount } from '../utils';
 import { getStoredUser } from '../services/authService';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { useTheme } from '../context/ThemeContext';
@@ -29,13 +30,7 @@ export function UsersPage() {
       setUsers(filteredUsers);
       setConversations(convos);
 
-      try {
-        const raw = localStorage.getItem('nexusquest-unread-users');
-        const map: Record<string, number> = raw ? JSON.parse(raw) : {};
-        setUnreadByUser(map);
-      } catch {
-        // ignore JSON errors
-      }
+      setUnreadByUser(getUnreadMessages());
     });
   }, [navigate]);
 
@@ -51,11 +46,8 @@ export function UsersPage() {
     const handleReceived = (_msg: ChatMessage) => {
       const currentUser = getStoredUser();
       if (currentUser && _msg.recipientId === currentUser.id) {
-        const fromId = _msg.senderId;
-        setUnreadByUser(prev => ({
-          ...prev,
-          [fromId]: (prev[fromId] || 0) + 1,
-        }));
+        incrementUnreadCount(_msg.senderId);
+        setUnreadByUser(getUnreadMessages());
       }
     };
 
@@ -79,14 +71,8 @@ export function UsersPage() {
   }, [users, search]);
 
   const clearUnread = (userId: string) => {
-    setUnreadByUser(prev => {
-      const next = { ...prev };
-      if (next[userId]) {
-        delete next[userId];
-        localStorage.setItem('nexusquest-unread-users', JSON.stringify(next));
-      }
-      return next;
-    });
+    clearUnreadCount(userId);
+    setUnreadByUser(getUnreadMessages());
   };
 
   return (

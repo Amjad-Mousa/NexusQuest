@@ -14,6 +14,7 @@ import { NotificationsBell } from '../components/NotificationsBell';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { fetchUsers, type ChatUser, getMyLeaderboardRank } from '../services/userService';
 import { getDailyChallengeStats } from '../services/dailyChallengeService';
+import { incrementUnreadCount } from '../utils';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 interface DashboardProps {
@@ -88,16 +89,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       // Increment global counter
       setNewMessageCount((prev) => prev + 1);
 
-      // Persist per-user unread counts so Messages page can show badges
-      try {
-        const raw = localStorage.getItem('nexusquest-unread-users');
-        const map: Record<string, number> = raw ? JSON.parse(raw) : {};
-        const fromId = _msg.senderId;
-        map[fromId] = (map[fromId] || 0) + 1;
-        localStorage.setItem('nexusquest-unread-users', JSON.stringify(map));
-      } catch {
-        // ignore JSON/localStorage errors
-      }
+      // Persist per-user unread counts
+      incrementUnreadCount(_msg.senderId);
     };
 
     s.on('dm:received', handleReceived as any);

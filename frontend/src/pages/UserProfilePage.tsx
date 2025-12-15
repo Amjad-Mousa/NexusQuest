@@ -9,6 +9,7 @@ import { Star, CheckCircle, Trophy, Zap, Lock } from 'lucide-react';
 import { getUserDailyChallengeStats } from '../services/dailyChallengeService';
 import { getGamificationProfile, GamificationProfile, getAvailableAchievements, AchievementWithStatus } from '../services/gamificationService';
 import { getUserProgress, TaskProgress } from '../services/taskService';
+import { getCategoryColor, getTimeAgo } from '../utils';
 
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -202,16 +203,6 @@ export function UserProfilePage() {
     { label: 'Current Streak', value: `${streak} days`, icon: Zap, color: 'blue' }
   ];
 
-  const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      python: 'blue',
-      javascript: 'yellow',
-      java: 'red',
-      cpp: 'purple',
-      general: 'green'
-    };
-    return colors[category] || 'gray';
-  };
 
   const skills = gamificationProfile?.skills.map(skill => ({
     name: skill.name,
@@ -223,12 +214,7 @@ export function UserProfilePage() {
   const recentActivity = completedTasks.slice(0, 4).map((progress, index) => {
     const task = progress.taskId;
     const completedDate = progress.completedAt ? new Date(progress.completedAt) : new Date();
-    const now = new Date();
-    const diffMs = now.getTime() - completedDate.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-    const timeAgo = diffDays > 0 ? `${diffDays} day${diffDays > 1 ? 's' : ''} ago` : 
-                   diffHours > 0 ? `${diffHours} hour${diffHours > 1 ? 's' : ''} ago` : 'Just now';
+    const timeAgo = getTimeAgo(completedDate);
     
     return {
       id: index + 1,

@@ -4,6 +4,7 @@ import { BookOpen, Code, Filter, Loader2, Search } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { getTutorials, getAvailableLanguages, Tutorial } from '../services/tutorialService';
+import { getDifficultyColorForTutorial } from '../utils';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function TutorialsPage() {
@@ -61,18 +62,6 @@ export default function TutorialsPage() {
     });
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'beginner':
-        return 'bg-green-500/20 text-green-400';
-      case 'intermediate':
-        return 'bg-yellow-500/20 text-yellow-400';
-      case 'advanced':
-        return 'bg-red-500/20 text-red-400';
-      default:
-        return 'bg-gray-500/20 text-gray-400';
-    }
-  };
 
   if (loading) {
     return (
@@ -207,7 +196,7 @@ export default function TutorialsPage() {
                       >
                         <div className="flex items-start justify-between mb-3">
                           <h3 className="font-semibold text-lg">{tutorial.title}</h3>
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(tutorial.difficulty)}`}>
+                          <span className={`px-2 py-1 rounded-full text-xs ${getDifficultyColorForTutorial(tutorial.difficulty)}`}>
                             {tutorial.difficulty}
                           </span>
                         </div>

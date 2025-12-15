@@ -1,6 +1,7 @@
 import { Clock, Calendar, CheckCircle2, Play, Trophy } from 'lucide-react';
 import { DifficultyBadge } from './DifficultyBadge';
-import { getQuizStatusColor, formatDateTime } from '../../utils/styleHelpers';
+import { getQuizStatusColor } from '../../utils/styleHelpers';
+import { formatDateTime } from '../../utils/dateHelpers';
 import type { Quiz } from '../../services/quizService';
 
 interface QuizCardProps {

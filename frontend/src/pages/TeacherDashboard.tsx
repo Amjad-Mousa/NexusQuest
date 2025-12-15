@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, BookOpen, Award, BarChart3, User, Clock, Calendar, Users, Book, MessageCircle, Code2 } from 'lucide-react';
-import { getDifficultyColor, getQuizStatusColor, formatDateTime } from '../utils/styleHelpers';
+import { getDifficultyColor, getQuizStatusColor } from '../utils/styleHelpers';
+import { formatDateTime } from '../utils/dateHelpers';
 import { Button } from '../components/ui/button';
 import { Task, getMyTasks, deleteTask } from '../services/taskService';
 import { Quiz, getMyQuizzes, deleteQuiz } from '../services/quizService';
