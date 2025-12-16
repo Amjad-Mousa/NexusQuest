@@ -467,14 +467,118 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
     }
 });
 
-// Submit quiz solution
-router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
+// Run code against test cases (without submitting)
+router.post('/:id/run', async (req: AuthRequest, res: Response) => {
     try {
         const { code } = req.body as { code?: string };
 
         if (!code || !code.trim()) {
             return res.status(400).json({ success: false, error: 'Code is required' });
         }
+
+        const quiz = await Quiz.findById(req.params.id);
+
+        if (!quiz) {
+            return res.status(404).json({ success: false, error: 'Quiz not found' });
+        }
+
+        const status = getQuizStatus(quiz);
+        if (status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                error: status === 'scheduled' ? 'Quiz has not started yet' : 'Quiz has ended',
+            });
+        }
+
+        // Check if user has started the quiz
+        const submission = await QuizSubmission.findOne({
+            quizId: quiz._id,
+            userId: req.userId,
+        });
+
+        if (!submission) {
+            return res.status(400).json({ success: false, error: 'You must start the quiz first' });
+        }
+
+        // Only run against visible test cases
+        const visibleTestCases = (quiz.testCases || []).filter(tc => !tc.isHidden);
+        const normalize = (value: string): string => {
+            return value.replace(/\r\n/g, '\n').trim();
+        };
+
+        const results = [] as Array<{
+            index: number;
+            passed: boolean;
+            input: string;
+            expectedOutput: string;
+            actualOutput: string;
+            error?: string;
+        }>;
+
+        for (let i = 0; i < visibleTestCases.length; i++) {
+            const test = visibleTestCases[i];
+
+            try {
+                const execResult = await Promise.race([
+                    executeCode(code, quiz.language, test.input),
+                    new Promise<never>((_, reject) => {
+                        setTimeout(() => reject(new Error('Test execution timeout (10 seconds)')), 10000);
+                    }),
+                ]);
+
+                const actual = (execResult as any).error
+                    ? (execResult as any).error
+                    : (execResult as any).output;
+
+                const passed = !(execResult as any).error && normalize(actual) === normalize(test.expectedOutput);
+
+                results.push({
+                    index: i,
+                    passed,
+                    input: test.input,
+                    expectedOutput: test.expectedOutput,
+                    actualOutput: actual,
+                    error: (execResult as any).error || undefined,
+                });
+            } catch (error: any) {
+                results.push({
+                    index: i,
+                    passed: false,
+                    input: test.input,
+                    expectedOutput: test.expectedOutput,
+                    actualOutput: '',
+                    error: error?.message || 'Execution failed',
+                });
+            }
+        }
+
+        const passed = results.filter(r => r.passed).length;
+
+        res.json({
+            success: true,
+            data: {
+                total: results.length,
+                passed,
+                results,
+            },
+        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        res.status(500).json({ success: false, error: err.message || 'Failed to run code' });
+    }
+});
+
+// Submit quiz solution
+router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
+    try {
+        const { code, forceSubmit, violations } = req.body as { code?: string; forceSubmit?: boolean; violations?: number };
+
+        // Allow empty code only for force submit (when student tries to cheat)
+        if (!forceSubmit && (!code || !code.trim())) {
+            return res.status(400).json({ success: false, error: 'Code is required' });
+        }
+        
+        const submittedCode = code || '';
 
         const quiz = await Quiz.findById(req.params.id);
 
@@ -524,7 +628,7 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
 
             try {
                 const execResult = await Promise.race([
-                    executeCode(code, quiz.language, test.input),
+                    executeCode(submittedCode, quiz.language, test.input),
                     new Promise<never>((_, reject) => {
                         setTimeout(() => reject(new Error('Test execution timeout (10 seconds)')), 10000);
                     }),
@@ -557,23 +661,32 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
         const passed = results.filter(r => r.passed).length;
         const allPassed = passed === results.length;
 
-        // Calculate points (proportional to tests passed)
-        // Only award points automatically if all tests pass
-        const newPointsAwarded = allPassed ? quiz.points : 0;
+        // Calculate auto grade based on percentage of tests passed (0-100)
+        const autoGrade = results.length > 0 ? Math.round((passed / results.length) * 100) : 0;
+
+        // Calculate points proportionally based on tests passed
+        const newPointsAwarded = results.length > 0 
+            ? Math.round((passed / results.length) * quiz.points) 
+            : 0;
 
         // Track previous points to handle point adjustments
         const previousPoints = submission.pointsAwarded || 0;
         const pointsDiff = newPointsAwarded - previousPoints;
 
         // Update submission
-        submission.code = code;
+        submission.code = submittedCode;
         submission.status = allPassed ? 'passed' : 'submitted';
         submission.score = passed;
         submission.totalTests = results.length;
         submission.submittedAt = new Date();
+        
+        // Set auto grade (teacher can override this later)
+        if (submission.teacherGrade === undefined) {
+            submission.teacherGrade = autoGrade;
+        }
 
-        // Only update points if score improved (all passed)
-        if (allPassed && pointsDiff > 0) {
+        // Award points proportionally (only if improved)
+        if (pointsDiff > 0) {
             submission.pointsAwarded = newPointsAwarded;
             await User.findByIdAndUpdate(req.userId, { $inc: { totalPoints: pointsDiff } });
 
@@ -582,12 +695,15 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
                 await Notification.create({
                     userId: req.userId,
                     type: NotificationType.POINTS_EARNED,
-                    message: `You earned ${pointsDiff} points from quiz "${quiz.title}"`,
+                    message: `You earned ${pointsDiff} points from quiz "${quiz.title}" (${passed}/${results.length} tests passed)`,
                     metadata: {
                         quizId: quiz._id,
                         title: quiz.title,
                         points: pointsDiff,
-                        reason: 'quiz_auto_pass',
+                        testsPassed: passed,
+                        totalTests: results.length,
+                        autoGrade: autoGrade,
+                        reason: 'quiz_auto_grade',
                     },
                     read: false,
                 });
@@ -597,6 +713,35 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
         }
 
         await submission.save();
+
+        // If force submitted (student tried to switch tabs), notify the teacher
+        if (forceSubmit) {
+            try {
+                // Get student info
+                const student = await User.findById(req.userId).select('name email');
+                
+                // Send notification to the quiz creator (teacher)
+                await Notification.create({
+                    userId: quiz.createdBy,
+                    type: NotificationType.QUIZ_VIOLATION,
+                    message: `⚠️ Student ${student?.name || 'Unknown'} attempted to leave quiz "${quiz.title}" and was force-submitted`,
+                    metadata: {
+                        quizId: quiz._id,
+                        quizTitle: quiz.title,
+                        studentId: req.userId,
+                        studentName: student?.name,
+                        studentEmail: student?.email,
+                        violations: violations || 1,
+                        reason: 'tab_switch_detected',
+                        submittedAt: new Date(),
+                    },
+                    read: false,
+                });
+                console.log(`🚨 Quiz violation notification sent to teacher for student: ${student?.name}`);
+            } catch (notifyError) {
+                console.error('Failed to create QUIZ_VIOLATION notification:', notifyError);
+            }
+        }
 
         // Check and unlock quiz achievements
         try {

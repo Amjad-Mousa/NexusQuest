@@ -119,10 +119,10 @@ Current context: User is working with ${language}. They may have code in their e
       messages.push({ role: 'user', content: userMsg });
       
       const completion = await groqClient.chat.completions.create({
-        model: process.env.GROQ_MODEL || 'llama-3.1-70b-versatile', // Use more powerful model
+        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', // Latest and best model
         messages,
-        max_tokens: 1500, // More tokens for detailed responses
-        temperature: 0.8, // More creative and natural
+        max_tokens: 2000, // More tokens for detailed responses
+        temperature: 0.7, // Balanced creativity
       });
       
       const response = completion.choices[0]?.message?.content?.trim();

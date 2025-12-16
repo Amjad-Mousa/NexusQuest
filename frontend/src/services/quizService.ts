@@ -163,8 +163,33 @@ export async function startQuiz(id: string): Promise<{ submission: QuizSubmissio
     return data.data;
 }
 
-export async function submitQuiz(id: string, code: string): Promise<QuizSubmitResponse> {
+export async function submitQuiz(id: string, code: string, forceSubmit?: boolean, violations?: number): Promise<QuizSubmitResponse> {
     const res = await authFetch(`${API_URL}/api/quizzes/${id}/submit`, {
+        method: 'POST',
+        body: JSON.stringify({ code, forceSubmit, violations }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+}
+
+export interface RunTestResult {
+    index: number;
+    passed: boolean;
+    input: string;
+    expectedOutput: string;
+    actualOutput: string;
+    error?: string;
+}
+
+export interface RunTestsResponse {
+    total: number;
+    passed: number;
+    results: RunTestResult[];
+}
+
+export async function runTests(id: string, code: string): Promise<RunTestsResponse> {
+    const res = await authFetch(`${API_URL}/api/quizzes/${id}/run`, {
         method: 'POST',
         body: JSON.stringify({ code }),
     });
