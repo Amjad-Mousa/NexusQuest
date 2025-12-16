@@ -470,7 +470,7 @@ router.post('/:id/start', async (req: AuthRequest, res: Response) => {
 // Submit quiz solution
 router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
     try {
-        const { code } = req.body as { code?: string };
+        const { code, forceSubmit, violations } = req.body as { code?: string; forceSubmit?: boolean; violations?: number };
 
         if (!code || !code.trim()) {
             return res.status(400).json({ success: false, error: 'Code is required' });
@@ -597,6 +597,35 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
         }
 
         await submission.save();
+
+        // If force submitted (student tried to switch tabs), notify the teacher
+        if (forceSubmit) {
+            try {
+                // Get student info
+                const student = await User.findById(req.userId).select('name email');
+                
+                // Send notification to the quiz creator (teacher)
+                await Notification.create({
+                    userId: quiz.createdBy,
+                    type: NotificationType.QUIZ_VIOLATION,
+                    message: `⚠️ الطالب ${student?.name || 'Unknown'} حاول الخروج من الكويز "${quiz.title}" وتم تسليمه إجبارياً`,
+                    metadata: {
+                        quizId: quiz._id,
+                        quizTitle: quiz.title,
+                        studentId: req.userId,
+                        studentName: student?.name,
+                        studentEmail: student?.email,
+                        violations: violations || 1,
+                        reason: 'tab_switch_detected',
+                        submittedAt: new Date(),
+                    },
+                    read: false,
+                });
+                console.log(`🚨 Quiz violation notification sent to teacher for student: ${student?.name}`);
+            } catch (notifyError) {
+                console.error('Failed to create QUIZ_VIOLATION notification:', notifyError);
+            }
+        }
 
         // Check and unlock quiz achievements
         try {

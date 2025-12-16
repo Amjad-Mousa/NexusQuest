@@ -27,6 +27,20 @@ export default function QuizPage() {
   const [forceSubmitted, setForceSubmitted] = useState(false);
   const isSubmittingRef = useRef(false);
   const quizContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Refs to hold current values for event handlers
+  const codeRef = useRef(code);
+  const violationsRef = useRef(violations);
+  const resultRef = useRef(result);
+  const forceSubmittedRef = useRef(forceSubmitted);
+  const startedRef = useRef(started);
+  
+  // Keep refs in sync with state
+  useEffect(() => { codeRef.current = code; }, [code]);
+  useEffect(() => { violationsRef.current = violations; }, [violations]);
+  useEffect(() => { resultRef.current = result; }, [result]);
+  useEffect(() => { forceSubmittedRef.current = forceSubmitted; }, [forceSubmitted]);
+  useEffect(() => { startedRef.current = started; }, [started]);
 
   // Load quiz data
   const loadQuiz = useCallback(async () => {
@@ -142,55 +156,66 @@ export default function QuizPage() {
     };
   }, [started, result]);
 
-  // Force submit quiz when tab/window loses focus
-  const forceSubmitQuiz = useCallback(async () => {
-    if (!id || isSubmittingRef.current || result || forceSubmitted) return;
+  // Force submit quiz and redirect - called when student tries to leave
+  const forceSubmitAndRedirect = useCallback(async () => {
+    // Use refs to get current values
+    if (!id || isSubmittingRef.current || resultRef.current || forceSubmittedRef.current) return;
     
+    console.log('🚨 FORCE SUBMIT TRIGGERED!');
     isSubmittingRef.current = true;
-    try {
-      setSubmitting(true);
-      const submitResult = await submitQuiz(id, code);
-      setResult(submitResult);
-      setForceSubmitted(true);
-      
-      // Exit fullscreen
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      }
-    } catch (err: any) {
-      console.error('Force submit failed:', err);
-    } finally {
-      setSubmitting(false);
-      isSubmittingRef.current = false;
+    forceSubmittedRef.current = true;
+    setForceSubmitted(true);
+    
+    // Exit fullscreen first
+    if (document.fullscreenElement) {
+      try { document.exitFullscreen(); } catch (e) { /* ignore */ }
     }
-  }, [id, code, result, forceSubmitted]);
+    
+    // Submit the quiz with forceSubmit flag (don't await - do it in background)
+    submitQuiz(id, codeRef.current || '', true, violationsRef.current || 0)
+      .then(() => console.log('✅ Quiz force submitted successfully'))
+      .catch((err) => console.error('❌ Force submit failed:', err));
+    
+    // Redirect immediately using window.location for guaranteed redirect
+    window.location.href = '/quizzes';
+  }, [id]);
 
   // Monitor tab/window visibility changes - AUTO SUBMIT on tab switch
   useEffect(() => {
-    if (!started || result || forceSubmitted) return;
+    if (!started) return;
 
     const handleVisibilityChange = () => {
-      if (document.hidden && started && !result && !forceSubmitted) {
-        // Auto submit quiz when switching tabs
-        forceSubmitQuiz();
+      console.log('👁️ Visibility changed, hidden:', document.hidden);
+      console.log('States - started:', startedRef.current, 'result:', resultRef.current, 'forceSubmitted:', forceSubmittedRef.current);
+      
+      if (document.hidden && startedRef.current && !resultRef.current && !forceSubmittedRef.current) {
+        console.log('🚨 Tab switch detected! Force submitting and redirecting...');
+        forceSubmitAndRedirect();
       }
     };
 
     const handleBlur = () => {
-      if (started && !result && !forceSubmitted) {
-        // Auto submit quiz when window loses focus
-        forceSubmitQuiz();
+      console.log('👁️ Window blur detected');
+      console.log('States - started:', startedRef.current, 'result:', resultRef.current, 'forceSubmitted:', forceSubmittedRef.current);
+      
+      if (startedRef.current && !resultRef.current && !forceSubmittedRef.current) {
+        console.log('🚨 Window blur! Force submitting and redirecting...');
+        forceSubmitAndRedirect();
       }
     };
 
+    // Add listeners
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
+
+    console.log('👂 Event listeners added for quiz protection');
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
+      console.log('👂 Event listeners removed');
     };
-  }, [started, result, forceSubmitted, forceSubmitQuiz]);
+  }, [started, forceSubmitAndRedirect]);
 
   // Prevent keyboard shortcuts - but still submit if they manage to switch
   useEffect(() => {

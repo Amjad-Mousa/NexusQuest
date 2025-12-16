@@ -163,10 +163,10 @@ export async function startQuiz(id: string): Promise<{ submission: QuizSubmissio
     return data.data;
 }
 
-export async function submitQuiz(id: string, code: string): Promise<QuizSubmitResponse> {
+export async function submitQuiz(id: string, code: string, forceSubmit?: boolean, violations?: number): Promise<QuizSubmitResponse> {
     const res = await authFetch(`${API_URL}/api/quizzes/${id}/submit`, {
         method: 'POST',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, forceSubmit, violations }),
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
