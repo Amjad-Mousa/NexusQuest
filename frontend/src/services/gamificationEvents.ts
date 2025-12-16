@@ -16,11 +16,12 @@ export function triggerAchievementNotification(title: string, description: strin
 
 // Check for level up and achievements after completing tasks/quizzes
 import { getStoredToken } from './authService';
+import { getApiUrl } from '../utils/apiHelpers';
 
 export async function checkGamificationUpdates(previousLevel?: number, previousAchievements?: string[]) {
     try {
         const token = getStoredToken();
-        const response = await fetch('http://localhost:9876/api/gamification/profile', {
+        const response = await fetch(`${getApiUrl()}/api/gamification/profile`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
             },

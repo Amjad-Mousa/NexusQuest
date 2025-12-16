@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:9876';
+import { getApiUrl } from '../utils/apiHelpers';
+
+const API_BASE_URL = getApiUrl();
 
 export interface AiCompletionRequest {
   code: string;

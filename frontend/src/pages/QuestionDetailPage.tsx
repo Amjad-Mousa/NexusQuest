@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
+import { getApiUrl } from '../utils/apiHelpers';
 import {
   getQuestion,
   createAnswer,
@@ -57,7 +58,7 @@ export default function QuestionDetailPage() {
   const loadUserAvatar = async () => {
     try {
       const token = localStorage.getItem('nexusquest-token');
-      const response = await fetch('http://localhost:9876/api/auth/me', {
+      const response = await fetch(`${getApiUrl()}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();

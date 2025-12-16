@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button';
 import { Task, getTask, startTask, saveTaskCode, runTaskTests, TaskTestResultItem } from '../services/taskService';
 import type { Language, Theme, ConsoleOutput } from '../types';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface TaskPageProps {
   user: { name: string; email: string } | null;
@@ -87,7 +88,7 @@ export default function TaskPage({ user }: TaskPageProps) {
     const loadUserAvatar = async () => {
       try {
         const token = localStorage.getItem('nexusquest-token');
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();

@@ -10,6 +10,7 @@ import { getDailyChallengeStats } from '../services/dailyChallengeService';
 import { getGamificationProfile, GamificationProfile, getAllAchievementsWithStatus, AchievementWithStatus, addCustomSkill, removeCustomSkill } from '../services/gamificationService';
 import { getCategoryColor, getTimeAgo } from '../utils';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface ProfileProps {
   user: { name: string; email: string } | null;
@@ -77,7 +78,7 @@ export function Profile({ user, onLogout }: ProfileProps) {
   const handlePrivacyChange = async (newIsPublic: boolean) => {
     try {
       const token = localStorage.getItem('nexusquest-token');
-      const response = await fetch('http://localhost:9876/api/gamification/profile/settings', {
+      const response = await fetch(`${getApiUrl()}/api/gamification/profile/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +136,7 @@ export function Profile({ user, onLogout }: ProfileProps) {
       if (editName) updateData.name = editName;
       if (editPassword) updateData.password = editPassword;
 
-      const response = await fetch('http://localhost:9876/api/auth/profile', {
+      const response = await fetch(`${getApiUrl()}/api/auth/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(updateData)

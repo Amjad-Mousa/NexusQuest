@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
+import { getApiUrl } from '../utils/apiHelpers';
 import { getQuestions, getTags, Question } from '../services/forumService';
 import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
@@ -52,7 +53,7 @@ export default function ForumPage() {
   const loadUserAvatar = async () => {
     try {
       const token = localStorage.getItem('nexusquest-token');
-      const response = await fetch('http://localhost:9876/api/auth/me', {
+      const response = await fetch(`${getApiUrl()}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();

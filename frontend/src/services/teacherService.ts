@@ -1,4 +1,6 @@
-const API_BASE = 'http://localhost:9876/api';
+import { getApiUrl } from '../utils/apiHelpers';
+
+const API_BASE = `${getApiUrl()}/api`;
 
 export interface TeacherStats {
   totalTasks: number;

@@ -1,6 +1,7 @@
 // User-related utility functions
 
 import { getStoredToken } from '../services/authService';
+import { getApiUrl } from './apiHelpers';
 
 /**
  * Fetch current user's avatar image
@@ -10,7 +11,7 @@ export async function fetchUserAvatar(): Promise<string | null> {
         const token = getStoredToken();
         if (!token) return null;
 
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -38,7 +39,7 @@ export async function fetchCurrentUser(): Promise<{
         const token = getStoredToken();
         if (!token) return null;
 
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }

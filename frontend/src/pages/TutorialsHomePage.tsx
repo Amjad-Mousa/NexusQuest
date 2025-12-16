@@ -9,6 +9,7 @@ import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface LanguageFolder {
   language: string;
@@ -41,7 +42,7 @@ export default function TutorialsHomePage() {
     const loadUserAvatar = async () => {
       try {
         const token = localStorage.getItem('nexusquest-token');
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

@@ -1,7 +1,8 @@
 import { io, Socket } from 'socket.io-client';
 import { getStoredToken } from './authService';
+import { getApiUrl } from '../utils/apiHelpers';
 
-const API_URL = 'http://localhost:9876';
+const API_URL = getApiUrl();
 
 let socket: Socket | null = null;
 

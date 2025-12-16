@@ -8,6 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getStoredUser } from '../services/authService';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { getApiUrl } from '../utils/apiHelpers';
 
 const DEFAULT_CODE: Record<string, string> = {
   python: `# Python Playground - Write and run code instantly!
@@ -76,7 +77,7 @@ export function Playground() {
     const loadUserAvatar = async () => {
       try {
         const token = localStorage.getItem('nexusquest-token');
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();

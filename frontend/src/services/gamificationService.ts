@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:9876/api';
+import { getApiUrl } from '../utils/apiHelpers';
+
+const API_URL = `${getApiUrl()}/api`;
 
 export interface Skill {
     name: string;

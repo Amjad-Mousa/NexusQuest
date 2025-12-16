@@ -1,6 +1,7 @@
 import { getStoredToken } from './authService';
+import { getApiUrl } from '../utils/apiHelpers';
 
-const API_URL = 'http://localhost:9876';
+const API_URL = getApiUrl();
 
 export interface ChatUser {
     id: string;

@@ -8,6 +8,7 @@ import CollaborativeEditor from '../components/CollaborativeEditor';
 import { useTheme } from '../context/ThemeContext';
 import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
+import { getApiUrl } from '../utils/apiHelpers';
 import {
   Plus,
   Users,
@@ -62,7 +63,7 @@ export default function CollaborationPage() {
     const loadUserAvatar = async () => {
       try {
         const token = localStorage.getItem('nexusquest-token');
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();

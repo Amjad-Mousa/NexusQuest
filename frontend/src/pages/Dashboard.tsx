@@ -16,6 +16,7 @@ import { fetchUsers, type ChatUser, getMyLeaderboardRank } from '../services/use
 import { getDailyChallengeStats } from '../services/dailyChallengeService';
 import { incrementUnreadCount } from '../utils';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface DashboardProps {
   user: { name: string; email: string } | null;
@@ -47,7 +48,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     const loadUserAvatar = async () => {
       try {
         const token = localStorage.getItem('nexusquest-token');
-        const response = await fetch('http://localhost:9876/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
