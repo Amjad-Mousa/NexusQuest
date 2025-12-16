@@ -24,6 +24,8 @@ export default function QuizPage() {
   const [violations, setViolations] = useState(0);
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [violationMessage, setViolationMessage] = useState('');
+  const [forceSubmitted, setForceSubmitted] = useState(false);
+  const isSubmittingRef = useRef(false);
   const quizContainerRef = useRef<HTMLDivElement>(null);
 
   // Load quiz data
@@ -140,23 +142,44 @@ export default function QuizPage() {
     };
   }, [started, result]);
 
-  // Monitor tab/window visibility changes
+  // Force submit quiz when tab/window loses focus
+  const forceSubmitQuiz = useCallback(async () => {
+    if (!id || isSubmittingRef.current || result || forceSubmitted) return;
+    
+    isSubmittingRef.current = true;
+    try {
+      setSubmitting(true);
+      const submitResult = await submitQuiz(id, code);
+      setResult(submitResult);
+      setForceSubmitted(true);
+      
+      // Exit fullscreen
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    } catch (err: any) {
+      console.error('Force submit failed:', err);
+    } finally {
+      setSubmitting(false);
+      isSubmittingRef.current = false;
+    }
+  }, [id, code, result, forceSubmitted]);
+
+  // Monitor tab/window visibility changes - AUTO SUBMIT on tab switch
   useEffect(() => {
-    if (!started || result) return;
+    if (!started || result || forceSubmitted) return;
 
     const handleVisibilityChange = () => {
-      if (document.hidden && started && !result) {
-        setViolations(prev => prev + 1);
-        setViolationMessage('⚠️ تم اكتشاف محاولة تبديل التطبيق! هذا مخالف لقواعد الاختبار.');
-        setShowViolationWarning(true);
+      if (document.hidden && started && !result && !forceSubmitted) {
+        // Auto submit quiz when switching tabs
+        forceSubmitQuiz();
       }
     };
 
     const handleBlur = () => {
-      if (started && !result) {
-        setViolations(prev => prev + 1);
-        setViolationMessage('⚠️ تم اكتشاف محاولة الخروج من النافذة!');
-        setShowViolationWarning(true);
+      if (started && !result && !forceSubmitted) {
+        // Auto submit quiz when window loses focus
+        forceSubmitQuiz();
       }
     };
 
@@ -167,24 +190,18 @@ export default function QuizPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [started, result]);
+  }, [started, result, forceSubmitted, forceSubmitQuiz]);
 
-  // Prevent keyboard shortcuts
+  // Prevent keyboard shortcuts - but still submit if they manage to switch
   useEffect(() => {
-    if (!started || result) return;
+    if (!started || result || forceSubmitted) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Block common exit shortcuts
-      if (
-        e.key === 'Escape' ||
-        (e.altKey && e.key === 'Tab') ||
-        (e.altKey && e.key === 'F4') ||
-        (e.ctrlKey && e.key === 'w') ||
-        (e.metaKey && e.key === 'Tab')
-      ) {
+      // Block Escape to prevent exiting fullscreen
+      if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        setViolationMessage('⚠️ لا يمكنك استخدام هذا الاختصار أثناء الاختبار!');
+        setViolationMessage('⚠️ لا يمكنك الخروج من وضع الشاشة الكاملة!');
         setShowViolationWarning(true);
         setTimeout(() => setShowViolationWarning(false), 3000);
       }
@@ -192,7 +209,7 @@ export default function QuizPage() {
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [started, result]);
+  }, [started, result, forceSubmitted]);
 
   // Exit fullscreen when quiz ends or result is shown
   useEffect(() => {
@@ -200,6 +217,13 @@ export default function QuizPage() {
       exitFullscreen();
     }
   }, [result, isFullscreen, exitFullscreen]);
+
+  // Check if quiz was force submitted (prevent re-entry)
+  useEffect(() => {
+    if (quiz?.submission?.status === 'submitted' || quiz?.submission?.status === 'passed') {
+      setForceSubmitted(true);
+    }
+  }, [quiz]);
 
   const handleStart = async () => {
     if (!id) return;
