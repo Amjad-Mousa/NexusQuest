@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Play, CheckCircle2, XCircle, Loader2, AlertTriangle, Trophy, RefreshCw, Maximize, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Clock, Play, CheckCircle2, XCircle, Loader2, AlertTriangle, Trophy, RefreshCw, Maximize, ShieldAlert, Terminal } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { Quiz, getQuiz, startQuiz, submitQuiz, QuizSubmitResponse, runTests, RunTestsResponse } from '../services/quizService';
 import { usePageTitle } from '../hooks/usePageTitle';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9876';
 
 export default function QuizPage() {
   usePageTitle('Quiz');
@@ -27,7 +29,12 @@ export default function QuizPage() {
   const [forceSubmitted, setForceSubmitted] = useState(false);
   const [runningTests, setRunningTests] = useState(false);
   const [testResults, setTestResults] = useState<RunTestsResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<'problem' | 'testcases'>('problem');
+  const [activeTab, setActiveTab] = useState<'problem' | 'testcases' | 'runconsole'>('problem');
+  const [terminalLines, setTerminalLines] = useState<Array<{type: 'output' | 'error', content: string}>>([]);
+  const [terminalInput, setTerminalInput] = useState('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isCodeRunning, setIsCodeRunning] = useState(false);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
   const isSubmittingRef = useRef(false);
   const quizContainerRef = useRef<HTMLDivElement>(null);
   
@@ -310,6 +317,105 @@ export default function QuizPage() {
 
   // Get visible test cases (non-hidden)
   const visibleTestCases = quiz?.testCases?.filter(tc => !tc.isHidden) || [];
+
+  // Scroll terminal to bottom
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [terminalLines]);
+
+  // Run code with interactive input (like Playground)
+  const handleRunCode = async () => {
+    if (!quiz || isCodeRunning) return;
+    
+    const newSessionId = `${Date.now()}`;
+    setSessionId(newSessionId);
+    setIsCodeRunning(true);
+    setTerminalLines([{ type: 'output', content: `▶️ Running ${quiz.language} code...\n` }]);
+    setActiveTab('runconsole');
+
+    try {
+      const response = await fetch(`${API_URL}/api/playground/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          language: quiz.language,
+          sessionId: newSessionId
+        })
+      });
+
+      if (!response.ok) throw new Error(`Request failed: ${response.statusText}`);
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts[parts.length - 1];
+
+        for (let i = 0; i < parts.length - 1; i++) {
+          const message = parts[i];
+          if (message.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(message.substring(6));
+              if (data.type === 'stdout' || data.type === 'output') {
+                setTerminalLines(prev => [...prev, { type: 'output', content: data.data || data.content }]);
+              } else if (data.type === 'stderr' || data.type === 'error') {
+                setTerminalLines(prev => [...prev, { type: 'error', content: data.data || data.content }]);
+              } else if (data.type === 'end') {
+                setTerminalLines(prev => [...prev, { type: 'output', content: '\n✓ Program finished\n' }]);
+                setIsCodeRunning(false);
+              }
+            } catch (e) { /* ignore parse errors */ }
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.substring(6));
+          if (data.type === 'stdout' || data.type === 'output') {
+            setTerminalLines(prev => [...prev, { type: 'output', content: data.data || data.content }]);
+          } else if (data.type === 'stderr' || data.type === 'error') {
+            setTerminalLines(prev => [...prev, { type: 'error', content: data.data || data.content }]);
+          } else if (data.type === 'end') {
+            setTerminalLines(prev => [...prev, { type: 'output', content: '\n✓ Program finished\n' }]);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      setIsCodeRunning(false);
+    } catch (error: any) {
+      setTerminalLines(prev => [...prev, { type: 'error', content: `Error: ${error.message}\n` }]);
+      setIsCodeRunning(false);
+    }
+  };
+
+  // Send input to running program
+  const handleTerminalInputSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!terminalInput.trim() || !sessionId) return;
+
+    setTerminalLines(prev => [...prev, { type: 'output', content: terminalInput + '\n' }]);
+
+    try {
+      await fetch(`${API_URL}/api/playground/input`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, input: terminalInput })
+      });
+      setTerminalInput('');
+    } catch (error: any) {
+      setTerminalLines(prev => [...prev, { type: 'error', content: `Failed to send input: ${error.message}\n` }]);
+    }
+  };
 
   const formatTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -610,6 +716,17 @@ export default function QuizPage() {
                 >
                   Test Cases ({visibleTestCases.length})
                 </button>
+                <button
+                  onClick={() => setActiveTab('runconsole')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
+                    activeTab === 'runconsole'
+                      ? theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow'
+                      : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Terminal className="w-4 h-4" />
+                  Console
+                </button>
               </div>
 
               {/* Problem Tab */}
@@ -710,6 +827,69 @@ export default function QuizPage() {
                   )}
                 </div>
               )}
+
+              {/* Console Tab */}
+              {activeTab === 'runconsole' && (
+                <div className={`rounded-xl overflow-hidden h-[400px] flex flex-col ${theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <div className={`px-4 py-2 border-b flex items-center justify-between ${theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Terminal className="w-4 h-4" />
+                      Console
+                    </h3>
+                    {isCodeRunning && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-green-500">Running...</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Terminal Output */}
+                  <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
+                    {terminalLines.length === 0 ? (
+                      <p className={`${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Click "Run Code" to execute your code with input support...
+                      </p>
+                    ) : (
+                      terminalLines.map((line, index) => (
+                        <div
+                          key={index}
+                          className={line.type === 'error' ? 'text-red-400' : 'whitespace-pre-wrap'}
+                        >
+                          {line.content}
+                        </div>
+                      ))
+                    )}
+                    <div ref={terminalEndRef} />
+                  </div>
+
+                  {/* Terminal Input */}
+                  {isCodeRunning && (
+                    <form onSubmit={handleTerminalInputSubmit} className={`border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'} p-2`}>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={terminalInput}
+                          onChange={(e) => setTerminalInput(e.target.value)}
+                          placeholder="Enter input..."
+                          className={`flex-1 px-3 py-2 rounded font-mono text-sm ${
+                            theme === 'dark'
+                              ? 'bg-gray-800 text-white placeholder-gray-500 border-gray-700'
+                              : 'bg-white text-gray-900 placeholder-gray-400 border-gray-300'
+                          } border focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          autoFocus
+                        />
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Code Editor */}
@@ -719,6 +899,24 @@ export default function QuizPage() {
                   <span className="font-medium">Your Solution ({quiz.language})</span>
                   <div className="flex items-center gap-2">
                     <Button
+                      onClick={handleRunCode}
+                      disabled={isCodeRunning || !code.trim()}
+                      variant="outline"
+                      className={theme === 'dark' ? 'border-blue-600 text-blue-400 hover:bg-blue-900/30' : 'border-blue-500 text-blue-600'}
+                    >
+                      {isCodeRunning ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Running...
+                        </>
+                      ) : (
+                        <>
+                          <Terminal className="w-4 h-4 mr-2" />
+                          Run Code
+                        </>
+                      )}
+                    </Button>
+                    <Button
                       onClick={handleRunTests}
                       disabled={runningTests || !code.trim()}
                       variant="outline"
@@ -727,7 +925,7 @@ export default function QuizPage() {
                       {runningTests ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Running...
+                          Testing...
                         </>
                       ) : (
                         <>
