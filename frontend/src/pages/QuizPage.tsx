@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Play, CheckCircle2, XCircle, Loader2, AlertTriangle, Trophy, RefreshCw, Maximize, ShieldAlert } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
-import { Quiz, getQuiz, startQuiz, submitQuiz, QuizSubmitResponse } from '../services/quizService';
+import { Quiz, getQuiz, startQuiz, submitQuiz, QuizSubmitResponse, runTests, RunTestsResponse } from '../services/quizService';
 import { usePageTitle } from '../hooks/usePageTitle';
 
 export default function QuizPage() {
@@ -25,6 +25,9 @@ export default function QuizPage() {
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [violationMessage, setViolationMessage] = useState('');
   const [forceSubmitted, setForceSubmitted] = useState(false);
+  const [runningTests, setRunningTests] = useState(false);
+  const [testResults, setTestResults] = useState<RunTestsResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<'problem' | 'testcases'>('problem');
   const isSubmittingRef = useRef(false);
   const quizContainerRef = useRef<HTMLDivElement>(null);
   
@@ -290,6 +293,23 @@ export default function QuizPage() {
       setSubmitting(false);
     }
   };
+
+  const handleRunTests = async () => {
+    if (!id || runningTests) return;
+    try {
+      setRunningTests(true);
+      setTestResults(null);
+      const results = await runTests(id, code);
+      setTestResults(results);
+    } catch (err: any) {
+      setError(err.message || 'Failed to run tests');
+    } finally {
+      setRunningTests(false);
+    }
+  };
+
+  // Get visible test cases (non-hidden)
+  const visibleTestCases = quiz?.testCases?.filter(tc => !tc.isHidden) || [];
 
   const formatTime = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
@@ -566,12 +586,130 @@ export default function QuizPage() {
         {/* Code Editor */}
         {started && !result && isActive && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Problem Description */}
-            <div className={`rounded-xl p-6 ${theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}>
-              <h2 className="text-xl font-bold mb-4">Problem</h2>
-              <div className={`prose max-w-none ${theme === 'dark' ? 'prose-invert' : ''}`}>
-                <p className="whitespace-pre-wrap">{quiz.description}</p>
+            {/* Left Panel - Problem & Test Cases */}
+            <div className="space-y-4">
+              {/* Tabs */}
+              <div className={`flex rounded-lg p-1 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200'}`}>
+                <button
+                  onClick={() => setActiveTab('problem')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'problem'
+                      ? theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow'
+                      : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Problem
+                </button>
+                <button
+                  onClick={() => setActiveTab('testcases')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    activeTab === 'testcases'
+                      ? theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-white text-gray-900 shadow'
+                      : theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Test Cases ({visibleTestCases.length})
+                </button>
               </div>
+
+              {/* Problem Tab */}
+              {activeTab === 'problem' && (
+                <div className={`rounded-xl p-6 ${theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <h2 className="text-xl font-bold mb-4">Problem</h2>
+                  <div className={`prose max-w-none ${theme === 'dark' ? 'prose-invert' : ''}`}>
+                    <p className="whitespace-pre-wrap">{quiz.description}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Test Cases Tab */}
+              {activeTab === 'testcases' && (
+                <div className={`rounded-xl p-6 ${theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold">Test Cases</h2>
+                    {quiz.testCases && quiz.testCases.some(tc => tc.isHidden) && (
+                      <span className={`text-xs px-2 py-1 rounded ${theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
+                        + Hidden tests
+                      </span>
+                    )}
+                  </div>
+                  
+                  {visibleTestCases.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">All test cases are hidden</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {visibleTestCases.map((tc, idx) => {
+                        const testResult = testResults?.results?.[idx];
+                        return (
+                          <div
+                            key={idx}
+                            className={`rounded-lg border ${
+                              testResult
+                                ? testResult.passed
+                                  ? theme === 'dark' ? 'border-green-500/50 bg-green-900/20' : 'border-green-300 bg-green-50'
+                                  : theme === 'dark' ? 'border-red-500/50 bg-red-900/20' : 'border-red-300 bg-red-50'
+                                : theme === 'dark' ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                            }`}
+                          >
+                            <div className={`px-4 py-2 border-b flex items-center justify-between ${
+                              theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+                            }`}>
+                              <span className="font-medium text-sm">Test Case {idx + 1}</span>
+                              {testResult && (
+                                testResult.passed
+                                  ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  : <XCircle className="w-4 h-4 text-red-500" />
+                              )}
+                            </div>
+                            <div className="p-4 space-y-3">
+                              <div>
+                                <label className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Input:</label>
+                                <pre className={`mt-1 p-2 rounded text-sm font-mono overflow-x-auto ${
+                                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                                }`}>{tc.input || '(no input)'}</pre>
+                              </div>
+                              <div>
+                                <label className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Expected Output:</label>
+                                <pre className={`mt-1 p-2 rounded text-sm font-mono overflow-x-auto ${
+                                  theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                                }`}>{tc.expectedOutput}</pre>
+                              </div>
+                              {testResult && (
+                                <div>
+                                  <label className={`text-xs font-medium ${testResult.passed ? 'text-green-400' : 'text-red-400'}`}>
+                                    Your Output:
+                                  </label>
+                                  <pre className={`mt-1 p-2 rounded text-sm font-mono overflow-x-auto ${
+                                    theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+                                  } ${testResult.passed ? 'text-green-400' : 'text-red-400'}`}>
+                                    {testResult.error || testResult.actualOutput || '(no output)'}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Test Results Summary */}
+                  {testResults && (
+                    <div className={`mt-4 p-3 rounded-lg ${
+                      testResults.passed === testResults.total
+                        ? theme === 'dark' ? 'bg-green-900/30 border border-green-500/30' : 'bg-green-100 border border-green-300'
+                        : theme === 'dark' ? 'bg-orange-900/30 border border-orange-500/30' : 'bg-orange-100 border border-orange-300'
+                    }`}>
+                      <p className="text-center font-medium">
+                        {testResults.passed === testResults.total
+                          ? `✅ All ${testResults.total} visible tests passed!`
+                          : `⚠️ ${testResults.passed}/${testResults.total} visible tests passed`
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Code Editor */}
@@ -579,23 +717,43 @@ export default function QuizPage() {
               <div className={`px-4 py-3 border-b ${theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Your Solution ({quiz.language})</span>
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={submitting || !code.trim()}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Submit
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleRunTests}
+                      disabled={runningTests || !code.trim()}
+                      variant="outline"
+                      className={theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : ''}
+                    >
+                      {runningTests ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Running...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Run Tests
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={submitting || !code.trim()}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Submit
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
               <textarea
@@ -609,7 +767,7 @@ export default function QuizPage() {
                     : 'bg-white text-gray-900'
                 }`}
                 placeholder="Write your code here..."
-                disabled={submitting}
+                disabled={submitting || runningTests}
               />
             </div>
           </div>
