@@ -12,6 +12,7 @@ import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import YouTubeEmbed from '../components/YouTubeEmbed';
 
 export default function TutorialCardView() {
   usePageTitle('Tutorial');
@@ -450,6 +451,15 @@ export default function TutorialCardView() {
                     ))}
                   </div>
                 </div>
+
+                {/* YouTube Video */}
+                {currentSectionData?.videoUrl && (
+                  <YouTubeEmbed 
+                    videoUrl={currentSectionData.videoUrl} 
+                    title={`${currentSectionData.title} - Video`}
+                    theme={theme}
+                  />
+                )}
 
                 {/* Code Example */}
                 {currentSectionData?.codeExample && (

@@ -4,6 +4,7 @@ export interface TutorialSection {
   content: string;
   codeExample?: string;
   language?: string;
+  videoUrl?: string; // YouTube video URL
 }
 
 export interface Tutorial {
@@ -35,7 +36,8 @@ export const defaultTutorials: Tutorial[] = [
 
 Variables are fundamental to programming - they allow you to store information that can be used and changed throughout your program.`,
         codeExample: `let variableName = value;`,
-        language: 'javascript'
+        language: 'javascript',
+        videoUrl: 'https://www.youtube.com/watch?v=9emXNzqCKyg'
       },
       {
         id: 'declaration',
@@ -162,7 +164,8 @@ Functions help organize code, make it reusable, and easier to maintain.`,
     // code to be executed
     return value;
 }`,
-        language: 'javascript'
+        language: 'javascript',
+        videoUrl: 'https://www.youtube.com/watch?v=N8ap4k_1QEQ'
       },
       {
         id: 'declaration',
