@@ -18,6 +18,7 @@ export interface ITask extends Document {
     expectedOutput: string;
     isHidden: boolean;
   }[];
+  assignedTo?: mongoose.Types.ObjectId[]; // Empty array = all students
   createdAt: Date;
   updatedAt: Date;
 }
@@ -76,6 +77,10 @@ const taskSchema = new Schema<ITask>(
         isHidden: { type: Boolean, default: false },
       },
     ],
+    assignedTo: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    }],
   },
   {
     timestamps: true,

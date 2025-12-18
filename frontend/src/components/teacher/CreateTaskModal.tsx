@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, Eye, EyeOff, Users, Check } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Task, TaskDifficulty, TaskLanguage, TestCase, createTask, updateTask } from '../../services/taskService';
+import { Task, TaskDifficulty, TaskLanguage, TestCase, StudentInfo, createTask, updateTask, getStudentsList } from '../../services/taskService';
 
 interface CreateTaskModalProps {
   task: Task | null;
@@ -22,6 +22,26 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [students, setStudents] = useState<StudentInfo[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [assignToAll, setAssignToAll] = useState(true);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+
+  // Load students list
+  useEffect(() => {
+    const loadStudents = async () => {
+      try {
+        setLoadingStudents(true);
+        const studentsList = await getStudentsList();
+        setStudents(studentsList);
+      } catch (err) {
+        console.error('Failed to load students:', err);
+      } finally {
+        setLoadingStudents(false);
+      }
+    };
+    loadStudents();
+  }, []);
 
   useEffect(() => {
     if (task) {
@@ -33,6 +53,14 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
       setStarterCode(task.starterCode || '');
       setSolution(task.solution || '');
       setTestCases(task.testCases || []);
+      // Set assigned students
+      if (task.assignedTo && task.assignedTo.length > 0) {
+        setAssignToAll(false);
+        setSelectedStudents(task.assignedTo.map(s => s._id));
+      } else {
+        setAssignToAll(true);
+        setSelectedStudents([]);
+      }
     }
   }, [task]);
 
@@ -42,7 +70,17 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
     setSaving(true);
 
     try {
-      const payload = { title, description, points, difficulty, language, starterCode, solution, testCases };
+      const payload = { 
+        title, 
+        description, 
+        points, 
+        difficulty, 
+        language, 
+        starterCode, 
+        solution, 
+        testCases,
+        assignedTo: assignToAll ? [] : selectedStudents,
+      };
       if (task) {
         await updateTask(task._id, payload);
       } else {
@@ -242,6 +280,106 @@ export default function CreateTaskModal({ task, onClose, onSave, theme }: Create
               >
                 + Add Test Case
               </button>
+            </div>
+          </div>
+
+          {/* Student Assignment */}
+          <div>
+            <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Assign To
+            </label>
+            <div className="space-y-3">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={assignToAll}
+                    onChange={() => {
+                      setAssignToAll(true);
+                      setSelectedStudents([]);
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">All Students</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={!assignToAll}
+                    onChange={() => setAssignToAll(false)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Specific Students</span>
+                </label>
+              </div>
+
+              {!assignToAll && (
+                <div className={`border rounded-lg p-3 max-h-48 overflow-y-auto ${
+                  theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-300 bg-gray-50'
+                }`}>
+                  {loadingStudents ? (
+                    <div className="text-sm text-gray-500 text-center py-2">Loading students...</div>
+                  ) : students.length === 0 ? (
+                    <div className="text-sm text-gray-500 text-center py-2">No students found</div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+                        <span className="text-xs text-gray-400">{selectedStudents.length} selected</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedStudents.length === students.length) {
+                              setSelectedStudents([]);
+                            } else {
+                              setSelectedStudents(students.map(s => s._id));
+                            }
+                          }}
+                          className="text-xs text-blue-400 hover:text-blue-300"
+                        >
+                          {selectedStudents.length === students.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                      </div>
+                      {students.map(student => (
+                        <label
+                          key={student._id}
+                          className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                            selectedStudents.includes(student._id)
+                              ? theme === 'dark' ? 'bg-blue-500/20' : 'bg-blue-100'
+                              : theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                          }`}
+                        >
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                            selectedStudents.includes(student._id)
+                              ? 'bg-blue-500 border-blue-500'
+                              : theme === 'dark' ? 'border-gray-600' : 'border-gray-400'
+                          }`}>
+                            {selectedStudents.includes(student._id) && (
+                              <Check className="w-3 h-3 text-white" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{student.name}</div>
+                            <div className="text-xs text-gray-500 truncate">{student.email}</div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student._id)}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setSelectedStudents(prev => [...prev, student._id]);
+                              } else {
+                                setSelectedStudents(prev => prev.filter(id => id !== student._id));
+                              }
+                            }}
+                            className="sr-only"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

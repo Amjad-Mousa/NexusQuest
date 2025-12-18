@@ -11,6 +11,12 @@ export interface TestCase {
   isHidden: boolean;
 }
 
+export interface StudentInfo {
+  _id: string;
+  name: string;
+  email: string;
+}
+
 export interface Task {
   _id: string;
   title: string;
@@ -26,6 +32,7 @@ export interface Task {
   starterCode?: string;
   solution?: string; // Only visible to the teacher who created the task
   testCases?: TestCase[];
+  assignedTo?: StudentInfo[]; // Empty array = all students
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +46,7 @@ export interface CreateTaskInput {
   starterCode?: string;
   solution?: string;
   testCases?: TestCase[];
+  assignedTo?: string[]; // Array of student IDs, empty = all students
 }
 
 async function authFetch(url: string, options: RequestInit = {}) {
@@ -102,6 +110,13 @@ export async function deleteTask(id: string): Promise<void> {
   });
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
+}
+
+export async function getStudentsList(): Promise<StudentInfo[]> {
+  const res = await authFetch(`${API_URL}/api/tasks/students/list`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error);
+  return data.data;
 }
 
 // Task Progress Types and Functions
