@@ -29,7 +29,7 @@ const teacherMiddleware = async (req: AuthRequest, res: Response, next: () => vo
 // All routes require authentication
 router.use(authMiddleware);
 
-// Get all tasks (available to all users)
+// Get all tasks (available to all users, filtered by assignedTo for students)
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { difficulty, language, createdBy } = req.query;
@@ -39,9 +39,29 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     if (language) filter.language = language;
     if (createdBy) filter.createdBy = createdBy;
 
-    const tasks = await Task.find(filter)
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 });
+    // Check if user is a teacher or student
+    const user = await User.findById(req.userId);
+    
+    let tasks;
+    if (user && user.role === 'teacher') {
+      // Teachers see all tasks
+      tasks = await Task.find(filter)
+        .populate('createdBy', 'name email')
+        .populate('assignedTo', '_id name email')
+        .sort({ createdAt: -1 });
+    } else {
+      // Students only see tasks assigned to them OR tasks with empty assignedTo (all students)
+      tasks = await Task.find({
+        ...filter,
+        $or: [
+          { assignedTo: { $size: 0 } }, // Empty array = all students
+          { assignedTo: { $exists: false } }, // No assignedTo field = all students
+          { assignedTo: req.userId } // Assigned to this specific student
+        ]
+      })
+        .populate('createdBy', 'name email')
+        .sort({ createdAt: -1 });
+    }
 
     res.json({
       success: true,
@@ -72,7 +92,8 @@ router.get('/my-tasks', teacherMiddleware, async (req: AuthRequest, res: Respons
 // Get list of students (for task assignment) - MUST be before /:id route
 router.get('/students/list', teacherMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const students = await User.find({ role: 'student' })
+    // In this system, 'user' role represents students (non-teachers)
+    const students = await User.find({ role: 'user' })
       .select('_id name email')
       .sort({ name: 1 });
 
