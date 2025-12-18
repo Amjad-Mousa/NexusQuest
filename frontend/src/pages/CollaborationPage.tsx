@@ -127,7 +127,7 @@ export default function CollaborationPage() {
     }
   };
 
-  const handleJoinSession = async (sessionId: string) => {
+  const handleJoinSession = async (sessionId: string, role?: 'editor' | 'viewer') => {
     try {
       const session = await collaborationService.getSession(sessionId);
       const user = getStoredUser();
@@ -140,6 +140,7 @@ export default function CollaborationPage() {
         sessionId: session.sessionId,
         userId: user.id,
         username: user.name || user.email,
+        role: role, // Pass role from invitation
       });
     } catch (error) {
       console.error('Error joining session:', error);
@@ -340,12 +341,17 @@ export default function CollaborationPage() {
             {(activeTab === 'my-sessions' ? sessions : publicSessions).map((session) => {
               const activeParticipants = session.participants?.filter((p) => p.isActive).length || 0;
               const isOwner = session.owner === storedUser?.id;
+              const hasPendingInvite = session.hasPendingInvite;
               
               return (
                 <div
                   key={session.sessionId}
                   className={`group relative p-6 rounded-2xl border transition-all duration-300 overflow-hidden ${
-                    theme === 'dark'
+                    hasPendingInvite
+                      ? theme === 'dark'
+                        ? 'bg-blue-900/20 border-blue-500/50 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/10'
+                        : 'bg-blue-50 border-blue-300 hover:border-blue-400 shadow-sm hover:shadow-xl hover:shadow-blue-500/10'
+                      : theme === 'dark'
                       ? 'bg-gray-900/60 border-gray-800 hover:border-orange-500/50 hover:shadow-xl hover:shadow-orange-500/10'
                       : 'bg-white border-gray-200 hover:border-orange-400 shadow-sm hover:shadow-xl hover:shadow-orange-500/10'
                   } hover:-translate-y-1`}
@@ -357,6 +363,15 @@ export default function CollaborationPage() {
                       : 'bg-gradient-to-br from-orange-500/5 via-transparent to-red-500/5'
                   }`} />
                   
+                  {/* Pending Invite Badge */}
+                  {hasPendingInvite && (
+                    <div className={`absolute -top-1 -right-1 px-2 py-1 rounded-lg text-xs font-bold z-10 ${
+                      theme === 'dark' ? 'bg-blue-500 text-white' : 'bg-blue-500 text-white'
+                    }`}>
+                      Invited ({session.inviteRole === 'viewer' ? 'View Only' : 'Can Edit'})
+                    </div>
+                  )}
+
                   {/* Header */}
                   <div className="flex items-start justify-between mb-4 relative">
                     <div className="flex-1 pr-4">
@@ -458,31 +473,74 @@ export default function CollaborationPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2 relative">
-                    <Button
-                      onClick={() => {
-                        navigate(`/collaboration/${session.sessionId}`);
-                        handleJoinSession(session.sessionId);
-                      }}
-                      className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all duration-300"
-                      size="sm"
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Join Session
-                    </Button>
-                    {activeTab === 'my-sessions' && (
-                      <Button
-                        onClick={() => handleEndSession(session.sessionId)}
-                        variant="outline"
-                        size="sm"
-                        className={`${
-                          theme === 'dark'
-                            ? 'border-gray-700 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400'
-                            : 'border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-500'
-                        } transition-all duration-300`}
-                        title="End Session"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    {hasPendingInvite ? (
+                      <>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await collaborationService.acceptInvitation(session.sessionId, session.inviteNotificationId || '');
+                              navigate(`/collaboration/${session.sessionId}`);
+                              handleJoinSession(session.sessionId, session.inviteRole);
+                            } catch (error) {
+                              console.error('Failed to accept invitation:', error);
+                            }
+                          }}
+                          className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-lg shadow-green-500/20 hover:shadow-green-500/30 transition-all duration-300"
+                          size="sm"
+                        >
+                          <Play className="w-4 h-4 mr-2" />
+                          Accept & Join
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await collaborationService.rejectInvitation(session.sessionId, session.inviteNotificationId || '');
+                              loadSessions();
+                            } catch (error) {
+                              console.error('Failed to reject invitation:', error);
+                            }
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className={`${
+                            theme === 'dark'
+                              ? 'border-gray-700 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400'
+                              : 'border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-500'
+                          } transition-all duration-300`}
+                          title="Reject Invitation"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          onClick={() => {
+                            navigate(`/collaboration/${session.sessionId}`);
+                            handleJoinSession(session.sessionId);
+                          }}
+                          className="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all duration-300"
+                          size="sm"
+                        >
+                          <Play className="w-4 h-4 mr-2" />
+                          Join Session
+                        </Button>
+                        {activeTab === 'my-sessions' && isOwner && (
+                          <Button
+                            onClick={() => handleEndSession(session.sessionId)}
+                            variant="outline"
+                            size="sm"
+                            className={`${
+                              theme === 'dark'
+                                ? 'border-gray-700 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400'
+                                : 'border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-500'
+                            } transition-all duration-300`}
+                            title="End Session"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
