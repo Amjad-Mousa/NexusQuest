@@ -49,6 +49,12 @@ export default function SnapshotsPage() {
   } | null>(null);
   const [selectedFileDiff, setSelectedFileDiff] = useState<FileDiff | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    type: 'restore' | 'delete';
+    snapshotId: string;
+    snapshotName: string;
+  } | null>(null);
 
   useEffect(() => {
     if (projectId) {
@@ -81,28 +87,33 @@ export default function SnapshotsPage() {
     }
   };
 
-  const handleDeleteSnapshot = async (snapshotId: string) => {
-    if (!confirm('Are you sure you want to delete this snapshot?')) return;
-    setLoadingAction(snapshotId);
-    try {
-      await deleteProjectSnapshot(snapshotId);
-      setSnapshots(prev => prev.filter(s => s._id !== snapshotId));
-    } catch (error) {
-      console.error('Failed to delete snapshot:', error);
-    } finally {
-      setLoadingAction(null);
-    }
+  const openConfirmDialog = (type: 'restore' | 'delete', snapshotId: string, snapshotName: string) => {
+    setConfirmDialog({ isOpen: true, type, snapshotId, snapshotName });
   };
 
-  const handleRestoreSnapshot = async (snapshotId: string) => {
-    if (!confirm('Are you sure you want to restore this snapshot? This will replace all current files.')) return;
+  const closeConfirmDialog = () => {
+    setConfirmDialog(null);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmDialog) return;
+    
+    const { type, snapshotId } = confirmDialog;
     setLoadingAction(snapshotId);
+    closeConfirmDialog();
+    
     try {
-      const result = await restoreProjectSnapshot(snapshotId);
-      alert(`Restored ${result.files.length} files from "${result.name}"`);
-      navigate(`/playground/${projectId}`);
+      if (type === 'delete') {
+        await deleteProjectSnapshot(snapshotId);
+        setSnapshots(prev => prev.filter(s => s._id !== snapshotId));
+      } else if (type === 'restore') {
+        const result = await restoreProjectSnapshot(snapshotId);
+        navigate(`/playground/${projectId}`, { 
+          state: { restoredFiles: result.files, snapshotName: result.name } 
+        });
+      }
     } catch (error) {
-      console.error('Failed to restore snapshot:', error);
+      console.error(`Failed to ${type} snapshot:`, error);
     } finally {
       setLoadingAction(null);
     }
@@ -451,7 +462,7 @@ export default function SnapshotsPage() {
                         )}
                       </Button>
                       <Button
-                        onClick={() => handleRestoreSnapshot(snapshot._id)}
+                        onClick={() => openConfirmDialog('restore', snapshot._id, snapshot.name)}
                         disabled={loadingAction === snapshot._id}
                         variant="outline"
                         size="sm"
@@ -461,7 +472,7 @@ export default function SnapshotsPage() {
                         Restore
                       </Button>
                       <Button
-                        onClick={() => handleDeleteSnapshot(snapshot._id)}
+                        onClick={() => openConfirmDialog('delete', snapshot._id, snapshot.name)}
                         disabled={loadingAction === snapshot._id}
                         variant="outline"
                         size="sm"
@@ -521,6 +532,110 @@ export default function SnapshotsPage() {
                   </pre>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl overflow-hidden ${
+            theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`px-6 py-4 border-b ${
+              theme === 'dark' ? 'border-gray-800' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${
+                  confirmDialog.type === 'restore'
+                    ? theme === 'dark' ? 'bg-orange-500/20' : 'bg-orange-100'
+                    : theme === 'dark' ? 'bg-red-500/20' : 'bg-red-100'
+                }`}>
+                  {confirmDialog.type === 'restore' ? (
+                    <RotateCcw className={`w-5 h-5 ${
+                      theme === 'dark' ? 'text-orange-400' : 'text-orange-600'
+                    }`} />
+                  ) : (
+                    <Trash2 className={`w-5 h-5 ${
+                      theme === 'dark' ? 'text-red-400' : 'text-red-600'
+                    }`} />
+                  )}
+                </div>
+                <h2 className="text-lg font-bold">
+                  {confirmDialog.type === 'restore' ? 'Restore Snapshot' : 'Delete Snapshot'}
+                </h2>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-5">
+              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                {confirmDialog.type === 'restore' ? (
+                  <>
+                    Are you sure you want to restore <span className="font-semibold text-orange-500">"{confirmDialog.snapshotName}"</span>?
+                    <br />
+                    <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      This will replace all current files in your project with the files from this snapshot.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to delete <span className="font-semibold text-red-500">"{confirmDialog.snapshotName}"</span>?
+                    <br />
+                    <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      This action cannot be undone.
+                    </span>
+                  </>
+                )}
+              </p>
+
+              {confirmDialog.type === 'restore' && (
+                <div className={`p-3 rounded-lg mb-4 ${
+                  theme === 'dark' ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-yellow-50 border border-yellow-200'
+                }`}>
+                  <p className={`text-sm flex items-start gap-2 ${
+                    theme === 'dark' ? 'text-yellow-400' : 'text-yellow-700'
+                  }`}>
+                    <span className="text-lg">⚠️</span>
+                    <span>Make sure to save your current work before restoring. Any unsaved changes will be lost.</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className={`px-6 py-4 border-t flex justify-end gap-3 ${
+              theme === 'dark' ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+            }`}>
+              <Button
+                variant="outline"
+                onClick={closeConfirmDialog}
+                className={theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmAction}
+                className={
+                  confirmDialog.type === 'restore'
+                    ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500'
+                    : 'bg-red-600 hover:bg-red-500'
+                }
+              >
+                {confirmDialog.type === 'restore' ? (
+                  <>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Restore Snapshot
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Snapshot
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
