@@ -494,7 +494,7 @@ router.delete('/project-snapshot/:snapshotId', authMiddleware, async (req: AuthR
     }
 });
 
-// Restore a project snapshot (returns all file contents)
+// Restore a project snapshot (updates all files in the project)
 router.post('/project-snapshot-restore/:snapshotId', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const { snapshotId } = req.params;
@@ -511,11 +511,40 @@ router.post('/project-snapshot-restore/:snapshotId', authMiddleware, async (req:
             return res.status(404).json({ success: false, error: 'Project not found' });
         }
 
-        logger.info(`[versions] Restoring project snapshot ${snapshotId} with ${snapshot.files.length} files`);
+        // Update each file in the project with the snapshot content
+        let restoredCount = 0;
+        for (const snapshotFile of snapshot.files) {
+            const fileIndex = project.files.findIndex(
+                (f: any) => f._id.toString() === snapshotFile.fileId || f.name === snapshotFile.fileName
+            );
+            
+            if (fileIndex !== -1) {
+                // Update existing file
+                project.files[fileIndex].content = snapshotFile.content;
+                restoredCount++;
+            } else {
+                // File doesn't exist anymore, add it back
+                project.files.push({
+                    name: snapshotFile.fileName,
+                    content: snapshotFile.content,
+                    language: snapshotFile.fileName.endsWith('.py') ? 'python' : 
+                              snapshotFile.fileName.endsWith('.js') ? 'javascript' :
+                              snapshotFile.fileName.endsWith('.ts') ? 'typescript' :
+                              snapshotFile.fileName.endsWith('.html') ? 'html' :
+                              snapshotFile.fileName.endsWith('.css') ? 'css' : 'plaintext',
+                });
+                restoredCount++;
+            }
+        }
+
+        await project.save();
+
+        logger.info(`[versions] Restored project snapshot ${snapshotId} - ${restoredCount} files updated`);
         res.json({
             success: true,
             name: snapshot.name,
             files: snapshot.files,
+            restoredCount,
         });
     } catch (error) {
         logger.error('[versions] Restore project snapshot error:', error);
