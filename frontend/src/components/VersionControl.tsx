@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { GitBranch, History, RotateCcw, Eye, ChevronDown, ChevronRight, Clock, FileCode, Plus, Camera } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { GitBranch, History, RotateCcw, Eye, ChevronDown, ChevronRight, Clock, FileCode, Plus, Camera, FolderOpen, ExternalLink } from 'lucide-react';
 import {
   getFileSnapshots,
   getProjectVersions,
@@ -7,6 +8,7 @@ import {
   restoreSnapshot,
   compareSnapshots,
   createSnapshot,
+  createFullProjectSnapshot,
   formatRelativeTime,
   Snapshot,
   FileVersionInfo,
@@ -36,10 +38,11 @@ export function VersionControl({
   currentFileId,
   currentFileName,
   currentCode,
-  projectFiles: _projectFiles,
+  projectFiles,
   onRestore,
   onSnapshotCreated,
 }: VersionControlProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'history' | 'diff'>('history');
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [versionedFiles, setVersionedFiles] = useState<FileVersionInfo[]>([]);
@@ -51,8 +54,11 @@ export function VersionControl({
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [showSnapshotInput, setShowSnapshotInput] = useState(false);
+  const [showProjectSnapshotInput, setShowProjectSnapshotInput] = useState(false);
   const [snapshotMessage, setSnapshotMessage] = useState('');
+  const [projectSnapshotName, setProjectSnapshotName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
 
   // Load snapshots when file changes
   useEffect(() => {
@@ -169,6 +175,37 @@ export function VersionControl({
     }
   };
 
+  const handleCreateProjectSnapshot = async () => {
+    if (!projectId || !projectFiles || projectFiles.length === 0) {
+      alert('No files to snapshot');
+      return;
+    }
+    
+    setCreatingProject(true);
+    try {
+      const files = projectFiles.map(f => ({
+        fileId: f._id,
+        fileName: f.name,
+        content: f.content,
+      }));
+      
+      await createFullProjectSnapshot(
+        projectId,
+        projectSnapshotName || `Snapshot ${new Date().toLocaleString()}`,
+        files
+      );
+      
+      onSnapshotCreated?.(`📸 Project snapshot created (${files.length} files)`);
+      setProjectSnapshotName('');
+      setShowProjectSnapshotInput(false);
+    } catch (error: any) {
+      console.error('Failed to create project snapshot:', error);
+      alert(`Failed to create project snapshot: ${error.message || error}`);
+    } finally {
+      setCreatingProject(false);
+    }
+  };
+
   const isDark = theme === 'dark';
 
   if (!projectId) {
@@ -193,20 +230,43 @@ export function VersionControl({
             {currentFileName}
           </span>
         )}
-        {currentFileId && (
+        <div className="ml-auto flex items-center gap-1">
+          {currentFileId && (
+            <button
+              onClick={() => setShowSnapshotInput(!showSnapshotInput)}
+              className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${
+                isDark 
+                  ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30' 
+                  : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+              }`}
+              title="Create File Snapshot"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
-            onClick={() => setShowSnapshotInput(!showSnapshotInput)}
-            className={`ml-auto p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${
+            onClick={() => setShowProjectSnapshotInput(!showProjectSnapshotInput)}
+            className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${
               isDark 
-                ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30' 
-                : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' 
+                : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
             }`}
-            title="Create Snapshot"
+            title="Create Project Snapshot (All Files)"
           >
-            <Camera className="w-3.5 h-3.5" />
-            <span>Snapshot</span>
+            <FolderOpen className="w-3.5 h-3.5" />
           </button>
-        )}
+          <button
+            onClick={() => navigate(`/snapshots/${projectId}`)}
+            className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${
+              isDark 
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title="View All Snapshots"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Create Snapshot Input */}
@@ -235,6 +295,46 @@ export function VersionControl({
               }`}
             >
               {creating ? (
+                <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                <Plus className="w-3 h-3" />
+              )}
+              Create
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Project Snapshot Input */}
+      {showProjectSnapshotInput && (
+        <div className={`px-3 py-2 border-b ${isDark ? 'border-gray-700 bg-orange-500/10' : 'border-gray-200 bg-orange-50'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <FolderOpen className="w-4 h-4 text-orange-500" />
+            <span className="text-xs font-medium">Project Snapshot ({projectFiles?.length || 0} files)</span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={projectSnapshotName}
+              onChange={(e) => setProjectSnapshotName(e.target.value)}
+              placeholder="Snapshot name (e.g., 'Before refactoring')"
+              className={`flex-1 text-xs px-2 py-1.5 rounded border ${
+                isDark 
+                  ? 'bg-gray-900 border-gray-600 text-gray-100 placeholder-gray-500' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+              }`}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateProjectSnapshot()}
+            />
+            <button
+              onClick={handleCreateProjectSnapshot}
+              disabled={creatingProject}
+              className={`px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1 ${
+                creatingProject
+                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                  : 'bg-orange-500 hover:bg-orange-600 text-white'
+              }`}
+            >
+              {creatingProject ? (
                 <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
               ) : (
                 <Plus className="w-3 h-3" />

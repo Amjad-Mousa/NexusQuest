@@ -143,6 +143,127 @@ export async function compareSnapshots(
     return { diff: data.diff, snapshot1: data.snapshot1, snapshot2: data.snapshot2 };
 }
 
+// ==================== PROJECT SNAPSHOTS ====================
+
+export interface ProjectSnapshotInfo {
+    _id: string;
+    name: string;
+    description?: string;
+    filesCount: number;
+    createdAt: string;
+}
+
+export interface ProjectSnapshotFull {
+    _id: string;
+    name: string;
+    description?: string;
+    files: { fileId: string; fileName: string; content: string }[];
+    createdAt: string;
+}
+
+export interface FileDiff {
+    fileId: string;
+    fileName: string;
+    status: 'added' | 'removed' | 'modified' | 'unchanged';
+    diff?: DiffLine[];
+}
+
+// Create a full project snapshot (all files at once with a name)
+export async function createFullProjectSnapshot(
+    projectId: string,
+    name: string,
+    files: { fileId: string; fileName: string; content: string }[],
+    description?: string
+): Promise<ProjectSnapshotInfo> {
+    const response = await fetch(`${API_URL}/project-snapshot`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ projectId, name, description, files }),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to create project snapshot');
+    }
+    return data.snapshot;
+}
+
+// Get all project snapshots
+export async function getProjectSnapshots(projectId: string): Promise<ProjectSnapshotInfo[]> {
+    const response = await fetch(`${API_URL}/project-snapshots/${projectId}`, {
+        headers: getAuthHeaders(),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to get project snapshots');
+    }
+    return data.snapshots;
+}
+
+// Get a specific project snapshot with all files
+export async function getProjectSnapshot(snapshotId: string): Promise<ProjectSnapshotFull> {
+    const response = await fetch(`${API_URL}/project-snapshot/${snapshotId}`, {
+        headers: getAuthHeaders(),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to get project snapshot');
+    }
+    return data.snapshot;
+}
+
+// Compare two project snapshots
+export async function compareProjectSnapshots(
+    snapshotId1: string,
+    snapshotId2: string
+): Promise<{
+    fileDiffs: FileDiff[];
+    snapshot1: ProjectSnapshotInfo;
+    snapshot2: ProjectSnapshotInfo;
+}> {
+    const response = await fetch(`${API_URL}/project-snapshot-diff/${snapshotId1}/${snapshotId2}`, {
+        headers: getAuthHeaders(),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to compare project snapshots');
+    }
+    return { fileDiffs: data.fileDiffs, snapshot1: data.snapshot1, snapshot2: data.snapshot2 };
+}
+
+// Delete a project snapshot
+export async function deleteProjectSnapshot(snapshotId: string): Promise<void> {
+    const response = await fetch(`${API_URL}/project-snapshot/${snapshotId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to delete project snapshot');
+    }
+}
+
+// Restore a project snapshot (get all file contents)
+export async function restoreProjectSnapshot(snapshotId: string): Promise<{
+    name: string;
+    files: { fileId: string; fileName: string; content: string }[];
+}> {
+    const response = await fetch(`${API_URL}/project-snapshot-restore/${snapshotId}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+        throw new Error(data.error || 'Failed to restore project snapshot');
+    }
+    return { name: data.name, files: data.files };
+}
+
 // Format relative time
 export function formatRelativeTime(dateString: string): string {
     const date = new Date(dateString);

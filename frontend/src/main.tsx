@@ -28,6 +28,7 @@ import QuestionDetailPage from './pages/QuestionDetailPage.tsx'
 import AskQuestionPage from './pages/AskQuestionPage.tsx'
 import MyQuestionsPage from './pages/MyQuestionsPage.tsx'
 import EditQuestionPage from './pages/EditQuestionPage.tsx'
+import SnapshotsPage from './pages/SnapshotsPage.tsx'
 
 import { ThemeProvider } from './context/ThemeContext.tsx'
 import { CollaborationProvider } from './context/CollaborationContext.tsx'
@@ -86,6 +87,7 @@ function Root() {
         <Route path="/forum/question/:id" element={user ? <QuestionDetailPage /> : <Navigate to="/" />} />
         <Route path="/forum/my-questions" element={user ? <MyQuestionsPage /> : <Navigate to="/" />} />
         <Route path="/forum/edit/:id" element={user ? <EditQuestionPage /> : <Navigate to="/" />} />
+        <Route path="/snapshots/:projectId" element={user ? <SnapshotsPage /> : <Navigate to="/" />} />
         <Route path="/login" element={<Login onLogin={handleAuth} />} />
         <Route path="/signup" element={<Signup onSignup={handleAuth} />} />
       </Routes>
