@@ -884,7 +884,8 @@ Variables are created the moment you assign a value to them.`,
         codeExample: `x = 5
 name = "Ali"
 is_student = True`,
-        language: 'python'
+        language: 'python',
+        videoUrl: 'https://www.youtube.com/watch?v=cQT33yu9pY8'
       },
       {
         id: 'naming',
@@ -1622,7 +1623,8 @@ print(get_grade(85))  # B`,
 
 This means Java checks variable types at compile time, preventing many errors.`,
         codeExample: `dataType variableName = value;`,
-        language: 'java'
+        language: 'java',
+        videoUrl: 'https://www.youtube.com/watch?v=eIrMbAQSU34'
       },
       {
         id: 'primitive',
@@ -2497,6 +2499,7 @@ System.out.println("Grade: " + grade);`,
         content: `C++ is a powerful general-purpose programming language. It's an extension of C with object-oriented features.
 
 C++ is used for system programming, game development, and performance-critical applications.`,
+        videoUrl: 'https://www.youtube.com/watch?v=vLnPwxZdW4Y',
         codeExample: `#include <iostream>
 using namespace std;
 
