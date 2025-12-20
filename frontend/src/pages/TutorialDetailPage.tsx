@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Code, Loader2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code, Loader2, CheckCircle, Play } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { getTutorial, Tutorial, completeTutorial, startTutorial } from '../services/tutorialService';
@@ -8,6 +8,27 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { usePageTitle } from '../hooks/usePageTitle';
+
+// Helper function to convert YouTube URL to embed URL
+const getYouTubeEmbedUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // Handle different YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      return `https://www.youtube.com/embed/${match[1]}`;
+    }
+  }
+  
+  // If already an embed URL or unrecognized format, return as-is
+  return url;
+};
 
 export default function TutorialDetailPage() {
   usePageTitle('Tutorial');
@@ -111,41 +132,84 @@ export default function TutorialDetailPage() {
           </div>
         </div>
 
-        {/* Tutorial Content */}
-        <div
-          className={`rounded-xl p-8 ${
-            theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'
-          }`}
-        >
-          <div
-            className={`prose max-w-none ${
-              theme === 'dark' ? 'prose-invert prose-pre:bg-gray-950' : 'prose-pre:bg-gray-100'
-            }`}
-          >
-            <ReactMarkdown
-              components={{
-                code({ className, children, ...props }: any) {
-                  const match = /language-(\w+)/.exec(className || '');
-                  return match ? (
-                    <SyntaxHighlighter
-                      style={vscDarkPlus as any}
-                      language={match[1]}
-                      PreTag="div"
-                      {...props}
-                    >
-                      {String(children).replace(/\n$/, '')}
-                    </SyntaxHighlighter>
-                  ) : (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
+        {/* Tutorial Content - Sections */}
+        <div className="space-y-8">
+          {tutorial.sections.map((section, index) => (
+            <div
+              key={section.id || index}
+              className={`rounded-xl p-8 ${
+                theme === 'dark' ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-200'
+              }`}
             >
-              {tutorial.sections.map(section => section.content).join('\n\n')}
-            </ReactMarkdown>
-          </div>
+              {section.title && (
+                <h2 className="text-2xl font-bold mb-4">{section.title}</h2>
+              )}
+
+              {/* Video Player */}
+              {section.videoUrl && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-2 mb-3 text-red-500">
+                    <Play className="w-5 h-5" />
+                    <span className="font-medium">Video Tutorial</span>
+                  </div>
+                  <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
+                    <iframe
+                      src={getYouTubeEmbedUrl(section.videoUrl)}
+                      title={section.title || 'Tutorial Video'}
+                      className="absolute inset-0 w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Section Content */}
+              <div
+                className={`prose max-w-none ${
+                  theme === 'dark' ? 'prose-invert prose-pre:bg-gray-950' : 'prose-pre:bg-gray-100'
+                }`}
+              >
+                <ReactMarkdown
+                  components={{
+                    code({ className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || '');
+                      return match ? (
+                        <SyntaxHighlighter
+                          style={vscDarkPlus as any}
+                          language={match[1]}
+                          PreTag="div"
+                          {...props}
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      ) : (
+                        <code className={className} {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                  }}
+                >
+                  {section.content}
+                </ReactMarkdown>
+              </div>
+
+              {/* Code Example */}
+              {section.codeExample && (
+                <div className="mt-4">
+                  <SyntaxHighlighter
+                    style={vscDarkPlus as any}
+                    language={section.language || tutorial.language}
+                    PreTag="div"
+                    className="rounded-lg"
+                  >
+                    {section.codeExample}
+                  </SyntaxHighlighter>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* Completion Button */}

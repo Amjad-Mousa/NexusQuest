@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { LogIn, Mail, Lock, Eye, EyeOff, Code2, Sparkles } from 'lucide-react';
+import { LogIn, Mail, Lock, Eye, EyeOff, Code2, Sparkles, Sun, Moon } from 'lucide-react';
 import * as authService from '../services/authService';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useTheme } from '../context/ThemeContext';
 
 interface LoginProps {
   onLogin: (user: authService.User) => void;
@@ -12,6 +13,7 @@ interface LoginProps {
 export function Login({ onLogin }: LoginProps) {
   usePageTitle('Login');
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,7 +43,21 @@ export function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className={`min-h-screen flex items-center justify-center p-4 relative overflow-hidden ${
+      theme === 'dark'
+        ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950'
+        : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
+    }`}>
+      {/* Theme Toggle */}
+      <button
+        onClick={toggleTheme}
+        className={`absolute top-4 right-4 p-2 rounded-lg transition-colors ${
+          theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+        }`}
+      >
+        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
+
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
@@ -60,13 +76,17 @@ export function Login({ onLogin }: LoginProps) {
               NexusQuest
             </span>
           </Link>
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Welcome Back
           </h1>
-          <p className="text-gray-400">Sign in to continue your coding journey</p>
+          <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>Sign in to continue your coding journey</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-900/50 backdrop-blur-xl rounded-2xl p-8 border border-gray-800 shadow-2xl shadow-black/20">
+        <form onSubmit={handleSubmit} className={`backdrop-blur-xl rounded-2xl p-8 border shadow-2xl ${
+          theme === 'dark'
+            ? 'bg-gray-900/50 border-gray-800 shadow-black/20'
+            : 'bg-white/80 border-gray-200 shadow-gray-200/50'
+        }`}>
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center gap-2">
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
@@ -76,14 +96,18 @@ export function Login({ onLogin }: LoginProps) {
 
           <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+              <label className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Email</label>
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300"
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 ${
+                    theme === 'dark'
+                      ? 'bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500'
+                      : 'bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400'
+                  }`}
                   placeholder="you@example.com"
                   required
                 />
@@ -91,14 +115,18 @@ export function Login({ onLogin }: LoginProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+              <label className={`block text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Password</label>
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-12 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300"
+                  className={`w-full pl-12 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 ${
+                    theme === 'dark'
+                      ? 'bg-gray-800/50 border border-gray-700 text-white placeholder-gray-500'
+                      : 'bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-400'
+                  }`}
                   placeholder="••••••••"
                   required
                 />
@@ -131,8 +159,8 @@ export function Login({ onLogin }: LoginProps) {
             )}
           </Button>
 
-          <div className="mt-6 pt-6 border-t border-gray-800">
-            <p className="text-center text-gray-400 text-sm">
+          <div className={`mt-6 pt-6 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+            <p className={`text-center text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Don't have an account?{' '}
               <Link to="/signup" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
                 Create account
@@ -142,7 +170,7 @@ export function Login({ onLogin }: LoginProps) {
         </form>
 
         {/* Features hint */}
-        <div className="mt-8 flex items-center justify-center gap-6 text-xs text-gray-500">
+        <div className={`mt-8 flex items-center justify-center gap-6 text-xs ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-blue-400" />
             <span>500+ Challenges</span>

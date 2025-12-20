@@ -1,14 +1,52 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Code2, Play, Terminal, Shield, Globe, Trophy, Target, BookOpen, Users, Star, CheckCircle2, ArrowRight, Sparkles, Rocket, Award } from 'lucide-react';
+import { Code2, Play, Terminal, Shield, Globe, Trophy, Target, BookOpen, Users, Star, CheckCircle2, ArrowRight, Sparkles, Rocket, Award, Sun, Moon } from 'lucide-react';
 import { usePageTitle } from '../hooks/usePageTitle';
+import { useTheme } from '../context/ThemeContext';
+
+interface PlatformStats {
+  users: number;
+  challenges: number;
+  tutorials: number;
+  languages: number;
+}
 
 export default function Home() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   usePageTitle('Home');
 
+  const [stats, setStats] = useState<PlatformStats | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9876';
+        const response = await fetch(`${API_URL}/api/stats`);
+        if (response.ok) {
+          const data = await response.json();
+          setStats({
+            users: data.users ?? 0,
+            challenges: data.challenges ?? 0,
+            tutorials: data.tutorials ?? 0,
+            languages: data.languages ?? 4,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 overflow-hidden">
+    <div className={`min-h-screen overflow-hidden ${
+      theme === 'dark' 
+        ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950' 
+        : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
+    }`}>
       {/* Animated Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
@@ -16,7 +54,11 @@ export default function Home() {
         <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl animate-bounce" style={{ animationDuration: '4s' }} />
       </div>
       {/* Header */}
-      <header className="border-b border-gray-800/50 bg-gray-950/70 backdrop-blur-xl sticky top-0 z-50">
+      <header className={`border-b backdrop-blur-xl sticky top-0 z-50 ${
+        theme === 'dark' 
+          ? 'border-gray-800/50 bg-gray-950/70' 
+          : 'border-gray-200 bg-white/70'
+      }`}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3 group cursor-pointer" onClick={() => navigate('/')}>
             <div className="w-11 h-11 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-all duration-300 group-hover:scale-105">
@@ -26,16 +68,29 @@ export default function Home() {
               NexusQuest
             </span>
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#ide" className="hover:text-white transition-colors">IDE</a>
-            <a href="#leaderboard" className="hover:text-white transition-colors">Leaderboard</a>
+          <nav className={`hidden md:flex items-center gap-8 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+            <a href="#features" className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Features</a>
+            <a href="#ide" className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>IDE</a>
+            <a href="#leaderboard" className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Leaderboard</a>
           </nav>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            {/* Theme Toggle */}
+            <Button
+              onClick={toggleTheme}
+              variant="ghost"
+              size="sm"
+              className={`p-2 ${theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </Button>
             <Button
               onClick={() => navigate('/login')}
               variant="ghost"
-              className="text-gray-300 hover:text-white hover:bg-gray-800/50 border border-transparent hover:border-gray-700 transition-all"
+              className={`border border-transparent transition-all ${
+                theme === 'dark' 
+                  ? 'text-gray-300 hover:text-white hover:bg-gray-800/50 hover:border-gray-700' 
+                  : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100 hover:border-gray-300'
+              }`}
             >
               Log In
             </Button>
@@ -58,7 +113,7 @@ export default function Home() {
           <span className="px-2 py-0.5 bg-blue-500/20 rounded-full text-xs text-blue-300">New</span>
         </div>
         
-        <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
+        <h1 className={`text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
           Learn to Code Through
           <br />
           <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-indigo-500 bg-clip-text text-transparent animate-gradient">
@@ -66,9 +121,9 @@ export default function Home() {
           </span>
         </h1>
         
-        <p className="text-xl text-gray-400 mb-12 max-w-3xl mx-auto leading-relaxed">
+        <p className={`text-xl mb-12 max-w-3xl mx-auto leading-relaxed ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
           Master programming with hands-on challenges, compete with developers worldwide, 
-          and build your portfolio with real projects. <span className="text-gray-300">Your coding journey starts here.</span>
+          and build your portfolio with real projects. <span className={theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}>Your coding journey starts here.</span>
         </p>
         
         <div className="flex gap-4 justify-center flex-wrap mb-16">
@@ -83,7 +138,11 @@ export default function Home() {
           <Button
             onClick={() => navigate('/login')}
             size="lg"
-            className="bg-gray-800/80 hover:bg-gray-700/80 text-white text-lg px-10 py-7 border border-gray-700 hover:border-gray-600 backdrop-blur-sm transition-all duration-300 hover:scale-105"
+            className={`text-lg px-10 py-7 border backdrop-blur-sm transition-all duration-300 hover:scale-105 ${
+              theme === 'dark'
+                ? 'bg-gray-800/80 hover:bg-gray-700/80 text-white border-gray-700 hover:border-gray-600'
+                : 'bg-white/80 hover:bg-gray-50 text-gray-900 border-gray-300 hover:border-gray-400'
+            }`}
           >
             <Play className="w-5 h-5 mr-2" />
             Try Live Demo
@@ -92,21 +151,29 @@ export default function Home() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 hover:border-blue-500/40 transition-all duration-300 hover:scale-105 group">
-            <div className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">500+</div>
-            <div className="text-gray-400 text-sm">Challenges</div>
+          <div className={`p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 hover:border-blue-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
+            <div className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? stats.challenges : '...'}
+            </div>
+            <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Challenges</div>
           </div>
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-300 hover:scale-105 group">
-            <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">10K+</div>
-            <div className="text-gray-400 text-sm">Developers</div>
+          <div className={`p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
+            <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? (stats.users >= 1000 ? `${(stats.users / 1000).toFixed(1)}K` : stats.users) : '...'}
+            </div>
+            <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Developers</div>
           </div>
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 hover:border-green-500/40 transition-all duration-300 hover:scale-105 group">
-            <div className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">4</div>
-            <div className="text-gray-400 text-sm">Languages</div>
+          <div className={`p-6 rounded-2xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 hover:border-green-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
+            <div className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? stats.languages : '...'}
+            </div>
+            <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Languages</div>
           </div>
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-orange-600/5 border border-orange-500/20 hover:border-orange-500/40 transition-all duration-300 hover:scale-105 group">
-            <div className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">24/7</div>
-            <div className="text-gray-400 text-sm">Support</div>
+          <div className={`p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-orange-600/5 border border-orange-500/20 hover:border-orange-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
+            <div className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? stats.tutorials : '...'}
+            </div>
+            <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Tutorials</div>
           </div>
         </div>
       </section>
@@ -118,31 +185,35 @@ export default function Home() {
             <Award className="w-4 h-4" />
             Core Features
           </span>
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+          <h2 className={`text-4xl md:text-5xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Everything You Need to <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Master Coding</span>
           </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+          <p className={`max-w-2xl mx-auto text-lg ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
             From beginner-friendly tutorials to advanced algorithmic challenges
           </p>
         </div>
         
         <div className="grid md:grid-cols-3 gap-8 mb-16">
           {/* Challenges */}
-          <div className="group bg-gradient-to-br from-blue-950/50 to-gray-900/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 hover:border-blue-500/40 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/20 hover:-translate-y-2">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-8 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 ${
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-blue-950/50 to-gray-900/50 border-blue-500/20 hover:border-blue-500/40 hover:shadow-blue-500/20'
+              : 'bg-white border-blue-200 hover:border-blue-400 hover:shadow-blue-500/10'
+          }`}>
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg shadow-blue-500/30">
               <Trophy className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-3">
+            <h3 className={`text-2xl font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               Coding Challenges
             </h3>
-            <p className="text-gray-400 mb-6 leading-relaxed">
+            <p className={`mb-6 leading-relaxed ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               500+ algorithmic challenges across all difficulty levels. Compete on leaderboards and earn badges.
             </p>
             <div className="flex items-center gap-2 text-blue-400 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4" />
               <span>Easy to Advanced</span>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-800">
+            <div className={`mt-4 pt-4 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
               <button onClick={() => navigate('/signup')} className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center gap-1 group/btn">
                 Start Challenges <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
               </button>
@@ -150,21 +221,25 @@ export default function Home() {
           </div>
 
           {/* Tasks & Projects */}
-          <div className="group bg-gradient-to-br from-indigo-950/50 to-gray-900/50 backdrop-blur-sm border border-indigo-500/20 rounded-2xl p-8 hover:border-indigo-500/40 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/20 hover:-translate-y-2">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-8 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 ${
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-indigo-950/50 to-gray-900/50 border-indigo-500/20 hover:border-indigo-500/40 hover:shadow-indigo-500/20'
+              : 'bg-white border-indigo-200 hover:border-indigo-400 hover:shadow-indigo-500/10'
+          }`}>
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg shadow-indigo-500/30">
               <Target className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-3">
+            <h3 className={`text-2xl font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               Real-World Tasks
             </h3>
-            <p className="text-gray-400 mb-6 leading-relaxed">
+            <p className={`mb-6 leading-relaxed ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Build actual projects and solve practical programming tasks. Perfect for your portfolio.
             </p>
             <div className="flex items-center gap-2 text-indigo-400 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4" />
               <span>Portfolio Ready</span>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-800">
+            <div className={`mt-4 pt-4 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
               <button onClick={() => navigate('/signup')} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium flex items-center gap-1 group/btn">
                 Browse Tasks <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
               </button>
@@ -172,21 +247,25 @@ export default function Home() {
           </div>
 
           {/* Learning Stories */}
-          <div className="group bg-gradient-to-br from-purple-950/50 to-gray-900/50 backdrop-blur-sm border border-purple-500/20 rounded-2xl p-8 hover:border-purple-500/40 transition-all duration-500 hover:shadow-2xl hover:shadow-purple-500/20 hover:-translate-y-2">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-8 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 ${
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-purple-950/50 to-gray-900/50 border-purple-500/20 hover:border-purple-500/40 hover:shadow-purple-500/20'
+              : 'bg-white border-purple-200 hover:border-purple-400 hover:shadow-purple-500/10'
+          }`}>
             <div className="bg-gradient-to-br from-purple-500 to-purple-600 w-16 h-16 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg shadow-purple-500/30">
               <BookOpen className="w-8 h-8 text-white" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-3">
+            <h3 className={`text-2xl font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               Learning Stories
             </h3>
-            <p className="text-gray-400 mb-6 leading-relaxed">
+            <p className={`mb-6 leading-relaxed ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Interactive tutorials and guided learning paths. Master concepts step by step.
             </p>
             <div className="flex items-center gap-2 text-purple-400 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4" />
               <span>Beginner Friendly</span>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-800">
+            <div className={`mt-4 pt-4 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
               <button onClick={() => navigate('/signup')} className="text-purple-400 hover:text-purple-300 text-sm font-medium flex items-center gap-1 group/btn">
                 Start Learning <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
               </button>
@@ -202,67 +281,95 @@ export default function Home() {
             <Terminal className="w-4 h-4" />
             Development Environment
           </span>
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+          <h2 className={`text-4xl md:text-5xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Powerful <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Online IDE</span>
           </h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-lg">
+          <p className={`max-w-2xl mx-auto text-lg ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
             Code, compile, and run directly in your browser
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-6">
-          <div className="group bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-emerald-500/10">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-800 hover:border-emerald-500/50 hover:shadow-emerald-500/10'
+              : 'bg-white border-gray-200 hover:border-emerald-400 hover:shadow-emerald-500/10'
+          }`}>
             <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Code2 className="w-6 h-6 text-emerald-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Multi-Language</h3>
-            <p className="text-slate-400 text-sm">Python, C++, Java, JavaScript with IntelliSense</p>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Multi-Language</h3>
+            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Python, C++, Java, JavaScript with IntelliSense</p>
           </div>
 
-          <div className="group bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-cyan-500/10">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-800 hover:border-cyan-500/50 hover:shadow-cyan-500/10'
+              : 'bg-white border-gray-200 hover:border-cyan-400 hover:shadow-cyan-500/10'
+          }`}>
             <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Terminal className="w-6 h-6 text-cyan-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Interactive Terminal</h3>
-            <p className="text-slate-400 text-sm">Real-time input/output streaming execution</p>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Interactive Terminal</h3>
+            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Real-time input/output streaming execution</p>
           </div>
 
-          <div className="group bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-500/10">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-800 hover:border-blue-500/50 hover:shadow-blue-500/10'
+              : 'bg-white border-gray-200 hover:border-blue-400 hover:shadow-blue-500/10'
+          }`}>
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Play className="w-6 h-6 text-blue-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Instant Run</h3>
-            <p className="text-slate-400 text-sm">Execute in secure Docker containers</p>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Instant Run</h3>
+            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Execute in secure Docker containers</p>
           </div>
 
-          <div className="group bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-purple-500/10">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-800 hover:border-purple-500/50 hover:shadow-purple-500/10'
+              : 'bg-white border-gray-200 hover:border-purple-400 hover:shadow-purple-500/10'
+          }`}>
             <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Shield className="w-6 h-6 text-purple-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Secure & Safe</h3>
-            <p className="text-slate-400 text-sm">Isolated execution environments</p>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Secure & Safe</h3>
+            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Isolated execution environments</p>
           </div>
 
-          <div className="group bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-pink-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-pink-500/10">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-800 hover:border-pink-500/50 hover:shadow-pink-500/10'
+              : 'bg-white border-gray-200 hover:border-pink-400 hover:shadow-pink-500/10'
+          }`}>
             <div className="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Globe className="w-6 h-6 text-pink-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Cloud-Based</h3>
-            <p className="text-slate-400 text-sm">Access from anywhere, no setup needed</p>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Cloud-Based</h3>
+            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Access from anywhere, no setup needed</p>
           </div>
 
-          <div className="group bg-slate-900/50 backdrop-blur-sm border border-slate-800 rounded-2xl p-6 hover:border-orange-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-orange-500/10">
+          <div className={`group backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            theme === 'dark'
+              ? 'bg-slate-900/50 border-slate-800 hover:border-orange-500/50 hover:shadow-orange-500/10'
+              : 'bg-white border-gray-200 hover:border-orange-400 hover:shadow-orange-500/10'
+          }`}>
             <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Users className="w-6 h-6 text-orange-400" />
             </div>
-            <h3 className="text-lg font-semibold text-white mb-2">Live Collaboration</h3>
-            <p className="text-slate-400 text-sm">Code together in real-time with your team</p>
+            <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Live Collaboration</h3>
+            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Code together in real-time with your team</p>
           </div>
         </div>
       </section>
 
       {/* Leaderboard Preview */}
       <section id="leaderboard" className="relative container mx-auto px-4 py-20">
-        <div className="relative bg-gradient-to-br from-amber-950/30 via-slate-900/50 to-orange-950/30 backdrop-blur-sm border border-amber-500/20 rounded-3xl p-12 text-center overflow-hidden">
+        <div className={`relative backdrop-blur-sm border rounded-3xl p-12 text-center overflow-hidden ${
+          theme === 'dark'
+            ? 'bg-gradient-to-br from-amber-950/30 via-slate-900/50 to-orange-950/30 border-amber-500/20'
+            : 'bg-gradient-to-br from-amber-50 via-white to-orange-50 border-amber-200'
+        }`}>
           {/* Decorative elements */}
           <div className="absolute top-0 left-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl" />
           <div className="absolute bottom-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl" />
@@ -271,27 +378,39 @@ export default function Home() {
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 mb-6 shadow-lg shadow-amber-500/30 animate-bounce" style={{ animationDuration: '2s' }}>
               <Star className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+            <h2 className={`text-4xl md:text-5xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               Compete & <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">Climb the Ranks</span>
             </h2>
-            <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto">
+            <p className={`text-xl mb-10 max-w-2xl mx-auto ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>
               Track your progress, earn points, and see how you rank against developers worldwide
             </p>
             <div className="flex gap-6 justify-center items-center flex-wrap mb-8">
-              <div className="group bg-slate-900/50 border border-amber-500/30 rounded-2xl px-8 py-6 hover:border-amber-500/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-amber-500/20">
+              <div className={`group border rounded-2xl px-8 py-6 transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                theme === 'dark'
+                  ? 'bg-slate-900/50 border-amber-500/30 hover:border-amber-500/60 hover:shadow-amber-500/20'
+                  : 'bg-white border-amber-200 hover:border-amber-400 hover:shadow-amber-500/10'
+              }`}>
                 <div className="text-4xl mb-2 group-hover:scale-125 transition-transform">🥇</div>
                 <div className="text-2xl font-bold text-amber-400 mb-1">Gold</div>
-                <div className="text-slate-400 text-sm">Top 1%</div>
+                <div className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Top 1%</div>
               </div>
-              <div className="group bg-slate-900/50 border border-slate-500/30 rounded-2xl px-8 py-6 hover:border-slate-400/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-slate-400/20">
+              <div className={`group border rounded-2xl px-8 py-6 transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                theme === 'dark'
+                  ? 'bg-slate-900/50 border-slate-500/30 hover:border-slate-400/60 hover:shadow-slate-400/20'
+                  : 'bg-white border-gray-200 hover:border-gray-400 hover:shadow-gray-400/10'
+              }`}>
                 <div className="text-4xl mb-2 group-hover:scale-125 transition-transform">🥈</div>
-                <div className="text-2xl font-bold text-slate-300 mb-1">Silver</div>
-                <div className="text-slate-400 text-sm">Top 5%</div>
+                <div className={`text-2xl font-bold mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-500'}`}>Silver</div>
+                <div className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Top 5%</div>
               </div>
-              <div className="group bg-slate-900/50 border border-orange-500/30 rounded-2xl px-8 py-6 hover:border-orange-500/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-orange-500/20">
+              <div className={`group border rounded-2xl px-8 py-6 transition-all duration-300 hover:scale-105 hover:shadow-lg ${
+                theme === 'dark'
+                  ? 'bg-slate-900/50 border-orange-500/30 hover:border-orange-500/60 hover:shadow-orange-500/20'
+                  : 'bg-white border-orange-200 hover:border-orange-400 hover:shadow-orange-500/10'
+              }`}>
                 <div className="text-4xl mb-2 group-hover:scale-125 transition-transform">🥉</div>
                 <div className="text-2xl font-bold text-orange-400 mb-1">Bronze</div>
-                <div className="text-slate-400 text-sm">Top 10%</div>
+                <div className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-gray-600'}`}>Top 10%</div>
               </div>
             </div>
             <Button
@@ -347,7 +466,11 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-gray-800 bg-gray-950/90 backdrop-blur-sm">
+      <footer className={`relative border-t backdrop-blur-sm ${
+        theme === 'dark' 
+          ? 'border-gray-800 bg-gray-950/90' 
+          : 'border-gray-200 bg-white/90'
+      }`}>
         <div className="container mx-auto px-4 py-12">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div className="md:col-span-2">
@@ -357,31 +480,31 @@ export default function Home() {
                 </div>
                 <span className="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">NexusQuest</span>
               </div>
-              <p className="text-gray-400 text-sm max-w-md">
+              <p className={`text-sm max-w-md ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                 The ultimate platform for learning to code through real challenges. Master programming, compete globally, and build your portfolio.
               </p>
             </div>
             <div>
-              <h4 className="font-semibold text-white mb-4">Platform</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#ide" className="hover:text-white transition-colors">Online IDE</a></li>
-                <li><a href="#leaderboard" className="hover:text-white transition-colors">Leaderboard</a></li>
+              <h4 className={`font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Platform</h4>
+              <ul className={`space-y-2 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                <li><a href="#features" className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Features</a></li>
+                <li><a href="#ide" className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Online IDE</a></li>
+                <li><a href="#leaderboard" className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Leaderboard</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-white mb-4">Get Started</h4>
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li><button onClick={() => navigate('/signup')} className="hover:text-white transition-colors">Sign Up</button></li>
-                <li><button onClick={() => navigate('/login')} className="hover:text-white transition-colors">Log In</button></li>
+              <h4 className={`font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Get Started</h4>
+              <ul className={`space-y-2 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                <li><button onClick={() => navigate('/signup')} className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Sign Up</button></li>
+                <li><button onClick={() => navigate('/login')} className={`transition-colors ${theme === 'dark' ? 'hover:text-white' : 'hover:text-gray-900'}`}>Log In</button></li>
               </ul>
             </div>
           </div>
-          <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-500 text-sm">
+          <div className={`pt-8 border-t flex flex-col md:flex-row items-center justify-between gap-4 ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
               © 2025 NexusQuest. Built with ❤️ for developers who love challenges.
             </p>
-            <div className="flex items-center gap-4 text-gray-500 text-sm">
+            <div className={`flex items-center gap-4 text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
               <span>Made for learners worldwide</span>
             </div>
           </div>

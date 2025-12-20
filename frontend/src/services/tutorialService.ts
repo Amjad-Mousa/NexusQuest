@@ -183,8 +183,41 @@ export const toggleTutorialVisibility = async (id: string): Promise<Tutorial> =>
   return getTutorial(id);
 };
 
+// Check if ID is a MongoDB ObjectId (24 hex characters)
+const isMongoId = (id: string): boolean => /^[a-f\d]{24}$/i.test(id);
+
+// Save tutorial customizations to localStorage
+const saveTutorialCustomizations = (customizations: Record<string, Partial<Tutorial>>): void => {
+  localStorage.setItem('tutorial-customizations', JSON.stringify(customizations));
+};
+
 // Save tutorial customizations
 export const saveTutorialCustomization = async (id: string, updates: Partial<Tutorial>): Promise<Tutorial> => {
+  // Check if this is a default tutorial (non-MongoDB ID)
+  if (!isMongoId(id)) {
+    // Save to localStorage for default tutorials
+    const customizations = getTutorialCustomizations();
+    customizations[id] = {
+      ...customizations[id],
+      ...updates,
+    };
+    saveTutorialCustomizations(customizations);
+
+    // Return the updated tutorial
+    const baseTutorial = defaultTutorials.find((t: BaseTutorial) => t.id === id);
+    if (!baseTutorial) {
+      throw new Error('Tutorial not found');
+    }
+
+    return {
+      ...baseTutorial,
+      ...customizations[id],
+      isPublished: true,
+      isCustom: true,
+    };
+  }
+
+  // For backend tutorials, use the API
   try {
     const token = getStoredToken();
     if (!token) {
