@@ -80,6 +80,8 @@ services:
     container_name: nexusquest-python
     volumes:
       - python-code:/app
+      - python-dependencies:/dependencies
+      - python-custom-libs:/custom-libs
     # Keep the runner container alive (default image CMD exits immediately)
     command: tail -f /dev/null
     restart: unless-stopped
@@ -94,6 +96,8 @@ services:
     container_name: nexusquest-javascript
     volumes:
       - javascript-code:/app
+      - javascript-dependencies:/dependencies
+      - javascript-custom-libs:/custom-libs
     # Keep the runner container alive for on-demand execution
     command: tail -f /dev/null
     restart: unless-stopped
@@ -108,6 +112,8 @@ services:
     container_name: nexusquest-java
     volumes:
       - java-code:/app
+      - java-dependencies:/dependencies
+      - java-custom-libs:/custom-libs
     command: tail -f /dev/null
     restart: unless-stopped
     tty: true
@@ -121,6 +127,8 @@ services:
     container_name: nexusquest-cpp
     volumes:
       - cpp-code:/app
+      - cpp-dependencies:/dependencies
+      - cpp-custom-libs:/custom-libs
     command: tail -f /dev/null
     restart: unless-stopped
     tty: true
@@ -131,6 +139,14 @@ volumes:
   javascript-code:
   java-code:
   cpp-code:
+  python-dependencies:
+  javascript-dependencies:
+  java-dependencies:
+  cpp-dependencies:
+  python-custom-libs:
+  javascript-custom-libs:
+  java-custom-libs:
+  cpp-custom-libs:
   frontend_node_modules:
   backend_node_modules:
   mongodb_data:

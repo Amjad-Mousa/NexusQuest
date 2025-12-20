@@ -13,6 +13,21 @@ export interface IDependencies {
   [key: string]: string;
 }
 
+export interface ICustomLibrary {
+  _id: mongoose.Types.ObjectId;
+  fileName: string;
+  originalName: string;
+  fileType: string;
+  size: number;
+  uploadedAt: Date;
+}
+
+export interface IDependencyMetadata {
+  installed: boolean;
+  installedAt?: Date;
+  hash?: string;
+}
+
 export interface IProject extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
@@ -21,6 +36,8 @@ export interface IProject extends Document {
   language: string;
   files: IFile[];
   dependencies?: IDependencies;
+  customLibraries?: ICustomLibrary[];
+  dependencyMetadata?: IDependencyMetadata;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,6 +61,47 @@ const fileSchema = new Schema<IFile>(
   {
     timestamps: true,
   }
+);
+
+const customLibrarySchema = new Schema<ICustomLibrary>(
+  {
+    fileName: {
+      type: String,
+      required: true,
+    },
+    originalName: {
+      type: String,
+      required: true,
+    },
+    fileType: {
+      type: String,
+      required: true,
+    },
+    size: {
+      type: Number,
+      required: true,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }
+);
+
+const dependencyMetadataSchema = new Schema<IDependencyMetadata>(
+  {
+    installed: {
+      type: Boolean,
+      default: false,
+    },
+    installedAt: {
+      type: Date,
+    },
+    hash: {
+      type: String,
+    },
+  },
+  { _id: false }
 );
 
 const projectSchema = new Schema<IProject>(
@@ -76,6 +134,11 @@ const projectSchema = new Schema<IProject>(
       type: Map,
       of: String,
       default: {},
+    },
+    customLibraries: [customLibrarySchema],
+    dependencyMetadata: {
+      type: dependencyMetadataSchema,
+      default: () => ({ installed: false }),
     },
   },
   {

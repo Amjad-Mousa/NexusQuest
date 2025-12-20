@@ -119,12 +119,12 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
       console.log('[Terminal] Sending request to:', endpoint);
       console.log('[Terminal] Request body keys:', Object.keys(requestBody));
       
-      // Create abort controller with timeout (300 seconds for heavy installs like Conan)
+      // Create abort controller with timeout (120 seconds for npm install)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.warn('[Terminal] Request timeout after 300 seconds');
+        console.warn('[Terminal] Request timeout after 120 seconds');
         controller.abort();
-      }, 300000);
+      }, 120000);
       
       try {
         const startRes = await fetch(endpoint, {

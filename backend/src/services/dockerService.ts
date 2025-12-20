@@ -15,12 +15,20 @@ export interface ProjectFile {
   language: string;
 }
 
+export interface CustomLibrary {
+  fileName: string;
+  originalName: string;
+  fileType: string;
+}
+
 export interface ProjectExecutionRequest {
   files: ProjectFile[];
   mainFile: string;
   language: string;
   input?: string;
   dependencies?: Record<string, string>;
+  customLibraries?: CustomLibrary[];
+  projectId?: string;
 }
 
 export async function checkDockerStatus(): Promise<{ available: boolean; message: string }> {
@@ -323,10 +331,77 @@ export async function executeCode(code: string, language: string, input?: string
   }
 }
 
+// Helper to compute hash of dependencies for caching
+function computeDependencyHash(dependencies: Record<string, string>, customLibs?: CustomLibrary[]): string {
+  const crypto = require('crypto');
+  const hash = crypto.createHash('sha256');
+  hash.update(JSON.stringify(dependencies));
+  if (customLibs && customLibs.length > 0) {
+    hash.update(JSON.stringify(customLibs.map(l => l.fileName)));
+  }
+  return hash.digest('hex');
+}
+
+// Helper to check if dependencies are already installed
+async function checkDependenciesInstalled(
+  container: Docker.Container,
+  projectId: string,
+  language: string,
+  dependencyHash: string
+): Promise<boolean> {
+  try {
+    const depDir = `/dependencies/${projectId}`;
+    const hashFile = `${depDir}/.dep_hash`;
+
+    const checkExec = await container.exec({
+      Cmd: ['sh', '-c', `test -f ${hashFile} && cat ${hashFile}`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const checkStream = await checkExec.start({ hijack: true });
+    const { stdout } = await demuxStream(checkStream);
+
+    return stdout.trim() === dependencyHash;
+  } catch (error) {
+    logger.info('[checkDependencies] Dependencies not cached yet');
+    return false;
+  }
+}
+
+// Helper to mark dependencies as installed
+async function markDependenciesInstalled(
+  container: Docker.Container,
+  projectId: string,
+  dependencyHash: string
+): Promise<void> {
+  try {
+    const depDir = `/dependencies/${projectId}`;
+    const hashFile = `${depDir}/.dep_hash`;
+
+    const markExec = await container.exec({
+      Cmd: ['sh', '-c', `mkdir -p ${depDir} && echo "${dependencyHash}" > ${hashFile}`],
+      AttachStdout: false,
+      AttachStderr: false,
+    });
+
+    const markStream = await markExec.start({});
+    await new Promise((resolve) => {
+      markStream.on('end', resolve);
+      markStream.on('error', resolve);
+    });
+
+    logger.info('[markDependencies] Dependencies marked as installed');
+  } catch (error) {
+    logger.error('[markDependencies] Error marking dependencies:', error);
+  }
+}
+
 // Helper to install dependencies for JavaScript projects
 async function installJavaScriptDependencies(
   container: Docker.Container,
   baseDir: string,
+  projectId: string,
   dependencies?: Record<string, string>
 ): Promise<{ success: boolean; output: string; error: string }> {
   try {
@@ -456,49 +531,49 @@ async function installPythonDependencies(
     return {
       success: false,
       output: '',
-      error: error.message || 'Failed to install dependencies',
-    };
-  }
-}
+      export async function executeProject(request: ProjectExecutionRequest): Promise<ExecutionResult> {
+        const startTime = Date.now();
+        const { files, mainFile, language, input, dependencies, customLibraries, projectId } = request;
+        const containerName = persistentContainers[language.toLowerCase()];
 
-// Execute multi-file project using PERSISTENT containers
-export async function executeProject(request: ProjectExecutionRequest): Promise<ExecutionResult> {
-  const startTime = Date.now();
-  const { files, mainFile, language, input, dependencies } = request;
-  const containerName = persistentContainers[language.toLowerCase()];
-
-  if (!containerName) {
-    return {
-      output: '',
-      error: `Unsupported language: ${language}`,
-      executionTime: Date.now() - startTime,
-    };
-  }
-
-  try {
-    const container = docker.getContainer(containerName);
-
-    // Check if container exists and is running
-    try {
-      const info = await container.inspect();
-      if (!info.State.Running) {
-        logger.info(`Starting container: ${containerName}`);
-        await container.start();
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!containerName) {
+          return {
+            output: '',
+            error: `Unsupported language: ${language}`,
+            executionTime: Date.now() - startTime,
+          };
+          logger.info(`Starting container: ${containerName}`);
+          await container.start();
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch(err: any) {
+        if (err.statusCode === 404) {
+          return {
+            output: '',
+            error: `Container ${containerName} not found. Please run: docker-compose up -d`,
+            executionTime: Date.now() - startTime,
+          };
+        }
+        throw err;
       }
-    } catch (err: any) {
-      if (err.statusCode === 404) {
-        return {
-          output: '',
-          error: `Container ${containerName} not found. Please run: docker-compose up -d`,
-          executionTime: Date.now() - startTime,
-        };
+
+  // Use a unique temp directory
+  const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Check if we should use cached dependencies
+      let useCachedDeps = false;
+      let depDir = '';
+      if(projectId && (dependencies || customLibraries)) {
+      const depHash = computeDependencyHash(dependencies || {}, customLibraries);
+      depDir = `/dependencies/${projectId}`;
+      useCachedDeps = await checkDependenciesInstalled(container, projectId, language, depHash);
+
+      if (useCachedDeps) {
+        logger.info(`[executeProject] Using cached dependencies for project ${projectId}`);
+      } else {
+        logger.info(`[executeProject] Dependencies changed or not cached, will install for project ${projectId}`);
       }
-      throw err;
     }
-
-    // Use a unique temp directory
-    const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Create base directory
     const mkdirExec = await container.exec({
@@ -553,7 +628,7 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
           resolve(null);
         });
       });
-      
+
       // Add a small delay to ensure file is written
       await new Promise(resolve => setTimeout(resolve, 100));
     }
