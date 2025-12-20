@@ -739,22 +739,7 @@ npm run test:e2e
 
 ---
 
-## 🗺 Roadmap
 
-### Upcoming Features
-
-- [x] Mobile application (React Native) ✅
-- [x] AI-powered code suggestions ✅
-- [ ] Advanced analytics dashboard
-- [ ] Integration with GitHub
-- [ ] Code review system
-- [ ] Certification system
-- [ ] Multi-language support (i18n)
-- [x] Dark/Light theme customization ✅
-- [ ] Export progress reports
-- [ ] API for third-party integrations
-
----
 
 <div align="center">
 
