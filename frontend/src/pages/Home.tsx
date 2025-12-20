@@ -1,13 +1,45 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Code2, Play, Terminal, Shield, Globe, Trophy, Target, BookOpen, Users, Star, CheckCircle2, ArrowRight, Sparkles, Rocket, Award, Sun, Moon } from 'lucide-react';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useTheme } from '../context/ThemeContext';
 
+interface PlatformStats {
+  users: number;
+  challenges: number;
+  tutorials: number;
+  languages: number;
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   usePageTitle('Home');
+
+  const [stats, setStats] = useState<PlatformStats | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9876';
+        const response = await fetch(`${API_URL}/api/stats`);
+        if (response.ok) {
+          const data = await response.json();
+          setStats({
+            users: data.users ?? 0,
+            challenges: data.challenges ?? 0,
+            tutorials: data.tutorials ?? 0,
+            languages: data.languages ?? 4,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   return (
     <div className={`min-h-screen overflow-hidden ${
@@ -120,20 +152,28 @@ export default function Home() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
           <div className={`p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 hover:border-blue-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
-            <div className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">500+</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? stats.challenges : '...'}
+            </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Challenges</div>
           </div>
           <div className={`p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
-            <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">10K+</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? (stats.users >= 1000 ? `${(stats.users / 1000).toFixed(1)}K` : stats.users) : '...'}
+            </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Developers</div>
           </div>
           <div className={`p-6 rounded-2xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 hover:border-green-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
-            <div className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">4</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? stats.languages : '...'}
+            </div>
             <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Languages</div>
           </div>
           <div className={`p-6 rounded-2xl bg-gradient-to-br from-orange-500/10 to-orange-600/5 border border-orange-500/20 hover:border-orange-500/40 transition-all duration-300 hover:scale-105 group ${theme === 'light' ? 'shadow-sm' : ''}`}>
-            <div className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">24/7</div>
-            <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Support</div>
+            <div className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent mb-1 group-hover:scale-110 transition-transform">
+              {stats !== null ? stats.tutorials : '...'}
+            </div>
+            <div className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Tutorials</div>
           </div>
         </div>
       </section>
