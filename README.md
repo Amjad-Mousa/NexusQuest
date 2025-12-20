@@ -33,6 +33,10 @@
 - 📊 **Analytics Dashboard**: Track progress, performance, and achievements
 - 🎮 **Daily Challenges**: Fresh coding challenges every day
 - 📝 **Quiz System**: Timed quizzes with instant feedback
+- 🌓 **Light/Dark Mode**: Full theme support across all pages
+- 🤖 **AI Assistant**: AI-powered code help and suggestions
+- 📹 **Video Tutorials**: Embedded video support in tutorials
+- 📈 **Real-Time Statistics**: Live platform statistics on landing page
 
 ---
 
@@ -48,10 +52,11 @@
 - **Quiz System**: Timed assessments with multiple question types
 
 #### 🤝 Collaboration
-- **Live Collaboration**: Real-time pair programming
-- **Code Synchronization**: See changes in real-time
+- **Live Collaboration**: Real-time pair programming with video/audio
+- **Code Synchronization**: See changes in real-time with cursor tracking
 - **Direct Messaging**: Chat with peers and teachers
 - **User Search**: Find and connect with other learners
+- **Session Management**: Create, join, and manage collaboration sessions
 
 #### 🏆 Gamification
 - **XP System**: Earn experience points for completing tasks
@@ -71,9 +76,10 @@
 
 #### 📝 Content Management
 - **Task Creation**: Design coding challenges with test cases
-- **Tutorial Builder**: Create interactive learning content
+- **Tutorial Builder**: Create interactive learning content with video support
 - **Quiz Designer**: Build timed assessments with various question types
 - **Content Publishing**: Control visibility of learning materials
+- **Video Integration**: Add YouTube/video URLs to tutorial sections
 
 #### 📊 Student Management
 - **Progress Tracking**: Monitor student performance
@@ -101,6 +107,8 @@
 - **WebRTC**: Simple Peer for video/audio
 - **Build Tool**: Vite
 - **Icons**: Lucide React
+- **Markdown**: React Markdown with syntax highlighting
+- **Charts**: For analytics visualization
 
 ### Backend
 - **Runtime**: Node.js with TypeScript
@@ -510,6 +518,45 @@ GET  /api/gamification/achievements # Get all achievements
 POST /api/gamification/claim        # Claim achievement reward
 ```
 
+### Public Stats Endpoints
+
+```http
+GET  /api/stats                     # Get public platform statistics
+```
+
+### AI Endpoints
+
+```http
+POST /api/ai/chat                   # Chat with AI assistant
+POST /api/ai/explain                # Get code explanation
+POST /api/ai/suggest                # Get code suggestions
+```
+
+### Chat Endpoints
+
+```http
+GET  /api/chat/conversations        # Get user conversations
+GET  /api/chat/conversations/:id    # Get conversation messages
+POST /api/chat/conversations        # Create new conversation
+POST /api/chat/messages             # Send message
+```
+
+### Notification Endpoints
+
+```http
+GET  /api/notifications             # Get user notifications
+PUT  /api/notifications/:id/read    # Mark notification as read
+DELETE /api/notifications/:id       # Delete notification
+```
+
+### Daily Challenge Endpoints
+
+```http
+GET  /api/daily-challenge           # Get today's challenge
+POST /api/daily-challenge/submit    # Submit challenge solution
+GET  /api/daily-challenge/history   # Get challenge history
+```
+
 ---
 
 ## 📦 Installing Custom Dependencies
@@ -577,12 +624,13 @@ Use CMake.
 
 ### Code Execution Engine
 
-NexusQuest supports multiple programming languages with isolated execution environments:
+NexusQuest supports multiple programming languages with isolated Docker execution environments:
 
-- **JavaScript/Node.js**: V8 engine execution
-- **Python**: Python 3.x interpreter
-- **Java**: JDK compilation and execution
-- **C++**: G++ compiler with STL support
+- **JavaScript/Node.js**: V8 engine execution with npm packages
+- **Python**: Python 3.x interpreter with pip packages
+- **Java**: JDK 17 compilation and execution with Maven
+- **C++**: G++ compiler with STL and CMake support
+- **Go**: Go 1.23 with module support
 
 **Security Features:**
 - Sandboxed execution
@@ -596,9 +644,11 @@ Powered by WebRTC and Socket.io:
 
 - **Video/Audio**: Peer-to-peer communication
 - **Screen Sharing**: Share your coding screen
-- **Code Sync**: Real-time code updates
+- **Code Sync**: Real-time code updates with Monaco Editor
 - **Cursor Tracking**: See where collaborators are typing
 - **Chat**: In-session messaging
+- **Session Invites**: Invite users to join your coding session
+- **Language Selection**: Choose programming language for session
 
 ### Gamification System
 
@@ -693,14 +743,14 @@ npm run test:e2e
 
 ### Upcoming Features
 
-- [ ] Mobile application (React Native)
-- [ ] AI-powered code suggestions
+- [x] Mobile application (React Native) ✅
+- [x] AI-powered code suggestions ✅
 - [ ] Advanced analytics dashboard
 - [ ] Integration with GitHub
 - [ ] Code review system
 - [ ] Certification system
 - [ ] Multi-language support (i18n)
-- [ ] Dark/Light theme customization
+- [x] Dark/Light theme customization ✅
 - [ ] Export progress reports
 - [ ] API for third-party integrations
 
