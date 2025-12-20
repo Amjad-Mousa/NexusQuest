@@ -8,6 +8,7 @@ import { UserSidePanel } from './components/UserSidePanel';
 import { AiAgent } from './components/AiAgent';
 import { ProjectExplorer } from './components/ProjectExplorer';
 import { VersionControl } from './components/VersionControl';
+import ProjectDependencies from './components/ProjectDependencies';
 import * as projectService from './services/projectService';
 import { 
   defaultCode, 
@@ -53,7 +54,7 @@ function App({ user, onLogout }: AppProps) {
 
   // UI state
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(true);
-  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal' | 'versions'>('console');
+  const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal' | 'versions' | 'dependencies'>('console');
   const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number; files?: { name: string; content: string }[]; mainFile?: string; dependencies?: Record<string, string> } | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
@@ -345,7 +346,7 @@ function App({ user, onLogout }: AppProps) {
     if (!currentProject || !currentFile) {
       // Just save to localStorage for standalone mode
       localStorage.setItem('nexusquest-code', code);
-      addToConsole('💾 Code saved to local storage', 'info');
+      addToConsole(' Code saved to local storage', 'info');
       return;
     }
 
@@ -354,7 +355,7 @@ function App({ user, onLogout }: AppProps) {
       await projectService.updateFile(currentProject._id, currentFile._id, { content: code });
       setLastSavedCode(code);
       setHasUnsavedChanges(false);
-      addToConsole(`💾 Saved: ${currentFile.name}`, 'info');
+      addToConsole(` Saved: ${currentFile.name}`, 'info');
 
       // Update the file in the projects list
       setProjects(prev => prev.map(p =>
@@ -387,10 +388,10 @@ function App({ user, onLogout }: AppProps) {
                 },
                 body: JSON.stringify({ dependencies: parsed.dependencies })
               });
-              addToConsole(`✓ Saved dependencies from package.json`, 'info');
+              addToConsole(` Saved dependencies from package.json`, 'info');
             } catch (saveErr) {
               console.error('Failed to save dependencies to backend:', saveErr);
-              addToConsole(`⚠️ Dependencies updated locally but failed to save to backend`, 'info');
+              addToConsole(` Dependencies updated locally but failed to save to backend`, 'info');
             }
           }
         } catch (e) {
@@ -415,10 +416,10 @@ function App({ user, onLogout }: AppProps) {
                 },
                 body: JSON.stringify({ dependencies: parsedDeps })
               });
-              addToConsole(`✓ Saved dependencies from requirements.txt`, 'info');
+              addToConsole(` Saved dependencies from requirements.txt`, 'info');
             } catch (saveErr) {
               console.error('Failed to save dependencies to backend:', saveErr);
-              addToConsole(`⚠️ Dependencies updated locally but failed to save to backend`, 'info');
+              addToConsole(` Dependencies updated locally but failed to save to backend`, 'info');
             }
           }
         } catch (e) {
@@ -430,7 +431,7 @@ function App({ user, onLogout }: AppProps) {
       setCurrentProject(updatedProject);
     } catch (err) {
       console.error('Failed to save file:', err);
-      addToConsole(`❌ Failed to save: ${err}`, 'error');
+      addToConsole(` Failed to save: ${err}`, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -517,11 +518,11 @@ function App({ user, onLogout }: AppProps) {
         dependencies: currentProject.dependencies || {}
       });
 
-      addToConsole(`⏳ Running project with ${filesForExecution.length} file(s)...`, 'info');
+      addToConsole(` Running project with ${filesForExecution.length} file(s)...`, 'info');
     } else {
       // Single file mode (no project)
       setCodeToExecute({ code: code.trim(), timestamp: Date.now() });
-      addToConsole('⏳ Code sent to Terminal for interactive execution', 'info');
+      addToConsole(' Code sent to Terminal for interactive execution', 'info');
     }
 
     addToConsole(' Switch to Terminal tab to see output and provide inputs in real-time', 'info');
@@ -557,10 +558,10 @@ function App({ user, onLogout }: AppProps) {
         reader.onload = (e) => {
           const content = e.target?.result as string;
           setCode(content);
-          addToConsole(`📂 Loaded file: ${file.name}`, 'info');
+          addToConsole(` Loaded file: ${file.name}`, 'info');
         };
         reader.onerror = () => {
-          addToConsole(`❌ Error loading file: ${file.name}`, 'error');
+          addToConsole(` Error loading file: ${file.name}`, 'error');
         };
         reader.readAsText(file);
       }
@@ -576,7 +577,7 @@ function App({ user, onLogout }: AppProps) {
 
   const handleConsoleInput = (_value: string) => {
     // Console input disabled - now using Terminal for interactive execution
-    addToConsole('💡 Code execution moved to Terminal tab for real-time interaction', 'info');
+    addToConsole(' Code execution moved to Terminal tab for real-time interaction', 'info');
     addToConsole('   Click the Terminal tab to see and interact with your running code', 'output');
   };
 
@@ -788,6 +789,19 @@ function App({ user, onLogout }: AppProps) {
                 >
                   Versions
                 </button>
+                {currentProject && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveBottomTab('dependencies')}
+                    className={`px-2 py-0.5 rounded-t-md border-b-2 ${
+                      activeBottomTab === 'dependencies'
+                        ? 'border-orange-400 text-orange-300'
+                        : 'border-transparent text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    Dependencies
+                  </button>
+                )}
               </div>
               {activeBottomTab === 'console' && (
                 <span className={`text-[10px] px-2 py-0.5 rounded border ${
@@ -814,6 +828,19 @@ function App({ user, onLogout }: AppProps) {
                   theme={theme}
                   language={language}
                   codeToExecute={codeToExecute}
+                />
+              ) : activeBottomTab === 'dependencies' && currentProject ? (
+                <ProjectDependencies
+                  projectId={currentProject._id}
+                  language={currentProject.language}
+                  dependencies={currentProject.dependencies || {}}
+                  onDependenciesChange={(newDeps) => {
+                    setCurrentProject(prev => {
+                      if (!prev) return prev;
+                      return { ...prev, dependencies: newDeps };
+                    });
+                    addToConsole('✓ Dependencies updated', 'info');
+                  }}
                 />
               ) : (
                 <VersionControl
