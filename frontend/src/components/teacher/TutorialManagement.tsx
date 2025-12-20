@@ -10,6 +10,7 @@ import {
   X,
   Search,
   Filter,
+  Video,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useTheme } from '../../context/ThemeContext';
@@ -659,6 +660,21 @@ export default function TutorialManagement() {
                           rows={4}
                           placeholder="Code example (optional)"
                         />
+
+                        <div className="flex items-center gap-2">
+                          <Video className="w-4 h-4 text-red-500" />
+                          <input
+                            type="text"
+                            value={section.videoUrl || ''}
+                            onChange={(e) => updateSection(index, { videoUrl: e.target.value })}
+                            className={`flex-1 px-3 py-2 rounded border ${
+                              theme === 'dark'
+                                ? 'bg-gray-900 border-gray-600'
+                                : 'bg-white border-gray-300'
+                            }`}
+                            placeholder="YouTube video URL (optional) - e.g., https://www.youtube.com/watch?v=..."
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}

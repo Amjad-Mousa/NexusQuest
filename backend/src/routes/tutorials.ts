@@ -235,10 +235,27 @@ router.put('/:id', authMiddleware, requireTeacher, async (req: AuthRequest, res:
     const { id } = req.params;
     const { title, description, language, content, difficulty, order, isPublished } = req.body;
 
-    const tutorial = await Tutorial.findOne({
+    // First try to find tutorial created by this user
+    let tutorial = await Tutorial.findOne({
       _id: id,
       createdBy: req.userId,
     });
+
+    // If not found, check if it's a tutorial without owner (allow teachers to edit)
+    if (!tutorial) {
+      tutorial = await Tutorial.findOne({
+        _id: id,
+        $or: [
+          { createdBy: { $exists: false } },
+          { createdBy: null }
+        ]
+      });
+      
+      // If found without owner, assign current user as owner
+      if (tutorial) {
+        tutorial.createdBy = req.userId as any;
+      }
+    }
 
     if (!tutorial) {
       return res.status(404).json({ error: 'Tutorial not found or unauthorized' });
