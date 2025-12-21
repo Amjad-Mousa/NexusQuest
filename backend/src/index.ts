@@ -21,6 +21,7 @@ import collaborationRouter from './routes/collaboration.js';
 import forumRouter from './routes/forum.js';
 import gamificationRouter from './routes/gamification.js';
 import publicStatsRouter from './routes/public-stats.js';
+import teacherRouter from './routes/teacher.js';
 import { streamExecutionRouter } from './routes/stream-execution.js';
 import { playgroundExecutionRouter } from './routes/playground-execution.js';
 import simplePlaygroundRouter from './routes/simple-playground.js';
@@ -109,6 +110,7 @@ app.use('/api/collaboration', collaborationRouter);
 app.use('/api/forum', forumRouter);
 app.use('/api/gamification', gamificationRouter);
 app.use('/api/stats', publicStatsRouter);
+app.use('/api/teacher', teacherRouter);
 
 // Error handling
 app.use(errorHandler);

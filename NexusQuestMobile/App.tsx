@@ -19,6 +19,9 @@ import TeacherDashboardScreen from './src/screens/TeacherDashboardScreen';
 import CreateTaskScreen from './src/screens/CreateTaskScreen';
 import CreateQuizScreen from './src/screens/CreateQuizScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
+import ForumScreen from './src/screens/ForumScreen';
+import QuestionDetailScreen from './src/screens/QuestionDetailScreen';
+import AskQuestionScreen from './src/screens/AskQuestionScreen';
 
 const Stack = createStackNavigator();
 
@@ -49,6 +52,9 @@ function AppNavigator() {
         <Stack.Screen name="QuizDetail" component={QuizDetailScreen} />
         <Stack.Screen name="CreateQuiz" component={CreateQuizScreen} />
         <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+        <Stack.Screen name="Forum" component={ForumScreen} />
+        <Stack.Screen name="QuestionDetail" component={QuestionDetailScreen} />
+        <Stack.Screen name="AskQuestion" component={AskQuestionScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

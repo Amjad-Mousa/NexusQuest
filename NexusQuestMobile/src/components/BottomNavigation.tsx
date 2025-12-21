@@ -13,9 +13,9 @@ export default function BottomNavigation({ navigation, activeRoute }: BottomNavi
 
   const navItems = [
     { name: 'Dashboard', icon: '🏠', label: 'Home' },
-    { name: 'Tutorials', icon: '📚', label: 'Tutorials' },
-    { name: 'Quizzes', icon: '📝', label: 'Quizzes' },
-    { name: 'Chat', icon: '💬', label: 'Chat' },
+    { name: 'Tutorials', icon: '📚', label: 'Learn' },
+    { name: 'Forum', icon: '💬', label: 'Forum' },
+    { name: 'Quizzes', icon: '📝', label: 'Quiz' },
     { name: 'Leaderboard', icon: '🏆', label: 'Rank' },
   ];
 
