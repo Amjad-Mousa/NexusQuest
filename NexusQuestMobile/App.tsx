@@ -22,6 +22,7 @@ import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ForumScreen from './src/screens/ForumScreen';
 import QuestionDetailScreen from './src/screens/QuestionDetailScreen';
 import AskQuestionScreen from './src/screens/AskQuestionScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 
 const Stack = createStackNavigator();
 
@@ -55,6 +56,7 @@ function AppNavigator() {
         <Stack.Screen name="Forum" component={ForumScreen} />
         <Stack.Screen name="QuestionDetail" component={QuestionDetailScreen} />
         <Stack.Screen name="AskQuestion" component={AskQuestionScreen} />
+        <Stack.Screen name="Notifications" component={NotificationsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

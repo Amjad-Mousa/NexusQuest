@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { getStoredUser, logout, User } from '../services/authService';
 import { useTheme } from '../context/ThemeContext';
 import { getUserStats, getMyLeaderboardRank, UserStats, LeaderboardMe } from '../services/statsService';
+import { getUnreadNotifications } from '../services/notificationService';
 import BottomNavigation from '../components/BottomNavigation';
 
 export default function DashboardScreen({ navigation }: any) {
@@ -11,6 +12,7 @@ export default function DashboardScreen({ navigation }: any) {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardMe | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -22,13 +24,15 @@ export default function DashboardScreen({ navigation }: any) {
       const userData = await getStoredUser();
       setUser(userData);
       
-      const [userStats, leaderboardData] = await Promise.all([
+      const [userStats, leaderboardData, notifData] = await Promise.all([
         getUserStats(),
         getMyLeaderboardRank(),
+        getUnreadNotifications(),
       ]);
       
       setStats(userStats);
       setLeaderboard(leaderboardData);
+      setUnreadCount(notifData.count || 0);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -52,6 +56,19 @@ export default function DashboardScreen({ navigation }: any) {
             style={styles.iconButton}
           >
             <Text style={styles.iconText}>👤</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Notifications')} 
+            style={styles.iconButton}
+          >
+            <Text style={styles.iconText}>🔔</Text>
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
         <View style={styles.headerButtons}>
@@ -201,5 +218,22 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 5,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
 });

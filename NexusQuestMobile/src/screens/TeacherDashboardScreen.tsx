@@ -19,6 +19,7 @@ import {
   QuizSubmission 
 } from '../services/teacherService';
 import BottomNavigation from '../components/BottomNavigation';
+import { getUnreadNotifications } from '../services/notificationService';
 
 export default function TeacherDashboardScreen({ navigation }: any) {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +28,7 @@ export default function TeacherDashboardScreen({ navigation }: any) {
   const [pendingSubmissions, setPendingSubmissions] = useState<QuizSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { theme, toggleTheme, colors } = useTheme();
 
   useEffect(() => {
@@ -37,6 +39,9 @@ export default function TeacherDashboardScreen({ navigation }: any) {
   const loadUser = async () => {
     const userData = await getStoredUser();
     setUser(userData);
+    // Load notifications count
+    const notifData = await getUnreadNotifications();
+    setUnreadCount(notifData.count || 0);
   };
 
   const loadData = async () => {
@@ -101,6 +106,16 @@ export default function TeacherDashboardScreen({ navigation }: any) {
             </View>
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.iconButton}>
+              <Text style={styles.iconText}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity onPress={toggleTheme} style={styles.iconButton}>
               <Text style={styles.iconText}>{theme === 'dark' ? '☀️' : '🌙'}</Text>
             </TouchableOpacity>
@@ -594,5 +609,22 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.error,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
