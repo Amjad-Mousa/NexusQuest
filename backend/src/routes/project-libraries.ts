@@ -362,7 +362,20 @@ router.post('/:projectId/dependencies/sync', auth, async (req: Request, res: Res
         if (!project) return res.status(404).json({ success: false, error: 'Project not found' });
         if (project.language !== 'javascript') return res.status(400).json({ success: false, error: 'Only JavaScript dependencies are supported for now' });
 
-        const declared: Record<string, string> = Object.fromEntries(Object.entries(project.dependencies || {}));
+        const rawDeps: Record<string, unknown> = (() => {
+            const deps: any = (project as any).dependencies || {};
+            if (deps && typeof deps.entries === 'function') {
+                return Object.fromEntries(deps.entries());
+            }
+            return deps;
+        })();
+        const declared: Record<string, string> = {};
+        for (const [name, version] of Object.entries(rawDeps || {})) {
+            const depName = String(name || '').trim();
+            if (!depName) continue;
+            const depVersion = typeof version === 'string' && version.trim() ? version.trim() : '*';
+            declared[depName] = depVersion;
+        }
         const depsHash = crypto.createHash('md5').update(stableDepsString(declared)).digest('hex');
         const cacheDir = `/dependencies/js-${depsHash}`;
         const language = project.language;
@@ -405,12 +418,17 @@ router.post('/:projectId/dependencies/sync', auth, async (req: Request, res: Res
                 await (await container.exec({ Cmd: ['sh', '-c', `cp -r ${cacheDir}/node_modules ${baseDir}/ 2>/dev/null || true`], AttachStdout: true, AttachStderr: true })).start({});
             } else {
                 // Install and cache
-                const installExec = await container.exec({ Cmd: ['sh', '-c', `cd ${baseDir} && npm install --legacy-peer-deps > npm-install.log 2>&1; ec=$?; if [ $ec -eq 0 ]; then mkdir -p ${cacheDir} && cp -r ${baseDir}/node_modules ${cacheDir}/ 2>/dev/null || true; touch ${cacheDir}/.cache-complete; echo ok; else echo fail; fi`], AttachStdout: true, AttachStderr: true });
+                const installExec = await container.exec({
+                    Cmd: ['sh', '-c', `cd ${baseDir} && npm install --legacy-peer-deps --no-audit --no-fund > npm-install.log 2>&1; ec=$?; if [ $ec -eq 0 ]; then mkdir -p ${cacheDir} && cp -r ${baseDir}/node_modules ${cacheDir}/ 2>/dev/null || true; touch ${cacheDir}/.cache-complete; echo ok; else echo fail; echo "---- package.json ----"; cat ${baseDir}/package.json 2>/dev/null || true; echo "---- npm-install.log (tail) ----"; tail -n 400 npm-install.log 2>/dev/null || true; fi`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
                 const installStream = await installExec.start({});
                 let instOut = '';
                 await new Promise((resolve) => { installStream.on('data', (c: Buffer) => instOut += c.toString()); installStream.on('end', resolve); installStream.on('error', resolve); setTimeout(resolve, 300000); });
                 if (!instOut.includes('ok')) {
-                    return res.status(500).json({ success: false, error: 'npm install failed' });
+                    const details = instOut.length > 12000 ? instOut.slice(-12000) : instOut;
+                    return res.status(500).json({ success: false, error: 'npm install failed', details });
                 }
             }
 
