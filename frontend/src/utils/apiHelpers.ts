@@ -17,7 +17,7 @@ export function getAuthHeaders(): HeadersInit {
  * Get API URL from environment or use default
  */
 export function getApiUrl(): string {
-    return import.meta.env.VITE_API_URL || 'https://muhjah.com/nexusquest/';
+    return import.meta.env.VITE_API_URL || 'https://muhjah.com/nexusquest';
 }
 
 /**
