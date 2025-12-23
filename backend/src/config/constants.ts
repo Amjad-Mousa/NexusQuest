@@ -8,5 +8,6 @@ export const ALLOWED_ORIGINS: string[] = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://192.168.1.100:5173',
+  'https://nexus-quest-jd.vercel.app',
   'https://nexusquest.vercel.app/'
 ];
