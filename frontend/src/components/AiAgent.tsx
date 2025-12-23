@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Copy, Check, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -47,7 +48,7 @@ export function AiAgent({ isOpen, onClose, theme, currentCode = '', language = '
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/ai/chat', {
+      const response = await fetch(`${getApiUrl()}/api/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -9,8 +9,7 @@ import {
   CursorPosition,
   JoinSessionData,
 } from '../types/collaboration';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface CollaborationContextType {
   socket: Socket | null;
@@ -58,7 +57,7 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
 
   // Initialize socket connection
   useEffect(() => {
-    const newSocket = io(`${API_URL}/collaboration`, {
+    const newSocket = io(`${getApiUrl()}/collaboration`, {
       transports: ['websocket'],
       autoConnect: false,
     });

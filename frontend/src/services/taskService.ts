@@ -1,6 +1,5 @@
 import { getStoredToken } from './authService';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 export type TaskDifficulty = 'easy' | 'medium' | 'hard';
 export type TaskLanguage = 'python' | 'javascript' | 'java' | 'cpp';
@@ -64,28 +63,28 @@ export async function getTasks(filters?: { difficulty?: TaskDifficulty; language
   if (filters?.difficulty) params.append('difficulty', filters.difficulty);
   if (filters?.language) params.append('language', filters.language);
 
-  const res = await authFetch(`${API_URL}/api/tasks?${params.toString()}`);
+  const res = await authFetch(`${getApiUrl()}/api/tasks?${params.toString()}`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
   return data.data;
 }
 
 export async function getMyTasks(): Promise<Task[]> {
-  const res = await authFetch(`${API_URL}/api/tasks/my-tasks`);
+  const res = await authFetch(`${getApiUrl()}/api/tasks/my-tasks`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
   return data.data;
 }
 
 export async function getTask(id: string): Promise<Task> {
-  const res = await authFetch(`${API_URL}/api/tasks/${id}`);
+  const res = await authFetch(`${getApiUrl()}/api/tasks/${id}`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
   return data.data;
 }
 
 export async function createTask(input: CreateTaskInput): Promise<Task> {
-  const res = await authFetch(`${API_URL}/api/tasks`, {
+  const res = await authFetch(`${getApiUrl()}/api/tasks`, {
     method: 'POST',
     body: JSON.stringify(input),
   });
@@ -95,7 +94,7 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 }
 
 export async function updateTask(id: string, input: Partial<CreateTaskInput>): Promise<Task> {
-  const res = await authFetch(`${API_URL}/api/tasks/${id}`, {
+  const res = await authFetch(`${getApiUrl()}/api/tasks/${id}`, {
     method: 'PUT',
     body: JSON.stringify(input),
   });
@@ -105,7 +104,7 @@ export async function updateTask(id: string, input: Partial<CreateTaskInput>): P
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  const res = await authFetch(`${API_URL}/api/tasks/${id}`, {
+  const res = await authFetch(`${getApiUrl()}/api/tasks/${id}`, {
     method: 'DELETE',
   });
   const data = await res.json();
@@ -113,7 +112,7 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 export async function getStudentsList(): Promise<StudentInfo[]> {
-  const res = await authFetch(`${API_URL}/api/tasks/students/list`);
+  const res = await authFetch(`${getApiUrl()}/api/tasks/students/list`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
   return data.data;
@@ -137,8 +136,8 @@ export async function getMyProgress(status?: string): Promise<TaskProgress[]> {
   if (!token) return [];
 
   const url = status
-    ? `${API_URL}/api/task-progress/my-progress?status=${status}`
-    : `${API_URL}/api/task-progress/my-progress`;
+    ? `${getApiUrl()}/api/task-progress/my-progress?status=${status}`
+    : `${getApiUrl()}/api/task-progress/my-progress`;
 
   const response = await fetch(url, {
     headers: {
@@ -159,8 +158,8 @@ export async function getUserProgress(userId: string, status?: string): Promise<
   if (!token) return [];
 
   const url = status
-    ? `${API_URL}/api/task-progress/user/${userId}?status=${status}`
-    : `${API_URL}/api/task-progress/user/${userId}`;
+    ? `${getApiUrl()}/api/task-progress/user/${userId}?status=${status}`
+    : `${getApiUrl()}/api/task-progress/user/${userId}`;
 
   const response = await fetch(url, {
     headers: {
@@ -177,14 +176,14 @@ export async function getUserProgress(userId: string, status?: string): Promise<
 }
 
 export async function getTaskProgress(taskId: string): Promise<TaskProgress | null> {
-  const res = await authFetch(`${API_URL}/api/task-progress/${taskId}`);
+  const res = await authFetch(`${getApiUrl()}/api/task-progress/${taskId}`);
   const data = await res.json();
   if (!data.success) throw new Error(data.error);
   return data.data;
 }
 
 export async function startTask(taskId: string): Promise<TaskProgress> {
-  const res = await authFetch(`${API_URL}/api/task-progress/${taskId}/start`, {
+  const res = await authFetch(`${getApiUrl()}/api/task-progress/${taskId}/start`, {
     method: 'POST',
   });
   const data = await res.json();
@@ -193,7 +192,7 @@ export async function startTask(taskId: string): Promise<TaskProgress> {
 }
 
 export async function saveTaskCode(taskId: string, code: string): Promise<TaskProgress> {
-  const res = await authFetch(`${API_URL}/api/task-progress/${taskId}/save`, {
+  const res = await authFetch(`${getApiUrl()}/api/task-progress/${taskId}/save`, {
     method: 'PUT',
     body: JSON.stringify({ code }),
   });
@@ -203,7 +202,7 @@ export async function saveTaskCode(taskId: string, code: string): Promise<TaskPr
 }
 
 export async function completeTask(taskId: string, code: string): Promise<TaskProgress> {
-  const res = await authFetch(`${API_URL}/api/task-progress/${taskId}/complete`, {
+  const res = await authFetch(`${getApiUrl()}/api/task-progress/${taskId}/complete`, {
     method: 'PUT',
     body: JSON.stringify({ code }),
   });
@@ -230,7 +229,7 @@ export interface TaskTestResultsSummary {
 }
 
 export async function runTaskTests(taskId: string, code: string): Promise<TaskTestResultsSummary> {
-  const res = await authFetch(`${API_URL}/api/tasks/${taskId}/run-tests`, {
+  const res = await authFetch(`${getApiUrl()}/api/tasks/${taskId}/run-tests`, {
     method: 'POST',
     body: JSON.stringify({ code }),
   });
@@ -247,7 +246,7 @@ export interface UserStats {
 }
 
 export async function syncUserPoints(): Promise<number> {
-  const res = await authFetch(`${API_URL}/api/auth/sync-points`, {
+  const res = await authFetch(`${getApiUrl()}/api/auth/sync-points`, {
     method: 'POST',
   });
   const data = await res.json();
@@ -261,7 +260,7 @@ export async function getUserStats(): Promise<UserStats> {
 
   // Sync points first if user has completed tasks but might have 0 points (migration)
   const token = getStoredToken();
-  let res = await fetch(`${API_URL}/api/auth/me`, {
+  let res = await fetch(`${getApiUrl()}/api/auth/me`, {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -273,7 +272,7 @@ export async function getUserStats(): Promise<UserStats> {
   if (data.success && completedProgress.length > 0 && (data.user?.totalPoints || 0) === 0) {
     await syncUserPoints();
     // Re-fetch user data after sync
-    res = await fetch(`${API_URL}/api/auth/me`, {
+    res = await fetch(`${getApiUrl()}/api/auth/me`, {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),

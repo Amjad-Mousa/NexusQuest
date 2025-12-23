@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { CheckCircle, XCircle, Play, Square, Trophy, Lightbulb, Terminal, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { CodeEditor } from './CodeEditor';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface PracticeQuestion {
   question: string;
@@ -75,7 +76,7 @@ export default function PracticeExercise({
     let fullOutput = '';
 
     try {
-      const response = await fetch('http://localhost:3001/api/playground/execute', {
+      const response = await fetch(`${getApiUrl()}/api/playground/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +177,7 @@ export default function PracticeExercise({
     setTerminalLines(prev => [...prev, { type: 'output', content: input + '\n' }]);
 
     try {
-      await fetch('http://localhost:3001/api/playground/input', {
+      await fetch(`${getApiUrl()}/api/playground/input`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

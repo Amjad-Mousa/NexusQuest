@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Code2, Play, Terminal, Shield, Globe, Trophy, Target, BookOpen, Users, Star, CheckCircle2, ArrowRight, Sparkles, Rocket, Award, Sun, Moon } from 'lucide-react';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { useTheme } from '../context/ThemeContext';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface PlatformStats {
   users: number;
@@ -22,8 +23,7 @@ export default function Home() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${API_URL}/api/stats`);
+        const response = await fetch(`${getApiUrl()}/api/stats`);
         if (response.ok) {
           const data = await response.json();
           setStats({

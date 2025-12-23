@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface ProjectFileForExecution {
   name: string;
@@ -98,7 +99,7 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
       // If we have files (project execution), use the streaming projects endpoint
       if (files && files.length > 0) {
         console.log('[Terminal] Using streaming container endpoint');
-        endpoint = 'http://localhost:3001/api/projects/execute';
+        endpoint = `${getApiUrl()}/api/projects/execute`;
         requestBody.files = files;
         requestBody.mainFile = mainFile || files[0].name;
         if (codeToExecute?.projectId) {
@@ -112,7 +113,7 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
       } else {
         console.log('[Terminal] Using task endpoint (single code)');
         // Single code execution (task or playground) - use task endpoint which supports streaming
-        endpoint = 'http://localhost:3001/api/tasks/execute';
+        endpoint = `${getApiUrl()}/api/tasks/execute`;
         requestBody.code = code;
       }
 
@@ -296,7 +297,7 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
     if (!currentSessionId) return;
 
     try {
-      await fetch('http://localhost:3001/api/stream/stream-input', {
+      await fetch(`${getApiUrl()}/api/stream/stream-input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: currentSessionId, input })
@@ -331,7 +332,7 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
     setLines(prev => [...prev, { type: 'command', content: command, timestamp: new Date() }]);
 
     try {
-      const response = await fetch('http://localhost:3001/api/terminal', {
+      const response = await fetch(`${getApiUrl()}/api/terminal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
+
 
 export interface Author {
   _id: string;
@@ -90,21 +91,21 @@ export const getQuestions = async (params?: {
   if (params?.search) searchParams.set('search', params.search);
   if (params?.sort) searchParams.set('sort', params.sort);
 
-  const response = await fetch(`${API_URL}/api/forum/questions?${searchParams}`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions?${searchParams}`, {
     headers: { ...getAuthHeader() },
   });
   return response.json();
 };
 
 export const getQuestion = async (id: string): Promise<{ success: boolean; question: Question; answers: Answer[] }> => {
-  const response = await fetch(`${API_URL}/api/forum/questions/${id}`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions/${id}`, {
     headers: { ...getAuthHeader() },
   });
   return response.json();
 };
 
 export const createQuestion = async (data: CreateQuestionData): Promise<{ success: boolean; question: Question }> => {
-  const response = await fetch(`${API_URL}/api/forum/questions`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -116,7 +117,7 @@ export const createQuestion = async (data: CreateQuestionData): Promise<{ succes
 };
 
 export const updateQuestion = async (id: string, data: Partial<CreateQuestionData>): Promise<{ success: boolean; question: Question }> => {
-  const response = await fetch(`${API_URL}/api/forum/questions/${id}`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -128,7 +129,7 @@ export const updateQuestion = async (id: string, data: Partial<CreateQuestionDat
 };
 
 export const deleteQuestion = async (id: string): Promise<{ success: boolean }> => {
-  const response = await fetch(`${API_URL}/api/forum/questions/${id}`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions/${id}`, {
     method: 'DELETE',
     headers: { ...getAuthHeader() },
   });
@@ -136,7 +137,7 @@ export const deleteQuestion = async (id: string): Promise<{ success: boolean }> 
 };
 
 export const voteQuestion = async (id: string, type: 'up' | 'down'): Promise<{ success: boolean; upvotes: number; downvotes: number; voteScore: number }> => {
-  const response = await fetch(`${API_URL}/api/forum/questions/${id}/vote`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions/${id}/vote`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -149,7 +150,7 @@ export const voteQuestion = async (id: string, type: 'up' | 'down'): Promise<{ s
 
 // Answers
 export const createAnswer = async (questionId: string, data: CreateAnswerData): Promise<{ success: boolean; answer: Answer }> => {
-  const response = await fetch(`${API_URL}/api/forum/questions/${questionId}/answers`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/questions/${questionId}/answers`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -161,7 +162,7 @@ export const createAnswer = async (questionId: string, data: CreateAnswerData): 
 };
 
 export const updateAnswer = async (id: string, data: Partial<CreateAnswerData>): Promise<{ success: boolean; answer: Answer }> => {
-  const response = await fetch(`${API_URL}/api/forum/answers/${id}`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/answers/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -173,7 +174,7 @@ export const updateAnswer = async (id: string, data: Partial<CreateAnswerData>):
 };
 
 export const deleteAnswer = async (id: string): Promise<{ success: boolean }> => {
-  const response = await fetch(`${API_URL}/api/forum/answers/${id}`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/answers/${id}`, {
     method: 'DELETE',
     headers: { ...getAuthHeader() },
   });
@@ -181,7 +182,7 @@ export const deleteAnswer = async (id: string): Promise<{ success: boolean }> =>
 };
 
 export const voteAnswer = async (id: string, type: 'up' | 'down'): Promise<{ success: boolean; upvotes: number; downvotes: number; voteScore: number }> => {
-  const response = await fetch(`${API_URL}/api/forum/answers/${id}/vote`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/answers/${id}/vote`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -193,7 +194,7 @@ export const voteAnswer = async (id: string, type: 'up' | 'down'): Promise<{ suc
 };
 
 export const acceptAnswer = async (id: string): Promise<{ success: boolean }> => {
-  const response = await fetch(`${API_URL}/api/forum/answers/${id}/accept`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/answers/${id}/accept`, {
     method: 'POST',
     headers: { ...getAuthHeader() },
   });
@@ -202,7 +203,7 @@ export const acceptAnswer = async (id: string): Promise<{ success: boolean }> =>
 
 // Tags
 export const getTags = async (): Promise<{ success: boolean; tags: { _id: string; count: number }[] }> => {
-  const response = await fetch(`${API_URL}/api/forum/tags`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/tags`, {
     headers: { ...getAuthHeader() },
   });
   return response.json();
@@ -210,7 +211,7 @@ export const getTags = async (): Promise<{ success: boolean; tags: { _id: string
 
 // My Questions
 export const getMyQuestions = async (): Promise<{ success: boolean; questions: Question[] }> => {
-  const response = await fetch(`${API_URL}/api/forum/my-questions`, {
+  const response = await fetch(`${getApiUrl()}/api/forum/my-questions`, {
     headers: { ...getAuthHeader() },
   });
   return response.json();

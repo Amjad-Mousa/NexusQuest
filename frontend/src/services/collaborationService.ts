@@ -4,11 +4,10 @@ import {
   CreateSessionData,
   CollaborationMessage,
 } from '../types/collaboration';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 const api = axios.create({
-  baseURL: `${API_URL}/api/collaboration`,
+  baseURL: `${getApiUrl()}/api/collaboration`,
   headers: {
     'Content-Type': 'application/json',
   },

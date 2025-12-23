@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface PlaygroundTerminalProps {
   language: 'python' | 'java' | 'javascript' | 'cpp';
@@ -42,7 +43,7 @@ export function PlaygroundTerminal({ language, code, executeFlag, theme = 'dark'
     setLines([{ type: 'output', content: `▶️ Running ${language} code...\n` }]);
 
     try {
-      const response = await fetch('http://localhost:3001/api/playground/execute', {
+      const response = await fetch(`${getApiUrl()}/api/playground/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +133,7 @@ export function PlaygroundTerminal({ language, code, executeFlag, theme = 'dark'
     setLines(prev => [...prev, { type: 'output', content: input + '\n' }]);
 
     try {
-      await fetch('http://localhost:3001/api/playground/input', {
+      await fetch(`${getApiUrl()}/api/playground/input`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

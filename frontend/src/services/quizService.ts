@@ -1,6 +1,5 @@
 import { getStoredToken } from './authService';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 export type QuizDifficulty = 'easy' | 'medium' | 'hard';
 export type QuizLanguage = 'python' | 'javascript' | 'java' | 'cpp';
@@ -99,35 +98,35 @@ async function authFetch(url: string, options: RequestInit = {}) {
 }
 
 export async function getQuizzes(): Promise<Quiz[]> {
-    const res = await authFetch(`${API_URL}/api/quizzes`);
+    const res = await authFetch(`${getApiUrl()}/api/quizzes`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
 }
 
 export async function getMyQuizzes(): Promise<Quiz[]> {
-    const res = await authFetch(`${API_URL}/api/quizzes/my-quizzes`);
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/my-quizzes`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
 }
 
 export async function getStudentsList(): Promise<StudentInfo[]> {
-    const res = await authFetch(`${API_URL}/api/quizzes/students/list`);
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/students/list`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
 }
 
 export async function getQuiz(id: string): Promise<Quiz> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}`);
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
 }
 
 export async function createQuiz(input: CreateQuizInput): Promise<Quiz> {
-    const res = await authFetch(`${API_URL}/api/quizzes`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes`, {
         method: 'POST',
         body: JSON.stringify(input),
     });
@@ -137,7 +136,7 @@ export async function createQuiz(input: CreateQuizInput): Promise<Quiz> {
 }
 
 export async function updateQuiz(id: string, input: Partial<CreateQuizInput>): Promise<Quiz> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
     });
@@ -147,7 +146,7 @@ export async function updateQuiz(id: string, input: Partial<CreateQuizInput>): P
 }
 
 export async function deleteQuiz(id: string): Promise<void> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}`, {
         method: 'DELETE',
     });
     const data = await res.json();
@@ -155,7 +154,7 @@ export async function deleteQuiz(id: string): Promise<void> {
 }
 
 export async function startQuiz(id: string): Promise<{ submission: QuizSubmissionInfo; alreadyStarted: boolean }> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}/start`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}/start`, {
         method: 'POST',
     });
     const data = await res.json();
@@ -164,7 +163,7 @@ export async function startQuiz(id: string): Promise<{ submission: QuizSubmissio
 }
 
 export async function submitQuiz(id: string, code: string, forceSubmit?: boolean, violations?: number): Promise<QuizSubmitResponse> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}/submit`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}/submit`, {
         method: 'POST',
         body: JSON.stringify({ code, forceSubmit, violations }),
     });
@@ -189,7 +188,7 @@ export interface RunTestsResponse {
 }
 
 export async function runTests(id: string, code: string): Promise<RunTestsResponse> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}/run`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}/run`, {
         method: 'POST',
         body: JSON.stringify({ code }),
     });
@@ -228,7 +227,7 @@ export interface QuizResultsResponse {
 }
 
 export async function getQuizResults(id: string): Promise<QuizResultsResponse> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${id}/results`);
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${id}/results`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
@@ -251,7 +250,7 @@ export async function gradeSubmission(
     };
     message: string;
 }> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${quizId}/submission/${submissionId}/grade`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${quizId}/submission/${submissionId}/grade`, {
         method: 'POST',
         body: JSON.stringify({ grade, feedback }),
     });
@@ -276,7 +275,7 @@ export async function gradeStudentByUserId(
     };
     message: string;
 }> {
-    const res = await authFetch(`${API_URL}/api/quizzes/${quizId}/grade-student/${userId}`, {
+    const res = await authFetch(`${getApiUrl()}/api/quizzes/${quizId}/grade-student/${userId}`, {
         method: 'POST',
         body: JSON.stringify({ grade, feedback }),
     });

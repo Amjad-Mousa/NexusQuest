@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Task, getMyTasks, deleteTask } from '../services/taskService';
 import { Quiz, getMyQuizzes, deleteQuiz } from '../services/quizService';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';
+import { getApiUrl } from '../utils/apiHelpers';
 import { getStoredUser } from '../services/authService';
 import CreateTaskModal from '../components/teacher/CreateTaskModal';
 import CreateQuizModal from '../components/teacher/CreateQuizModal';
@@ -69,7 +70,7 @@ export default function TeacherDashboard({ user, onLogout }: TeacherDashboardPro
     const loadUserData = async () => {
       try {
         const token = localStorage.getItem('nexusquest-token');
-        const response = await fetch('http://localhost:3001/api/auth/me', {
+        const response = await fetch(`${getApiUrl()}/api/auth/me`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();

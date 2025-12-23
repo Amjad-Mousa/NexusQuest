@@ -8,6 +8,7 @@ export interface Tutorial extends BaseTutorial {
 export type { TutorialSection };
 
 import { getStoredToken } from './authService';
+import { getApiUrl } from '../utils/apiHelpers';
 
 // Get tutorial customizations from localStorage
 const getTutorialCustomizations = (): Record<string, Partial<Tutorial>> => {
@@ -23,8 +24,7 @@ export const getTutorials = async (language?: string, difficulty?: string): Prom
     if (language) queryParams.append('language', language);
     if (difficulty) queryParams.append('difficulty', difficulty);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials?${queryParams}`);
+    const response = await fetch(`${getApiUrl()}/api/tutorials?${queryParams}`);
 
     if (response.ok) {
       const backendTutorials = await response.json();
@@ -85,8 +85,7 @@ export const getTutorialsByLanguage = async (language: string): Promise<Tutorial
 export const getTutorial = async (id: string): Promise<Tutorial> => {
   try {
     // Try fetching from backend first
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials/${id}`);
+    const response = await fetch(`${getApiUrl()}/api/tutorials/${id}`);
 
     if (response.ok) {
       const backendTutorial = await response.json();
@@ -129,8 +128,7 @@ export const getTeacherTutorials = async (): Promise<Tutorial[]> => {
       throw new Error('No authentication token');
     }
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials/teacher/all`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials/teacher/all`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -224,8 +222,7 @@ export const saveTutorialCustomization = async (id: string, updates: Partial<Tut
       throw new Error('No authentication token');
     }
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials/${id}`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials/${id}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -272,8 +269,7 @@ export const createCustomTutorial = async (tutorial: Omit<Tutorial, 'isPublished
       throw new Error('No authentication token');
     }
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -320,8 +316,7 @@ export const deleteCustomTutorial = async (id: string): Promise<void> => {
       throw new Error('No authentication token');
     }
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials/${id}`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials/${id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -341,9 +336,8 @@ export const deleteCustomTutorial = async (id: string): Promise<void> => {
 export const getAvailableLanguages = async (): Promise<string[]> => {
   try {
     // Try fetching from backend API first
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     const token = getStoredToken();
-    const response = await fetch(`${API_URL}/api/tutorials/meta/languages`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials/meta/languages`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -372,8 +366,7 @@ export const startTutorial = async (tutorialId: string): Promise<void> => {
   if (!token) return;
 
   try {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials/${tutorialId}/start`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials/${tutorialId}/start`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -395,8 +388,7 @@ export const completeTutorial = async (tutorialId: string): Promise<void> => {
   if (!token) return;
 
   try {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const response = await fetch(`${API_URL}/api/tutorials/${tutorialId}/complete`, {
+    const response = await fetch(`${getApiUrl()}/api/tutorials/${tutorialId}/complete`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

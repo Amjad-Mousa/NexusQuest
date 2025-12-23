@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Medal, Award, TrendingUp } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { getApiUrl } from '../../utils/apiHelpers';
 
 interface LeaderboardEntry {
   id: string;
@@ -27,7 +28,7 @@ export default function TeacherLeaderboard() {
       const user = JSON.parse(localStorage.getItem('nexusquest-user') || '{}');
 
       // Fetch teacher leaderboard
-      const response = await fetch('http://localhost:3001/api/auth/leaderboard/top?role=teacher&limit=50', {
+      const response = await fetch(`${getApiUrl()}/api/auth/leaderboard/top?role=teacher&limit=50`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

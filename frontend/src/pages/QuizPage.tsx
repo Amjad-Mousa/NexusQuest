@@ -5,8 +5,7 @@ import { Button } from '../components/ui/button';
 import { useTheme } from '../context/ThemeContext';
 import { Quiz, getQuiz, startQuiz, submitQuiz, QuizSubmitResponse, runTests, RunTestsResponse } from '../services/quizService';
 import { usePageTitle } from '../hooks/usePageTitle';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 export default function QuizPage() {
   usePageTitle('Quiz');
@@ -334,7 +333,7 @@ export default function QuizPage() {
     setActiveTab('runconsole');
 
     try {
-      const response = await fetch(`${API_URL}/api/playground/execute`, {
+      const response = await fetch(`${getApiUrl()}/api/playground/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -406,7 +405,7 @@ export default function QuizPage() {
     setTerminalLines(prev => [...prev, { type: 'output', content: terminalInput + '\n' }]);
 
     try {
-      await fetch(`${API_URL}/api/playground/input`, {
+      await fetch(`${getApiUrl()}/api/playground/input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, input: terminalInput })

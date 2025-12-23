@@ -1,6 +1,5 @@
 import { getStoredToken } from './authService';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 export interface DailyChallenge {
     title: string;
@@ -49,21 +48,21 @@ async function authFetch(url: string, options: RequestInit = {}) {
 }
 
 export async function getTodayChallenge(): Promise<TodayChallengeResponse> {
-    const res = await authFetch(`${API_URL}/api/daily-challenge/today`);
+    const res = await authFetch(`${getApiUrl()}/api/daily-challenge/today`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
 }
 
 export async function getUserDailyChallengeStats(userId: string): Promise<DailyChallengeStats> {
-    const res = await authFetch(`${API_URL}/api/daily-challenge/stats/${userId}`);
+    const res = await authFetch(`${getApiUrl()}/api/daily-challenge/stats/${userId}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;
 }
 
 export async function submitDailyChallenge(code: string): Promise<SubmitResult> {
-    const res = await authFetch(`${API_URL}/api/daily-challenge/submit`, {
+    const res = await authFetch(`${getApiUrl()}/api/daily-challenge/submit`, {
         method: 'POST',
         body: JSON.stringify({ code }),
     });
@@ -73,7 +72,7 @@ export async function submitDailyChallenge(code: string): Promise<SubmitResult> 
 }
 
 export async function getDailyChallengeStats(): Promise<DailyChallengeStats> {
-    const res = await authFetch(`${API_URL}/api/daily-challenge/stats`);
+    const res = await authFetch(`${getApiUrl()}/api/daily-challenge/stats`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     return data.data;

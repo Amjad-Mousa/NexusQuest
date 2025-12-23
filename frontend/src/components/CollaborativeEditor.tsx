@@ -6,6 +6,7 @@ import { getStoredUser } from '../services/authService';
 import { collaborationService } from '../services/collaborationService';
 import { Users, MessageSquare, Send, Play, Square, Terminal as TerminalIcon, Crown, ArrowLeft, Code2, UserPlus, X, Search, Loader2, Circle, Check } from 'lucide-react';
 import { Button } from './ui/button';
+import { getApiUrl } from '../utils/apiHelpers';
 import type { editor } from 'monaco-editor';
 
 interface AvailableUser {
@@ -225,7 +226,7 @@ export default function CollaborativeEditor({
     setTerminalLines([{ type: 'output', content: `▶️ Running ${language} code...\n` }]);
 
     try {
-      const response = await fetch('http://localhost:3001/api/playground/execute', {
+      const response = await fetch(`${getApiUrl()}/api/playground/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

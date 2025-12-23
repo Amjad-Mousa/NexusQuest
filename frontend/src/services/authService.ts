@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
+
 
 export type UserRole = 'user' | 'teacher';
 
@@ -56,7 +57,7 @@ export function clearAuth(): void {
 
 export async function signup(name: string, email: string, password: string, role: UserRole = 'user'): Promise<AuthResponse> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
+    const response = await fetch(`${getApiUrl()}/api/auth/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -81,7 +82,7 @@ export async function signup(name: string, email: string, password: string, role
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+    const response = await fetch(`${getApiUrl()}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -111,7 +112,7 @@ export async function getProfile(): Promise<AuthResponse> {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/auth/me`, {
+    const response = await fetch(`${getApiUrl()}/api/auth/me`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

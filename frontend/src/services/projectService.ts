@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
+
 
 export interface ProjectFile {
   _id: string;
@@ -24,7 +25,7 @@ import { getAuthHeaders } from '../utils';
 
 // Get all projects
 export async function getProjects(): Promise<Project[]> {
-  const response = await fetch(`${API_URL}/api/projects`, {
+  const response = await fetch(`${getApiUrl()}/api/projects`, {
     headers: getAuthHeaders(),
   });
   const data = await response.json();
@@ -34,7 +35,7 @@ export async function getProjects(): Promise<Project[]> {
 
 // Get a single project
 export async function getProject(projectId: string): Promise<Project> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
+  const response = await fetch(`${getApiUrl()}/api/projects/${projectId}`, {
     headers: getAuthHeaders(),
   });
   const data = await response.json();
@@ -48,7 +49,7 @@ export async function createProject(
   description?: string,
   language?: string
 ): Promise<Project> {
-  const response = await fetch(`${API_URL}/api/projects`, {
+  const response = await fetch(`${getApiUrl()}/api/projects`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ name, description, language }),
@@ -63,7 +64,7 @@ export async function updateProject(
   projectId: string,
   updates: { name?: string; description?: string; language?: string; dependencies?: Record<string, string> }
 ): Promise<Project> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
+  const response = await fetch(`${getApiUrl()}/api/projects/${projectId}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
     body: JSON.stringify(updates),
@@ -75,7 +76,7 @@ export async function updateProject(
 
 // Delete a project
 export async function deleteProject(projectId: string): Promise<void> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
+  const response = await fetch(`${getApiUrl()}/api/projects/${projectId}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -90,7 +91,7 @@ export async function addFile(
   content?: string,
   language?: string
 ): Promise<ProjectFile> {
-  const response = await fetch(`${API_URL}/api/projects/${projectId}/files`, {
+  const response = await fetch(`${getApiUrl()}/api/projects/${projectId}/files`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ name, content, language }),
@@ -107,7 +108,7 @@ export async function updateFile(
   updates: { name?: string; content?: string; language?: string }
 ): Promise<ProjectFile> {
   const response = await fetch(
-    `${API_URL}/api/projects/${projectId}/files/${fileId}`,
+    `${getApiUrl()}/api/projects/${projectId}/files/${fileId}`,
     {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -125,7 +126,7 @@ export async function deleteFile(
   fileId: string
 ): Promise<void> {
   const response = await fetch(
-    `${API_URL}/api/projects/${projectId}/files/${fileId}`,
+    `${getApiUrl()}/api/projects/${projectId}/files/${fileId}`,
     {
       method: 'DELETE',
       headers: getAuthHeaders(),
@@ -149,7 +150,7 @@ export async function runProject(
   language: string,
   input?: string
 ): Promise<RunProjectResult> {
-  const response = await fetch(`${API_URL}/api/run-project`, {
+  const response = await fetch(`${getApiUrl()}/api/run-project`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ files, mainFile, language, input }),

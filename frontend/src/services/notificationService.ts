@@ -1,6 +1,5 @@
 import { getStoredToken } from './authService';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getApiUrl } from '../utils/apiHelpers';
 
 export type NotificationType =
     | 'task_completed'
@@ -44,7 +43,7 @@ async function authFetch(url: string, options: RequestInit = {}) {
 }
 
 export async function getAllNotifications(): Promise<AllNotificationsResponse> {
-    const res = await authFetch(`${API_URL}/api/notifications/all`);
+    const res = await authFetch(`${getApiUrl()}/api/notifications/all`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed to load notifications');
     return {
@@ -54,7 +53,7 @@ export async function getAllNotifications(): Promise<AllNotificationsResponse> {
 }
 
 export async function getUnreadNotifications(): Promise<UnreadNotificationsResponse> {
-    const res = await authFetch(`${API_URL}/api/notifications/unread`);
+    const res = await authFetch(`${getApiUrl()}/api/notifications/unread`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'Failed to load unread notifications');
     return {
@@ -69,7 +68,7 @@ export async function createNotification(input: {
     relatedTask?: string;
     metadata?: Record<string, any>;
 }): Promise<NotificationItem> {
-    const res = await authFetch(`${API_URL}/api/notifications/create`, {
+    const res = await authFetch(`${getApiUrl()}/api/notifications/create`, {
         method: 'POST',
         body: JSON.stringify(input),
     });
@@ -79,7 +78,7 @@ export async function createNotification(input: {
 }
 
 export async function markNotificationRead(id: string): Promise<NotificationItem> {
-    const res = await authFetch(`${API_URL}/api/notifications/read`, {
+    const res = await authFetch(`${getApiUrl()}/api/notifications/read`, {
         method: 'PUT',
         body: JSON.stringify({ id }),
     });
@@ -89,7 +88,7 @@ export async function markNotificationRead(id: string): Promise<NotificationItem
 }
 
 export async function markNotificationUnread(id: string): Promise<NotificationItem> {
-    const res = await authFetch(`${API_URL}/api/notifications/unread`, {
+    const res = await authFetch(`${getApiUrl()}/api/notifications/unread`, {
         method: 'PUT',
         body: JSON.stringify({ id }),
     });
@@ -99,7 +98,7 @@ export async function markNotificationUnread(id: string): Promise<NotificationIt
 }
 
 export async function markAllNotificationsRead(): Promise<number> {
-    const res = await authFetch(`${API_URL}/api/notifications/read-all`, {
+    const res = await authFetch(`${getApiUrl()}/api/notifications/read-all`, {
         method: 'PUT',
     });
     const data = await res.json();

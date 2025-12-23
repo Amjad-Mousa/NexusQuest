@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Play, Square, Copy, Check, Terminal, Code } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { getApiUrl } from '../utils/apiHelpers';
 
 interface TerminalLine {
   type: 'output' | 'error';
@@ -55,7 +56,7 @@ export default function TutorialCodeRunner({ code, language, theme = 'dark' }: T
     setTerminalLines([{ type: 'output', content: `▶️ Running ${language} code...\n` }]);
 
     try {
-      const response = await fetch('http://localhost:3001/api/playground/execute', {
+      const response = await fetch(`${getApiUrl()}/api/playground/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,7 +147,7 @@ export default function TutorialCodeRunner({ code, language, theme = 'dark' }: T
     setTerminalLines(prev => [...prev, { type: 'output', content: input + '\n' }]);
 
     try {
-      await fetch('http://localhost:3001/api/playground/input', {
+      await fetch(`${getApiUrl()}/api/playground/input`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
