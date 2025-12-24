@@ -16,7 +16,6 @@ export interface TempContainerExecOptions {
     memoryLimit?: number;
 }
 
-// Execute code in temporary container (used by daily-challenge, tasks, and quizzes)
 export async function executeCodeInTempContainer(
     code: string,
     language: string,
@@ -34,8 +33,11 @@ export async function executeCodeInTempContainer(
 
     logger.info(`Temp container execution: language=${language}, sessionId=${sessionId}`);
 
+    let container: Docker.Container | null = null;
+    let stream: any = null;
+
     try {
-        // Check and remove existing container (shouldn't exist but safety check)
+        // Check and remove existing container
         try {
             const existingContainer = docker.getContainer(containerName);
             await existingContainer.inspect();
@@ -48,7 +50,7 @@ export async function executeCodeInTempContainer(
         }
 
         // Create temporary container
-        const container = await docker.createContainer({
+        container = await docker.createContainer({
             Image: languageImages[language],
             name: containerName,
             Cmd: ['sh', '-c', 'while true; do sleep 1; done'],
@@ -75,7 +77,6 @@ export async function executeCodeInTempContainer(
         const fileName = getDefaultFileName(language, 'simple', code);
         const filePath = `/tmp/${fileName}`;
 
-        // Write code using cat with heredoc to avoid issues with special characters
         const escapedCode = code.replace(/'/g, "'\\''");
         const writeCmd = [
             `cat > ${filePath} << 'EOFCODE'`,
@@ -95,15 +96,15 @@ export async function executeCodeInTempContainer(
         let className: string | undefined;
 
         if (language === 'python') {
-            execCommand = `python3 -u ${filePath}`;
+            execCommand = `timeout ${Math.ceil(timeoutMs / 1000)} python3 -u ${filePath}`;
         } else if (language === 'javascript') {
-            execCommand = `node ${filePath}`;
+            execCommand = `timeout ${Math.ceil(timeoutMs / 1000)} node ${filePath}`;
         } else if (language === 'cpp') {
-            execCommand = `g++ -std=c++20 ${filePath} -o /tmp/a.out && /tmp/a.out`;
+            execCommand = `g++ -std=c++20 ${filePath} -o /tmp/a.out && timeout ${Math.ceil(timeoutMs / 1000)} /tmp/a.out`;
         } else if (language === 'java') {
             const classMatch = code.match(/public\s+class\s+(\w+)/);
             className = classMatch ? classMatch[1] : 'Main';
-            execCommand = `cd /tmp && javac ${fileName} && java -cp /tmp ${className}`;
+            execCommand = `cd /tmp && javac ${fileName} && timeout ${Math.ceil(timeoutMs / 1000)} java -cp /tmp ${className}`;
         } else {
             await container.remove({ force: true });
             return { output: '', error: 'Unsupported language' };
@@ -118,7 +119,7 @@ export async function executeCodeInTempContainer(
             Tty: false
         });
 
-        const stream = await exec.start({
+        stream = await exec.start({
             hijack: true,
             stdin: true
         });
@@ -130,30 +131,22 @@ export async function executeCodeInTempContainer(
         }
         stream.end();
 
-        // Collect output
+        // Collect output with timeout
         const outputPromise = demuxStream(stream);
 
-        // Set timeout
         const timeoutPromise = new Promise<{ stdout: string; stderr: string }>((_, reject) => {
             setTimeout(() => {
-                stream.destroy();
+                if (stream) {
+                    stream.destroy();
+                }
                 reject(new Error(`Execution timeout (${timeoutMs / 1000} seconds)`));
-            }, timeoutMs);
+            }, timeoutMs + 1000); // Extra buffer beyond container timeout
         });
 
         const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
 
         // Clean up container
-        try {
-            await container.stop();
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await container.remove({ force: true });
-            logger.info(`Temp container removed: ${containerName}`);
-        } catch (err: any) {
-            if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                logger.warn(`Error removing temp container: ${err.message}`);
-            }
-        }
+        await cleanupContainer(container, containerName);
 
         return {
             output: stdout.trim() || 'Code executed successfully (no output)',
@@ -163,17 +156,43 @@ export async function executeCodeInTempContainer(
     } catch (error: any) {
         logger.error('Temp container execution failed:', error);
 
-        // Try to clean up container if it still exists
-        try {
-            const container = docker.getContainer(containerName);
-            await container.remove({ force: true });
-        } catch (cleanupErr) {
-            // Ignore cleanup errors
+        // Clean up resources
+        if (stream) {
+            try {
+                stream.destroy();
+            } catch { }
+        }
+
+        if (container) {
+            await cleanupContainer(container, containerName);
         }
 
         return {
             output: '',
             error: error.message || 'Execution failed'
         };
+    }
+}
+
+// Helper function for container cleanup
+async function cleanupContainer(container: Docker.Container, containerName: string): Promise<void> {
+    try {
+        // Try graceful stop first
+        await Promise.race([
+            container.stop({ t: 2 }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Stop timeout')), 3000))
+        ]);
+    } catch (err: any) {
+        logger.warn(`Could not stop container gracefully: ${err.message}`);
+    }
+
+    try {
+        // Force remove
+        await container.remove({ force: true });
+        logger.info(`Temp container removed: ${containerName}`);
+    } catch (err: any) {
+        if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
+            logger.warn(`Error removing temp container: ${err.message}`);
+        }
     }
 }

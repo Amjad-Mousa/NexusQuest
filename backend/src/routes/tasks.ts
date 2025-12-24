@@ -165,7 +165,7 @@ router.post('/', teacherMiddleware, async (req: AuthRequest, res: Response) => {
         read: false,
       });
     } catch (notifyError) {
-      console.error('Failed to create task creation notification:', notifyError);
+      logger.error('Failed to create task creation notification:', notifyError);
     }
 
     res.status(201).json({ success: true, data: task });
@@ -259,19 +259,30 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
       error?: string;
     }>;
 
-    for (let i = 0; i < testCases.length; i++) {
-      const test = testCases[i];
-
+    // Execute all test cases in parallel with individual timeouts
+    const testPromises = testCases.map(async (test, i) => {
       try {
-        // Hard timeout per test so a hanging container doesn't block all results
+        // Individual timeout per test with abort capability
+        const timeoutMs = 10000;
+        let timeoutId: NodeJS.Timeout;
+
+        const execPromise = executeCodeInTempContainer(code, task.language, test.input, {
+          sessionIdPrefix: 'task-test',
+          timeoutMs: timeoutMs
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error(`Test execution timeout (${timeoutMs / 1000} seconds)`));
+          }, timeoutMs);
+        });
+
         const execResult = await Promise.race([
-          executeCodeInTempContainer(code, task.language, test.input, {
-            sessionIdPrefix: 'task-test'
-          }),
-          new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Test execution timeout (10 seconds)')), 10000);
-          }),
-        ]);
+          execPromise,
+          timeoutPromise
+        ]).finally(() => {
+          if (timeoutId!) clearTimeout(timeoutId);
+        });
 
         const actual = (execResult as any).error
           ? (execResult as any).error
@@ -279,7 +290,7 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
 
         const passed = !(execResult as any).error && normalize(actual) === normalize(test.expectedOutput);
 
-        results.push({
+        return {
           index: i,
           passed,
           // Show input only if not hidden
@@ -287,17 +298,39 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
           // Never show expected output to students
           actualOutput: test.isHidden ? (passed ? '(correct)' : '(incorrect)') : actual,
           error: (execResult as any).error || undefined,
-        });
+        };
       } catch (error: any) {
-        results.push({
+        logger.error(`Test case ${i} failed:`, error.message);
+        return {
           index: i,
           passed: false,
           input: test.isHidden ? '(hidden)' : test.input,
           actualOutput: '',
           error: error?.message || 'Execution failed',
+        };
+      }
+    });
+
+    // Wait for all tests to complete (with their individual timeouts)
+    const settledResults = await Promise.allSettled(testPromises);
+
+    // Process results
+    settledResults.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      } else {
+        results.push({
+          index,
+          passed: false,
+          input: testCases[index].isHidden ? '(hidden)' : testCases[index].input,
+          actualOutput: '',
+          error: result.reason?.message || 'Test execution failed',
         });
       }
-    }
+    });
+
+    // Sort results by index to maintain order
+    results.sort((a, b) => a.index - b.index);
 
     const passed = results.filter(r => r.passed).length;
 
@@ -342,7 +375,7 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
               read: false,
             });
           } catch (notifyError) {
-            console.error('Failed to create POINTS_EARNED notification (task run-tests):', notifyError);
+            logger.error('Failed to create POINTS_EARNED notification:', notifyError);
           }
         }
 
@@ -359,7 +392,7 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
             read: false,
           });
         } catch (notifyError) {
-          console.error('Failed to create TASK_COMPLETED notification (task run-tests):', notifyError);
+          logger.error('Failed to create TASK_COMPLETED notification:', notifyError);
         }
 
         // Award XP and check achievements
@@ -371,24 +404,23 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
               task.language || 'python'
             );
 
-            console.log(`✅ Task completed: User ${userId} earned ${task.points || 10} XP`);
+            logger.info(`✅ Task completed: User ${userId} earned ${task.points || 10} XP`);
             if (gamificationResult.leveledUp) {
-              console.log(`🎉 User leveled up to level ${gamificationResult.newLevel}!`);
+              logger.info(`🎉 User leveled up to level ${gamificationResult.newLevel}!`);
             }
             if (gamificationResult.newAchievements.length > 0) {
-              console.log(`🏆 Unlocked ${gamificationResult.newAchievements.length} new achievements:`);
+              logger.info(`🏆 Unlocked ${gamificationResult.newAchievements.length} new achievements`);
               gamificationResult.newAchievements.forEach((ach: any) => {
-                console.log(`   - ${ach.icon} ${ach.title}`);
+                logger.info(`   - ${ach.icon} ${ach.title}`);
               });
             }
           }
         } catch (gamificationError) {
-          console.error('Failed to award XP or check achievements:', gamificationError);
+          logger.error('Failed to award XP or check achievements:', gamificationError);
         }
 
         completionUpdated = true;
       }
-
     }
 
     res.json({
@@ -401,6 +433,7 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error: any) {
+    logger.error('Failed to run tests:', error);
     res.status(500).json({
       success: false,
       error: error?.message || 'Failed to run tests',
