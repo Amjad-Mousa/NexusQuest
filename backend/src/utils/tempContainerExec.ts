@@ -89,7 +89,33 @@ export async function executeCodeInTempContainer(
             AttachStdout: true,
             AttachStderr: true
         });
-        await writeExec.start({});
+
+        // CRITICAL FIX: Wait for the write operation to complete
+        const writeStream = await writeExec.start({});
+        await new Promise<void>((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            writeStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+            writeStream.on('end', () => resolve());
+            writeStream.on('error', reject);
+        });
+
+        // Add a delay to ensure filesystem sync
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        // Verify file exists before executing
+        const verifyExec = await container.exec({
+            Cmd: ['sh', '-c', `test -f ${filePath} && echo "exists" || echo "missing"`],
+            AttachStdout: true,
+            AttachStderr: true
+        });
+        const verifyStream = await verifyExec.start({});
+        const verifyResult = await demuxStream(verifyStream);
+
+        if (!verifyResult.stdout.includes('exists')) {
+            logger.error(`File verification failed for ${filePath}`);
+            await cleanupContainer(container, containerName);
+            return { output: '', error: 'Failed to write code file to container' };
+        }
 
         // Prepare execution command
         let execCommand: string;
