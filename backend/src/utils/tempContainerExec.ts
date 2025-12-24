@@ -99,8 +99,8 @@ export async function executeCodeInTempContainer(
             writeStream.on('error', reject);
         });
 
-        // Add a small delay to ensure filesystem sync
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Add a delay to ensure filesystem sync
+        await new Promise(resolve => setTimeout(resolve, 250));
 
         // Verify file exists before executing
         const verifyExec = await container.exec({
