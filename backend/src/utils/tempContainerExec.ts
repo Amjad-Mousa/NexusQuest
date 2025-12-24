@@ -24,7 +24,7 @@ export async function executeCodeInTempContainer(
 ): Promise<TempContainerExecResult> {
     const {
         sessionIdPrefix = 'exec',
-        timeoutMs = 10000,
+        timeoutMs = 15000, // Increased from 10000 to 15000
         memoryLimit = 256 * 1024 * 1024
     } = options;
 
@@ -73,16 +73,13 @@ export async function executeCodeInTempContainer(
         await container.start();
         logger.info(`Temp container started: ${containerName}`);
 
-        // Write code to file
+        // Write code to file using a more reliable method
         const fileName = getDefaultFileName(language, 'simple', code);
         const filePath = `/tmp/${fileName}`;
 
-        const escapedCode = code.replace(/'/g, "'\\''");
-        const writeCmd = [
-            `cat > ${filePath} << 'EOFCODE'`,
-            escapedCode,
-            'EOFCODE'
-        ].join('\n');
+        // Use base64 encoding to avoid escaping issues
+        const codeBase64 = Buffer.from(code).toString('base64');
+        const writeCmd = `echo '${codeBase64}' | base64 -d > ${filePath}`;
 
         const writeExec = await container.exec({
             Cmd: ['sh', '-c', writeCmd],
@@ -90,32 +87,22 @@ export async function executeCodeInTempContainer(
             AttachStderr: true
         });
 
-        // CRITICAL FIX: Wait for the write operation to complete
+        // Wait for the write operation to complete
         const writeStream = await writeExec.start({});
         await new Promise<void>((resolve, reject) => {
-            const chunks: Buffer[] = [];
-            writeStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-            writeStream.on('end', () => resolve());
-            writeStream.on('error', reject);
+            const timeout = setTimeout(() => reject(new Error('File write timeout')), 5000);
+            writeStream.on('end', () => {
+                clearTimeout(timeout);
+                resolve();
+            });
+            writeStream.on('error', (err) => {
+                clearTimeout(timeout);
+                reject(err);
+            });
         });
 
-        // Add a delay to ensure filesystem sync
-        await new Promise(resolve => setTimeout(resolve, 250));
-
-        // Verify file exists before executing
-        const verifyExec = await container.exec({
-            Cmd: ['sh', '-c', `test -f ${filePath} && echo "exists" || echo "missing"`],
-            AttachStdout: true,
-            AttachStderr: true
-        });
-        const verifyStream = await verifyExec.start({});
-        const verifyResult = await demuxStream(verifyStream);
-
-        if (!verifyResult.stdout.includes('exists')) {
-            logger.error(`File verification failed for ${filePath}`);
-            await cleanupContainer(container, containerName);
-            return { output: '', error: 'Failed to write code file to container' };
-        }
+        // Small delay for filesystem sync
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Prepare execution command
         let execCommand: string;
@@ -166,7 +153,7 @@ export async function executeCodeInTempContainer(
                     stream.destroy();
                 }
                 reject(new Error(`Execution timeout (${timeoutMs / 1000} seconds)`));
-            }, timeoutMs + 1000); // Extra buffer beyond container timeout
+            }, timeoutMs + 2000); // Extra buffer beyond container timeout
         });
 
         const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
@@ -203,10 +190,10 @@ export async function executeCodeInTempContainer(
 // Helper function for container cleanup
 async function cleanupContainer(container: Docker.Container, containerName: string): Promise<void> {
     try {
-        // Try graceful stop first
+        // Try graceful stop first with shorter timeout
         await Promise.race([
-            container.stop({ t: 2 }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Stop timeout')), 3000))
+            container.stop({ t: 1 }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Stop timeout')), 2000))
         ]);
     } catch (err: any) {
         logger.warn(`Could not stop container gracefully: ${err.message}`);
