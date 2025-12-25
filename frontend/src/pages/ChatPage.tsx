@@ -146,7 +146,7 @@ export function ChatPage() {
   );
 
   return (
-    <div className={`min-h-screen flex flex-col relative ${
+    <div className={`h-screen flex flex-col relative overflow-hidden ${
       theme === 'dark'
         ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white'
         : 'bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-900'
@@ -159,8 +159,8 @@ export function ChatPage() {
         </div>
       )}
       
-      {/* Header */}
-      <header className={`sticky top-0 z-10 px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
+      {/* Header - Fixed at top */}
+      <header className={`flex-shrink-0 z-10 px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
         theme === 'dark'
           ? 'border-gray-800/50 bg-gray-950/80'
           : 'border-gray-200 bg-white/80'
@@ -189,8 +189,8 @@ export function ChatPage() {
         <div className="w-16" />
       </header>
 
-      {/* Messages Area */}
-      <main className="flex-1 flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      {/* Messages Area - Scrollable */}
+      <main className="flex-1 overflow-hidden flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="flex-1 overflow-y-auto py-6">
           {renderedMessages}
           {messages.length === 0 && (
@@ -227,56 +227,56 @@ export function ChatPage() {
           )}
           <div ref={bottomRef} />
         </div>
-
-        {/* Input Area */}
-        <div className={`sticky bottom-0 py-4 ${
-          theme === 'dark'
-            ? 'bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent'
-            : 'bg-gradient-to-t from-gray-50 via-gray-50/95 to-transparent'
-        }`}>
-          <div className="flex gap-3 items-end">
-            <div className="flex-1 relative">
-              <input
-                className={`w-full px-5 py-3.5 rounded-2xl text-sm outline-none transition-all shadow-lg ${
-                  theme === 'dark'
-                    ? 'bg-gray-900/90 border border-gray-800 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500'
-                    : 'bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 shadow-md'
-                }`}
-                placeholder="Type your message..."
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  if (userId) {
-                    emitTyping(userId);
-                    if (typingTimeoutRef.current) {
-                      clearTimeout(typingTimeoutRef.current);
-                    }
-                    typingTimeoutRef.current = setTimeout(() => {
-                      emitStopTyping(userId);
-                    }, 1000);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                    if (userId) emitStopTyping(userId);
-                  }
-                }}
-              />
-            </div>
-            <button
-              type="button"
-              className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white text-sm font-semibold shadow-lg shadow-emerald-600/30 transition-all duration-300 hover:shadow-emerald-600/40 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
-              onClick={handleSend}
-              disabled={!input.trim()}
-            >
-              <Send className="w-4 h-4" />
-              Send
-            </button>
-          </div>
-        </div>
       </main>
+
+      {/* Input Area - Fixed at bottom */}
+      <div className={`flex-shrink-0 z-10 py-4 px-4 sm:px-6 lg:px-8 w-full max-w-5xl mx-auto ${
+        theme === 'dark'
+          ? 'bg-gray-950/95 border-t border-gray-800/50'
+          : 'bg-gray-50/95 border-t border-gray-200'
+      }`}>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1 relative">
+            <input
+              className={`w-full px-5 py-3.5 rounded-2xl text-sm outline-none transition-all shadow-lg ${
+                theme === 'dark'
+                  ? 'bg-gray-900/90 border border-gray-800 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500'
+                  : 'bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 shadow-md'
+              }`}
+              placeholder="Type your message..."
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                if (userId) {
+                  emitTyping(userId);
+                  if (typingTimeoutRef.current) {
+                    clearTimeout(typingTimeoutRef.current);
+                  }
+                  typingTimeoutRef.current = setTimeout(() => {
+                    emitStopTyping(userId);
+                  }, 1000);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                  if (userId) emitStopTyping(userId);
+                }
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white text-sm font-semibold shadow-lg shadow-emerald-600/30 transition-all duration-300 hover:shadow-emerald-600/40 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+            onClick={handleSend}
+            disabled={!input.trim()}
+          >
+            <Send className="w-4 h-4" />
+            Send
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

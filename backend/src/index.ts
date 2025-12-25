@@ -115,6 +115,7 @@ app.use('/api/teacher', teacherRouter);
 app.use(errorHandler);
 
 const io = new Server(server, {
+  path: '/nexusquest/socket.io',
   cors: {
     origin: allowedOrigins,
     credentials: true,

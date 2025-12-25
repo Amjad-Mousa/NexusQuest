@@ -22,6 +22,7 @@ export function connectChat(): Socket | null {
     if (socket) return socket;
 
     socket = io(API_URL, {
+        path: '/nexusquest/socket.io',
         auth: { token },
         withCredentials: true,
     });

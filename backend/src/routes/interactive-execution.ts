@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import Docker from 'dockerode';
 import { logger } from '../utils/logger.js';
-import { Server } from 'socket.io';
 
 const router = Router();
 const docker = new Docker();
