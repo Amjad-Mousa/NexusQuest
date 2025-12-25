@@ -59,7 +59,7 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
   useEffect(() => {
     // Connect to the /collaboration namespace with /nexusquest/socket.io path
     const newSocket = io(getApiUrl() + '/collaboration', {
-      path: '/nexusquest/socket.io',
+      path: '/nexusquest/collaboration/socket.io',
       transports: ['polling', 'websocket'],
       autoConnect: false,
       withCredentials: true,
