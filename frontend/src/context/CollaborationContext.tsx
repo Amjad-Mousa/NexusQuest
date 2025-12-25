@@ -57,17 +57,24 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
 
   // Initialize socket connection
   useEffect(() => {
-    // FIXED: Use the base API URL without /collaboration namespace
-    const newSocket = io(getApiUrl(), {
-      path: '/socket.io',
-      transports: ['websocket', 'polling'], // Added polling as fallback
+    // Connect to the /collaboration namespace with /nexusquest/socket.io path
+    const newSocket = io(getApiUrl() + '/collaboration', {
+      path: '/nexusquest/socket.io',
+      transports: ['polling', 'websocket'],
       autoConnect: false,
-      withCredentials: true, // Added for CORS
+      withCredentials: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
     });
 
     newSocket.on('connect', () => {
       console.log('Connected to collaboration server');
       setIsConnected(true);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Collaboration connection error:', error.message);
     });
 
     newSocket.on('disconnect', () => {
