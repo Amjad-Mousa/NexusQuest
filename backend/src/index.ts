@@ -45,6 +45,8 @@ const server = http.createServer(app);
 // Use the container-forwarded port by default and bind to 0.0.0.0 so Docker can route traffic
 const PORT = DEFAULT_PORT;
 
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet());
 
