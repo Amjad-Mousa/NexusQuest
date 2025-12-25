@@ -45,7 +45,10 @@ const server = http.createServer(app);
 // Use the container-forwarded port by default and bind to 0.0.0.0 so Docker can route traffic
 const PORT = DEFAULT_PORT;
 
-app.set('trust proxy', true);
+// Trust proxy - MUST be set before rate limiter
+// Setup: Cloudflare -> Nginx -> Backend (2 proxies)
+// Trust 2 hops: Cloudflare and Nginx
+app.set('trust proxy', 2);
 
 // Security middleware
 app.use(helmet());
@@ -55,6 +58,8 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000, // limit each IP to 1000 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 app.use(limiter);
 
