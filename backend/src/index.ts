@@ -45,9 +45,7 @@ const server = http.createServer(app);
 // Use the container-forwarded port by default and bind to 0.0.0.0 so Docker can route traffic
 const PORT = DEFAULT_PORT;
 
-// Trust proxy - MUST be set before rate limiter
-// Setup: Cloudflare -> Nginx -> Backend (2 proxies)
-// Trust 2 hops: Cloudflare and Nginx
+
 app.set('trust proxy', 2);
 
 // Security middleware
@@ -69,11 +67,22 @@ const allowedOrigins = ALLOWED_ORIGINS;
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, Postman, or same-origin)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) {
       callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return;
     }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    
+    // Log rejected origin for debugging
+    console.log('CORS rejected origin:', origin);
+    console.log('Allowed origins:', allowedOrigins);
+    
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
 }));
