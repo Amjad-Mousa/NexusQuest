@@ -182,7 +182,7 @@ export function ChatPage() {
       )}
       
       {/* Header - Fixed at top */}
-      <header className={`flex-shrink-0 z-10 px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
+      <header className={`sticky top-0 z-20 w-full px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
         theme === 'dark'
           ? 'border-gray-800/50 bg-gray-950/80'
           : 'border-gray-200 bg-white/80'
