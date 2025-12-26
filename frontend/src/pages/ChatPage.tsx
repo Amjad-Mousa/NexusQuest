@@ -58,25 +58,47 @@ export function ChatPage() {
 
     setSocket(s);
 
-    const handleReceived = (message: ChatMessage) => {
-      if (message.senderId !== userId && message.recipientId !== userId) {
+    const toStr = (v: any): string => {
+      if (typeof v === 'string') return v;
+      if (!v) return '';
+      if (typeof v === 'object') return (v._id || v.id || v.toString?.() || '').toString();
+      try { return String(v); } catch { return ''; }
+    };
+
+    const otherId = toStr(userId);
+
+    const normalizeMessage = (m: any): ChatMessage => ({
+      id: toStr(m._id || m.id),
+      senderId: toStr(m.sender?.id ?? m.sender?._id ?? m.senderId ?? m.sender),
+      recipientId: toStr(m.recipient?.id ?? m.recipient?._id ?? m.recipientId ?? m.recipient),
+      content: m.content,
+      createdAt: toStr(m.createdAt),
+      readAt: m.readAt ? toStr(m.readAt) : null,
+    });
+
+    const handleReceived = (raw: any) => {
+      const m = normalizeMessage(raw);
+      if (m.senderId !== otherId && m.recipientId !== otherId) {
         return;
       }
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => [...prev, m]);
     };
 
-    const handleSent = (message: ChatMessage) => {
-      setMessages((prev) => [...prev, message]);
+    const handleSent = (raw: any) => {
+      const m = normalizeMessage(raw);
+      setMessages((prev) => [...prev, m]);
     };
 
-    const handleTyping = (data: { fromUserId: string }) => {
-      if (data.fromUserId === userId) {
+    const handleTyping = (data: { fromUserId: any }) => {
+      const from = toStr(data?.fromUserId);
+      if (from === otherId) {
         setIsOtherUserTyping(true);
       }
     };
 
-    const handleStopTyping = (data: { fromUserId: string }) => {
-      if (data.fromUserId === userId) {
+    const handleStopTyping = (data: { fromUserId: any }) => {
+      const from = toStr(data?.fromUserId);
+      if (from === otherId) {
         setIsOtherUserTyping(false);
       }
     };

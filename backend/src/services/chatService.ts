@@ -79,9 +79,9 @@ export function setupChat(io: Server) {
 
                     const recipientSocketId = userSocketMap.get(toUserId);
                     if (recipientSocketId) {
-                        io.to(recipientSocketId).emit('dm:received', messageData);
+                        chatNamespace.to(recipientSocketId).emit('dm:received', messageData);
                     } else {
-                        io.to(toUserId).emit('dm:received', messageData);
+                        chatNamespace.to(toUserId).emit('dm:received', messageData);
                     }
                 } catch {
                     // Swallow errors to avoid crashing the socket handler
@@ -95,9 +95,9 @@ export function setupChat(io: Server) {
 
                     const recipientSocketId = userSocketMap.get(toUserId);
                     if (recipientSocketId) {
-                        io.to(recipientSocketId).emit('user-typing', { fromUserId: userId });
+                        chatNamespace.to(recipientSocketId).emit('user-typing', { fromUserId: userId });
                     } else {
-                        io.to(toUserId).emit('user-typing', { fromUserId: userId });
+                        chatNamespace.to(toUserId).emit('user-typing', { fromUserId: userId });
                     }
                 } catch {
                     // Swallow errors
@@ -111,9 +111,9 @@ export function setupChat(io: Server) {
 
                     const recipientSocketId = userSocketMap.get(toUserId);
                     if (recipientSocketId) {
-                        io.to(recipientSocketId).emit('user-stop-typing', { fromUserId: userId });
+                        chatNamespace.to(recipientSocketId).emit('user-stop-typing', { fromUserId: userId });
                     } else {
-                        io.to(toUserId).emit('user-stop-typing', { fromUserId: userId });
+                        chatNamespace.to(toUserId).emit('user-stop-typing', { fromUserId: userId });
                     }
                 } catch {
                     // Swallow errors
