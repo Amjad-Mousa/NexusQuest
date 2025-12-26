@@ -37,6 +37,7 @@ export function connectChat(): Socket | null {
         reconnectionDelay: 1000,
         reconnectionAttempts: 5,
         autoConnect: false, // explicitly control connection
+        forceNew: true, // do not share manager/engine with other namespaces
     });
 
     // Explicitly connect only when ChatPage mounts
@@ -66,9 +67,10 @@ export function disconnectChat(): void {
     if (socket) {
         try {
             // prevent reconnection attempts and clear listeners
-            // @ts-ignore - opts property exists on Manager instance
-            if ((socket as any).io && (socket as any).io.opts) {
-                (socket as any).io.opts.reconnection = false;
+            const mgr = (socket as any).io;
+            if (mgr && mgr.opts) {
+                mgr.opts.reconnection = false;
+                mgr.backoff && typeof mgr.backoff.reset === 'function' && mgr.backoff.reset();
             }
             socket.off();
             // removeAllListeners for compatibility with event emitter
@@ -76,10 +78,18 @@ export function disconnectChat(): void {
             if (typeof (socket as any).removeAllListeners === 'function') {
                 (socket as any).removeAllListeners();
             }
-            socket.disconnect(); // ensures transport closes and no reconnection
-            // Some environments prefer close alias
+            // close namespace and underlying engine
+            socket.disconnect();
             if (typeof (socket as any).close === 'function') {
                 (socket as any).close();
+            }
+            // also close manager engine and remove all sockets to force teardown
+            if (mgr) {
+                try {
+                    mgr.removeAllListeners && mgr.removeAllListeners();
+                    // close engine if open
+                    mgr.engine && typeof mgr.engine.close === 'function' && mgr.engine.close();
+                } catch {}
             }
         } finally {
             socket = null;

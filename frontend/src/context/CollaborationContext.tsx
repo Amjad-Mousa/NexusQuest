@@ -9,7 +9,9 @@ import {
   CursorPosition,
   JoinSessionData,
 } from '../types/collaboration';
-import { API_URL } from '../utils/apiHelpers';
+import { getApiUrl } from '../utils/apiHelpers';
+
+const API_URL = getApiUrl();
 
 interface CollaborationContextType {
   socket: Socket | null;
@@ -147,7 +149,32 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
     setSocket(newSocket);
 
     return () => {
-      newSocket.close();
+      try {
+        // Disable reconnection and clear listeners to avoid lingering engine
+        const mgr: any = (newSocket as any).io;
+        if (mgr && mgr.opts) {
+          mgr.opts.reconnection = false;
+          mgr.backoff && typeof mgr.backoff.reset === 'function' && mgr.backoff.reset();
+        }
+        newSocket.off();
+        // @ts-ignore
+        if (typeof (newSocket as any).removeAllListeners === 'function') {
+          // @ts-ignore
+          (newSocket as any).removeAllListeners();
+        }
+        if (newSocket.connected) {
+          newSocket.disconnect();
+        }
+        if (typeof (newSocket as any).close === 'function') {
+          (newSocket as any).close();
+        }
+        if (mgr) {
+          try {
+            mgr.removeAllListeners && mgr.removeAllListeners();
+            mgr.engine && typeof mgr.engine.close === 'function' && mgr.engine.close();
+          } catch {}
+        }
+      } catch {}
     };
   }, []);
 
@@ -166,8 +193,30 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
     setCurrentSession(null);
     setParticipants([]);
     setMessages([]);
-    if (socket?.connected) {
-      socket.disconnect();
+    if (socket) {
+      try {
+        const mgr: any = (socket as any).io;
+        if (mgr && mgr.opts) {
+          mgr.opts.reconnection = false;
+          mgr.backoff && typeof mgr.backoff.reset === 'function' && mgr.backoff.reset();
+        }
+        socket.off();
+        // @ts-ignore
+        if (typeof (socket as any).removeAllListeners === 'function') {
+          // @ts-ignore
+          (socket as any).removeAllListeners();
+        }
+        socket.disconnect();
+        if (typeof (socket as any).close === 'function') {
+          (socket as any).close();
+        }
+        if (mgr) {
+          try {
+            mgr.removeAllListeners && mgr.removeAllListeners();
+            mgr.engine && typeof mgr.engine.close === 'function' && mgr.engine.close();
+          } catch {}
+        }
+      } catch {}
     }
   }, [socket]);
 
