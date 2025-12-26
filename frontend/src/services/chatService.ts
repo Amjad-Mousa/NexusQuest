@@ -21,7 +21,8 @@ export function connectChat(): Socket | null {
 
     if (socket) return socket;
 
-    socket = io(API_URL + '/chat', {
+    const SOCKET_ORIGIN = new URL(API_URL).origin;
+    socket = io(SOCKET_ORIGIN + '/chat', {
         path: '/nexusquest/socket.io',
         auth: { token },
         withCredentials: true,
