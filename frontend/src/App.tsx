@@ -381,7 +381,7 @@ function App({ user, onLogout }: AppProps) {
             // Also save dependencies to the backend
             try {
               const token = localStorage.getItem('nexusquest-token');
-              await fetch(`http://localhost:9876/api/projects/${currentProject._id}/dependencies`, {
+              await fetch(`${getApiUrl()}/api/projects/${currentProject._id}/dependencies`, {
                 method: 'PUT',
                 headers: { 
                   'Content-Type': 'application/json',
@@ -409,7 +409,7 @@ function App({ user, onLogout }: AppProps) {
             // Also save dependencies to the backend
             try {
               const token = localStorage.getItem('nexusquest-token');
-              await fetch(`http://localhost:9876/api/projects/${currentProject._id}/dependencies`, {
+              await fetch(`${getApiUrl()}/api/projects/${currentProject._id}/dependencies`, {
                 method: 'PUT',
                 headers: { 
                   'Content-Type': 'application/json',
