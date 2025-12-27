@@ -3,6 +3,7 @@ import { Project } from '../models/Project.js';
 import { authMiddleware, AuthRequest } from '../middleware/auth.js';
 import mongoose from 'mongoose';
 import { checkProjectAchievements } from '../services/gamificationService.js';
+import { getProjectLibraries } from '../services/customLibraryService.js';
 
 const router = Router();
 
@@ -57,15 +58,27 @@ int main() {
 };
 
 // Get all projects for current user
+// Get all projects for current user
 router.get('/', async (req: AuthRequest, res: Response) => {
     try {
         const projects = await Project.find({ owner: req.userId })
-            .select('name description language files dependencies createdAt updatedAt')
+            .select('name description language files dependencies customLibraries createdAt updatedAt')
             .sort({ updatedAt: -1 });
+
+        // Add custom libraries with their paths
+        const projectsData = await Promise.all(projects.map(async (project) => {
+            const projectObj = project.toObject();
+            const customLibraries = await getProjectLibraries(project._id.toString());
+            projectObj.customLibraries = customLibraries.map(lib => ({
+                ...lib,
+                path: `/uploads/libraries/${project._id}/${lib.fileName}`
+            }));
+            return projectObj;
+        }));
 
         res.json({
             success: true,
-            data: projects,
+            data: projectsData,
         });
     } catch (error) {
         res.status(500).json({
@@ -91,9 +104,16 @@ router.get('/:projectId', async (req: AuthRequest, res: Response) => {
             return;
         }
 
+        const projectObj = project.toObject();
+        const customLibraries = await getProjectLibraries(project._id.toString());
+        projectObj.customLibraries = customLibraries.map(lib => ({
+            ...lib,
+            path: `/uploads/libraries/${project._id}/${lib.fileName}`
+        }));
+
         res.json({
             success: true,
-            data: project,
+            data: projectObj,
         });
     } catch (error) {
         res.status(500).json({

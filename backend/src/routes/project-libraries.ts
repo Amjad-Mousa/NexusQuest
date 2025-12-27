@@ -112,7 +112,8 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
             success: true,
             library: {
                 id: project.customLibraries[project.customLibraries.length - 1]._id,
-                ...library
+                ...library,
+                path: `/uploads/libraries/${projectId}/${library.fileName}`
             }
         });
     } catch (error: any) {
@@ -134,9 +135,14 @@ router.get('/:projectId/libraries', auth, async (req: Request, res: Response) =>
             return res.status(404).json({ error: 'Project not found' });
         }
 
+        const librariesWithPaths = (project.customLibraries || []).map(lib => ({
+            ...lib,
+            path: `/uploads/libraries/${projectId}/${lib.fileName}`
+        }));
+
         res.json({
             success: true,
-            libraries: project.customLibraries || []
+            libraries: librariesWithPaths
         });
     } catch (error: any) {
         logger.error('[libraries] List error:', error);
