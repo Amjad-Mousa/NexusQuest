@@ -56,7 +56,7 @@ function App({ user, onLogout }: AppProps) {
   // UI state
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(true);
   const [activeBottomTab, setActiveBottomTab] = useState<'console' | 'terminal' | 'versions' | 'dependencies'>('console');
-  const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number; files?: { name: string; content: string }[]; mainFile?: string; dependencies?: Record<string, string>; projectId?: string } | null>(null);
+  const [codeToExecute, setCodeToExecute] = useState<{ code: string; timestamp: number; files?: { name: string; content: string }[]; mainFile?: string; dependencies?: Record<string, string>; projectId?: string; customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }> } | null>(null);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [isAiAgentOpen, setIsAiAgentOpen] = useState(false);
   const [fontSize, setFontSize] = useState<number>(() => {
@@ -381,7 +381,7 @@ function App({ user, onLogout }: AppProps) {
             // Also save dependencies to the backend
             try {
               const token = localStorage.getItem('nexusquest-token');
-              await fetch(`http://localhost:9876/api/projects/${currentProject._id}/dependencies`, {
+              await fetch(`${getApiUrl()}/api/projects/${currentProject._id}/dependencies`, {
                 method: 'PUT',
                 headers: { 
                   'Content-Type': 'application/json',
@@ -409,7 +409,7 @@ function App({ user, onLogout }: AppProps) {
             // Also save dependencies to the backend
             try {
               const token = localStorage.getItem('nexusquest-token');
-              await fetch(`http://localhost:9876/api/projects/${currentProject._id}/dependencies`, {
+              await fetch(`${getApiUrl()}/api/projects/${currentProject._id}/dependencies`, {
                 method: 'PUT',
                 headers: { 
                   'Content-Type': 'application/json',
@@ -517,7 +517,8 @@ function App({ user, onLogout }: AppProps) {
         files: filesForExecution,
         mainFile: mainFileName,
         dependencies: currentProject.dependencies || {},
-        projectId: currentProject._id
+        projectId: currentProject._id,
+        customLibraries: currentProject.customLibraries || []
       });
 
       addToConsole(` Running project with ${filesForExecution.length} file(s)...`, 'info');

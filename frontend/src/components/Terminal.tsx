@@ -10,7 +10,7 @@ interface TerminalProps {
   height?: string;
   theme?: 'dark' | 'light';
   language: 'python' | 'java' | 'javascript' | 'cpp' | 'go';
-  codeToExecute?: { code: string; timestamp: number; files?: ProjectFileForExecution[]; mainFile?: string; dependencies?: Record<string, string>; projectId?: string } | null;
+  codeToExecute?: { code: string; timestamp: number; files?: ProjectFileForExecution[]; mainFile?: string; dependencies?: Record<string, string>; projectId?: string; customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }> } | null;
 }
 
 interface TerminalLine {
@@ -109,6 +109,11 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
         if (dependencies && Object.keys(dependencies).length > 0) {
           requestBody.dependencies = dependencies;
           console.log('[Terminal] Including dependencies:', dependencies);
+        }
+        // Pass custom libraries if they exist
+        if (codeToExecute?.customLibraries && codeToExecute.customLibraries.length > 0) {
+          requestBody.customLibraries = codeToExecute.customLibraries;
+          console.log('[Terminal] Including custom libraries:', codeToExecute.customLibraries);
         }
       } else {
         console.log('[Terminal] Using task endpoint (single code)');
