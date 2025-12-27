@@ -1,5 +1,6 @@
 import Docker from 'dockerode';
 import { logger } from '../utils/logger.js';
+import { demuxStream } from '../utils/dockerStream.js';
 const docker = new Docker();
 export async function checkDockerStatus() {
     try {
@@ -25,49 +26,7 @@ const persistentContainers = {
     'cpp': 'nexusquest-cpp',
     'c++': 'nexusquest-cpp'
 };
-// Helper to demultiplex Docker stream
-function demuxStream(stream) {
-    return new Promise((resolve, reject) => {
-        let stdout = '';
-        let stderr = '';
-        let dataReceived = false;
-        const timeout = setTimeout(() => {
-            if (!dataReceived) {
-                logger.warn('No data received from stream after 2 seconds');
-            }
-        }, 2000);
-        stream.on('data', (chunk) => {
-            dataReceived = true;
-            clearTimeout(timeout);
-            // Docker uses 8-byte headers for multiplexed streams
-            let offset = 0;
-            while (offset < chunk.length) {
-                if (chunk.length - offset < 8)
-                    break;
-                const streamType = chunk.readUInt8(offset);
-                const payloadSize = chunk.readUInt32BE(offset + 4);
-                if (payloadSize > 0 && offset + 8 + payloadSize <= chunk.length) {
-                    const payload = chunk.toString('utf8', offset + 8, offset + 8 + payloadSize);
-                    if (streamType === 1) {
-                        stdout += payload;
-                    }
-                    else if (streamType === 2) {
-                        stderr += payload;
-                    }
-                }
-                offset += 8 + payloadSize;
-            }
-        });
-        stream.on('end', () => {
-            clearTimeout(timeout);
-            resolve({ stdout, stderr });
-        });
-        stream.on('error', (err) => {
-            clearTimeout(timeout);
-            reject(err);
-        });
-    });
-}
+// Uses shared demux helper from utils/dockerStream.ts
 // Get execution command based on language
 function getExecutionCommand(language, mainFile) {
     switch (language.toLowerCase()) {
@@ -266,8 +225,63 @@ export async function executeCode(code, language, input) {
         };
     }
 }
+// Helper to compute hash of dependencies for caching
+function computeDependencyHash(dependencies, customLibs) {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    // Use stable key ordering so the same deps map yields the same hash
+    const sortedDeps = Object.keys(dependencies || {}).sort().reduce((acc, k) => {
+        acc[k] = dependencies[k];
+        return acc;
+    }, {});
+    hash.update(JSON.stringify(sortedDeps));
+    if (customLibs && customLibs.length > 0) {
+        hash.update(JSON.stringify(customLibs.map(l => l.fileName).sort()));
+    }
+    return hash.digest('hex');
+}
+// Helper to check if dependencies are already installed
+async function checkDependenciesInstalled(container, projectId, language, dependencyHash) {
+    try {
+        const depDir = `/dependencies/${projectId}`;
+        const hashFile = `${depDir}/.dep_hash`;
+        const checkExec = await container.exec({
+            Cmd: ['sh', '-c', `test -f ${hashFile} && cat ${hashFile}`],
+            AttachStdout: true,
+            AttachStderr: true,
+        });
+        const checkStream = await checkExec.start({ hijack: true });
+        const { stdout } = await demuxStream(checkStream);
+        return stdout.trim() === dependencyHash;
+    }
+    catch (error) {
+        logger.info('[checkDependencies] Dependencies not cached yet');
+        return false;
+    }
+}
+// Helper to mark dependencies as installed
+async function markDependenciesInstalled(container, projectId, dependencyHash) {
+    try {
+        const depDir = `/dependencies/${projectId}`;
+        const hashFile = `${depDir}/.dep_hash`;
+        const markExec = await container.exec({
+            Cmd: ['sh', '-c', `mkdir -p ${depDir} && echo "${dependencyHash}" > ${hashFile}`],
+            AttachStdout: false,
+            AttachStderr: false,
+        });
+        const markStream = await markExec.start({});
+        await new Promise((resolve) => {
+            markStream.on('end', resolve);
+            markStream.on('error', resolve);
+        });
+        logger.info('[markDependencies] Dependencies marked as installed');
+    }
+    catch (error) {
+        logger.error('[markDependencies] Error marking dependencies:', error);
+    }
+}
 // Helper to install dependencies for JavaScript projects
-async function installJavaScriptDependencies(container, baseDir, dependencies) {
+async function installJavaScriptDependencies(container, baseDir, projectId, dependencies) {
     try {
         if (!dependencies || Object.keys(dependencies).length === 0) {
             logger.info('[npm install] No dependencies specified');
@@ -384,7 +398,7 @@ async function installPythonDependencies(container, baseDir, dependencies) {
 // Execute multi-file project using PERSISTENT containers
 export async function executeProject(request) {
     const startTime = Date.now();
-    const { files, mainFile, language, input, dependencies } = request;
+    const { files, mainFile, language, input, dependencies, customLibraries, projectId } = request;
     const containerName = persistentContainers[language.toLowerCase()];
     if (!containerName) {
         return {
@@ -395,27 +409,29 @@ export async function executeProject(request) {
     }
     try {
         const container = docker.getContainer(containerName);
-        // Check if container exists and is running
-        try {
-            const info = await container.inspect();
-            if (!info.State.Running) {
-                logger.info(`Starting container: ${containerName}`);
-                await container.start();
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-        catch (err) {
-            if (err.statusCode === 404) {
-                return {
-                    output: '',
-                    error: `Container ${containerName} not found. Please run: docker-compose up -d`,
-                    executionTime: Date.now() - startTime,
-                };
-            }
-            throw err;
+        // Check if container is running, start if needed
+        const info = await container.inspect();
+        if (!info.State.Running) {
+            logger.info(`Starting container: ${containerName}`);
+            await container.start();
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         // Use a unique temp directory
         const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        // Check if we should use cached dependencies
+        let useCachedDeps = false;
+        let depDir = '';
+        if (projectId && (dependencies || customLibraries)) {
+            const depHash = computeDependencyHash(dependencies || {}, customLibraries);
+            depDir = `/dependencies/${projectId}`;
+            useCachedDeps = await checkDependenciesInstalled(container, projectId, language, depHash);
+            if (useCachedDeps) {
+                logger.info(`[executeProject] Using cached dependencies for project ${projectId}`);
+            }
+            else {
+                logger.info(`[executeProject] Dependencies changed or not cached, will install for project ${projectId}`);
+            }
+        }
         // Create base directory
         const mkdirExec = await container.exec({
             Cmd: ['sh', '-c', `mkdir -p ${baseDir}`],
@@ -469,21 +485,11 @@ export async function executeProject(request) {
             // Add a small delay to ensure file is written
             await new Promise(resolve => setTimeout(resolve, 100));
         }
-        // Verify files were written
-        logger.info('[executeProject] Verifying files were written...');
-        const verifyExec = await container.exec({
-            Cmd: ['sh', '-c', `ls -la ${baseDir}`],
-            AttachStdout: true,
-            AttachStderr: true,
-        });
-        const verifyStream = await verifyExec.start({ hijack: true });
-        const { stdout: verifyOutput } = await demuxStream(verifyStream);
-        logger.info('[executeProject] Directory contents:\n' + verifyOutput);
         // Install dependencies if specified
         if (dependencies && Object.keys(dependencies).length > 0) {
             logger.info(`[executeProject] Installing dependencies for ${language}`);
             if (language.toLowerCase() === 'javascript') {
-                const depResult = await installJavaScriptDependencies(container, baseDir, dependencies);
+                const depResult = await installJavaScriptDependencies(container, baseDir, projectId || '', dependencies);
                 if (!depResult.success) {
                     logger.error('[executeProject] Dependency installation failed:', depResult.error);
                     return {

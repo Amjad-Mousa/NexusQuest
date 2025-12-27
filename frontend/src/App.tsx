@@ -840,11 +840,86 @@ function App({ user, onLogout }: AppProps) {
                   onDependenciesChange={async (newDeps) => {
                     if (!currentProject) return;
                     try {
-                      await projectService.updateProject(currentProject._id, { dependencies: newDeps });
+                      const token = localStorage.getItem('nexusquest-token');
+
+                      // Update dependencies in the backend
+                      await fetch(`${getApiUrl()}/api/projects/${currentProject._id}/dependencies`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ dependencies: newDeps })
+                      });
+
+                      // Update current project state
                       setCurrentProject(prev => {
                         if (!prev) return prev;
                         return { ...prev, dependencies: newDeps };
                       });
+
+                      // For JavaScript projects, also update the package.json file
+                      if (currentProject.language === 'javascript') {
+                        const packageJsonFile = currentProject.files.find(f => f.name === 'package.json');
+                        if (packageJsonFile) {
+                          try {
+                            const parsed = JSON.parse(packageJsonFile.content);
+                            parsed.dependencies = newDeps;
+                            const updatedContent = JSON.stringify(parsed, null, 2);
+
+                            // Update the file in the backend
+                            await projectService.updateFile(currentProject._id, packageJsonFile._id, { content: updatedContent });
+
+                            // Update the file in the projects list
+                            setProjects(prev => prev.map(p =>
+                              p._id === currentProject._id
+                                ? { ...p, files: p.files.map(f => f._id === packageJsonFile._id ? { ...f, content: updatedContent } : f) }
+                                : p
+                            ));
+
+                            // If currently viewing package.json, update the code editor
+                            if (currentFile?._id === packageJsonFile._id) {
+                              setCode(updatedContent);
+                              setLastSavedCode(updatedContent);
+                            }
+                          } catch (parseErr) {
+                            console.warn('Failed to update package.json file:', parseErr);
+                          }
+                        }
+                      }
+                      // For Python projects, also update the requirements.txt file
+                      else if (currentProject.language === 'python') {
+                        const requirementsFile = currentProject.files.find(f => f.name === 'requirements.txt');
+                        if (requirementsFile) {
+                          try {
+                            const requirementsContent = Object.entries(newDeps)
+                              .map(([name, version]) => {
+                                if (version === '*' || version === 'latest') return name;
+                                return `${name}${version.startsWith('==') || version.startsWith('>=') || version.startsWith('<=') ? '' : '=='}${version}`;
+                              })
+                              .join('\n');
+
+                            // Update the file in the backend
+                            await projectService.updateFile(currentProject._id, requirementsFile._id, { content: requirementsContent });
+
+                            // Update the file in the projects list
+                            setProjects(prev => prev.map(p =>
+                              p._id === currentProject._id
+                                ? { ...p, files: p.files.map(f => f._id === requirementsFile._id ? { ...f, content: requirementsContent } : f) }
+                                : p
+                            ));
+
+                            // If currently viewing requirements.txt, update the code editor
+                            if (currentFile?._id === requirementsFile._id) {
+                              setCode(requirementsContent);
+                              setLastSavedCode(requirementsContent);
+                            }
+                          } catch (parseErr) {
+                            console.warn('Failed to update requirements.txt file:', parseErr);
+                          }
+                        }
+                      }
+
                       addToConsole('✓ Dependencies updated and saved', 'info');
                     } catch (err) {
                       console.error('Failed to save dependencies:', err);
@@ -853,43 +928,14 @@ function App({ user, onLogout }: AppProps) {
                   }}
                 />
               ) : (
-                <VersionControl
-                  theme={theme}
-                  projectId={currentProject?._id || null}
-                  currentFileId={currentFile?._id || null}
-                  currentFileName={currentFile?.name || null}
-                  currentCode={code}
-                  projectFiles={currentProject?.files || []}
-                  onSnapshotCreated={(msg) => addToConsole(msg, 'info')}
-                  onRestore={(content, fileId, fileName) => {
-                    if (currentProject) {
-                      const file = currentProject.files.find(f => f._id === fileId);
-                      if (file) {
-                        setCurrentFile({ ...file, content });
-                        setCode(content);
-                        addToConsole(`🔄 Restored: ${fileName}`, 'info');
-                      }
-                    }
-                  }}
-                />
+                <div className={`flex items-center justify-center text-gray-500 ${theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-100/50'}`}>
+                  <p>Select a tab above</p>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* User Side Panel */}
-      <UserSidePanel
-        theme={theme}
-        setTheme={setTheme}
-        user={user}
-        avatarImage={avatarImage}
-        fontSize={fontSize}
-        setFontSize={setFontSize}
-        isOpen={showSidePanel}
-        onClose={() => setShowSidePanel(false)}
-        onLogout={onLogout}
-      />
     </div>
   );
 }

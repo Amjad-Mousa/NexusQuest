@@ -65,7 +65,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
         // Convert Map types to plain objects for JSON serialization
         const projectsData = projects.map(project => {
-            const projectObj = project.toObject();
+            data: projects,
             // Convert dependencies Map to plain object if it exists
             if (projectObj.dependencies && projectObj.dependencies instanceof Map) {
                 projectObj.dependencies = Object.fromEntries(projectObj.dependencies);
@@ -93,7 +93,7 @@ router.get('/:projectId', async (req: AuthRequest, res: Response) => {
             owner: req.userId,
         });
 
-        if (!project) {
+            data: project,
             res.status(404).json({
                 success: false,
                 error: 'Project not found',
@@ -313,12 +313,12 @@ endif()`;
         });
     } catch (error: unknown) {
         const mongoError = error as { code?: number };
-        if (mongoError.code === 11000) {
+        const { name, description, language, dependencies } = req.body;
             res.status(400).json({
-                success: false,
-                error: 'Project with this name already exists',
-            });
-            return;
+        const project = await Project.findOne({
+            _id: req.params.projectId,
+            owner: req.userId,
+        });
         }
         res.status(500).json({
             success: false,
@@ -328,28 +328,28 @@ endif()`;
 });
 
 // Update a project
-router.put('/:projectId', async (req: AuthRequest, res: Response) => {
-    try {
-        const { name, description, language } = req.body;
+        // Update basic fields
+        if (name !== undefined) project.name = name;
+        if (description !== undefined) project.description = description;
+        if (language !== undefined) project.language = language;
 
-        const project = await Project.findOneAndUpdate(
-            { _id: req.params.projectId, owner: req.userId },
-            { name, description, language },
-            { new: true, runValidators: true }
-        );
-
-        if (!project) {
-            res.status(404).json({
-                success: false,
-                error: 'Project not found',
-            });
-            return;
+        // Handle dependencies - store as plain object
+        if (dependencies !== undefined) {
+            if (typeof dependencies === 'object' && dependencies !== null) {
+                project.dependencies = dependencies;
+            } else {
+                project.dependencies = {};
+            }
         }
 
-        res.json({
+        await project.save();
+
+        // Convert response data properly
+        const projectObj = project.toObject();
+
             success: true,
             data: project,
-        });
+            data: projectObj,
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -586,16 +586,16 @@ router.post('/:projectId/dependencies', async (req: AuthRequest, res: Response) 
 
         if (!project.dependencies) {
             project.dependencies = new Map();
-        }
+            project.dependencies = {};
 
         // Ensure dependencies is a Map
-        if (!(project.dependencies instanceof Map)) {
-            project.dependencies = new Map(Object.entries(project.dependencies));
+        // Add the new dependency
+        project.dependencies[name] = version || '*';
         }
 
         project.dependencies.set(name, version || '*');
         await project.save();
-
+            dependencies: project.dependencies,
         // Convert Map to plain object for response
         const depsObj = project.dependencies instanceof Map
             ? Object.fromEntries(project.dependencies)
@@ -632,17 +632,17 @@ router.put('/:projectId/dependencies', async (req: AuthRequest, res: Response) =
             owner: req.userId,
         });
 
-        if (!project) {
-            res.status(404).json({
-                success: false,
-                error: 'Project not found',
-            });
-            return;
+        // Update dependencies as plain object
+        if (typeof dependencies === 'object' && dependencies !== null) {
+            project.dependencies = dependencies;
+        } else {
+            project.dependencies = {};
+        }
         }
 
         // Convert plain object to Map for Mongoose Map type
         // Mongoose Map types need to be set as a Map object
-        project.dependencies = new Map(Object.entries(dependencies));
+            dependencies: project.dependencies,
         await project.save();
 
         // Convert Map back to plain object for response

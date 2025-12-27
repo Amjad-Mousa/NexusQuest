@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { DEFAULT_PORT, ALLOWED_ORIGINS } from './config/constants.js';
 import { codeExecutionRouter } from './routes/execution.js';
 import aiRouter from './routes/ai.js';
 import authRouter from './routes/auth.js';
@@ -20,10 +21,13 @@ import chatRouter from './routes/chat.js';
 import collaborationRouter from './routes/collaboration.js';
 import forumRouter from './routes/forum.js';
 import gamificationRouter from './routes/gamification.js';
+import publicStatsRouter from './routes/public-stats.js';
+import teacherRouter from './routes/teacher.js';
 import { streamExecutionRouter } from './routes/stream-execution.js';
 import { playgroundExecutionRouter } from './routes/playground-execution.js';
 import simplePlaygroundRouter from './routes/simple-playground.js';
 import { projectExecutionRouter } from './routes/project-execution.js';
+import projectLibrariesRouter from './routes/project-libraries.js';
 import { taskExecutionRouter } from './routes/task-execution.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { logger } from './utils/logger.js';
@@ -36,7 +40,8 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 // Use the container-forwarded port by default and bind to 0.0.0.0 so Docker can route traffic
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = DEFAULT_PORT;
+app.set('trust proxy', 2);
 // Security middleware
 app.use(helmet());
 // Rate limiting - increased for development
@@ -44,25 +49,28 @@ const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // limit each IP to 1000 requests per windowMs
     message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 app.use(limiter);
 // CORS configuration - allow multiple origins for Docker and local development
-const allowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:5173',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'https://nexus-quest-jd.vercel.app',
-    'https://nexusquest.vercel.app/'
-];
+const allowedOrigins = ALLOWED_ORIGINS;
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps, Postman, or same-origin)
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin) {
             callback(null, true);
+            return;
         }
-        else {
-            callback(new Error('Not allowed by CORS'));
+        // Check if origin is in allowed list
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
         }
+        // Log rejected origin for debugging
+        console.log('CORS rejected origin:', origin);
+        console.log('Allowed origins:', allowedOrigins);
+        callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
 }));
@@ -84,6 +92,8 @@ app.use('/api/stream', streamExecutionRouter);
 app.use('/api/playground', playgroundExecutionRouter);
 app.use('/api/simple-playground', simplePlaygroundRouter);
 app.use('/api/projects', projectExecutionRouter);
+// Mount dependency and libraries routes (install/sync, clear-cache, libraries CRUD)
+app.use('/api/projects', projectLibrariesRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/tasks', taskExecutionRouter);
 app.use('/api/tasks', tasksRouter);
@@ -99,9 +109,12 @@ app.use('/api/chat', chatRouter);
 app.use('/api/collaboration', collaborationRouter);
 app.use('/api/forum', forumRouter);
 app.use('/api/gamification', gamificationRouter);
+app.use('/api/stats', publicStatsRouter);
+app.use('/api/teacher', teacherRouter);
 // Error handling
 app.use(errorHandler);
 const io = new Server(server, {
+    path: '/socket.io',
     cors: {
         origin: allowedOrigins,
         credentials: true,

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { executeCode, executeProject } from '../services/dockerService.js';
+import { saveDependenciesToProject } from '../services/dependencyService.js';
 import { logger } from '../utils/logger.js';
 import { validateCode } from '../middleware/validation.js';
 export const codeExecutionRouter = Router();
@@ -27,7 +28,7 @@ codeExecutionRouter.post('/run', validateCode, async (req, res) => {
 });
 // Execute multi-file project endpoint
 codeExecutionRouter.post('/run-project', async (req, res) => {
-    const { files, mainFile, language, input, dependencies } = req.body;
+    const { files, mainFile, language, input, dependencies, projectPath } = req.body;
     // Validate request
     if (!files || !Array.isArray(files) || files.length === 0) {
         res.status(400).json({
@@ -65,6 +66,17 @@ codeExecutionRouter.post('/run-project', async (req, res) => {
     }
     try {
         logger.info(`Executing ${language} project with ${files.length} files, main: ${mainFile}`);
+        // Save dependencies to project if projectPath is provided
+        if (projectPath && dependencies && Object.keys(dependencies).length > 0) {
+            logger.info(`Saving dependencies to project at ${projectPath}`);
+            const saveResult = await saveDependenciesToProject(projectPath, language, dependencies);
+            if (saveResult.success) {
+                logger.info(`Dependencies saved successfully to ${saveResult.filePath}`);
+            }
+            else {
+                logger.warn(`Failed to save dependencies: ${saveResult.error}`);
+            }
+        }
         const result = await executeProject({
             files,
             mainFile,
@@ -85,6 +97,61 @@ codeExecutionRouter.post('/run-project', async (req, res) => {
             success: false,
             error: 'Internal server error during project execution',
             output: ''
+        });
+    }
+});
+// Save dependencies to project endpoint
+codeExecutionRouter.post('/save-dependencies', async (req, res) => {
+    const { projectPath, language, dependencies } = req.body;
+    // Validate request
+    if (!projectPath) {
+        res.status(400).json({
+            success: false,
+            error: 'No project path provided',
+            filePath: ''
+        });
+        return;
+    }
+    if (!language) {
+        res.status(400).json({
+            success: false,
+            error: 'No language specified',
+            filePath: ''
+        });
+        return;
+    }
+    if (!dependencies || Object.keys(dependencies).length === 0) {
+        res.status(400).json({
+            success: false,
+            error: 'No dependencies provided',
+            filePath: ''
+        });
+        return;
+    }
+    try {
+        logger.info(`Saving dependencies for ${language} project at ${projectPath}`);
+        const result = await saveDependenciesToProject(projectPath, language, dependencies);
+        if (result.success) {
+            res.json({
+                success: true,
+                message: 'Dependencies saved successfully',
+                filePath: result.filePath
+            });
+        }
+        else {
+            res.status(400).json({
+                success: false,
+                error: result.error || 'Failed to save dependencies',
+                filePath: ''
+            });
+        }
+    }
+    catch (error) {
+        logger.error('Failed to save dependencies:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error while saving dependencies',
+            filePath: ''
         });
     }
 });

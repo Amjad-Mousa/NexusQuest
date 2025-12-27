@@ -8,12 +8,19 @@ export interface ProjectFile {
     content: string;
     language: string;
 }
+export interface CustomLibrary {
+    fileName: string;
+    originalName: string;
+    fileType: string;
+}
 export interface ProjectExecutionRequest {
     files: ProjectFile[];
     mainFile: string;
     language: string;
     input?: string;
     dependencies?: Record<string, string>;
+    customLibraries?: CustomLibrary[];
+    projectId?: string;
 }
 export declare function checkDockerStatus(): Promise<{
     available: boolean;
