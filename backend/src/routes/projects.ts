@@ -65,16 +65,17 @@ router.get('/', async (req: AuthRequest, res: Response) => {
             .select('name description language files dependencies customLibraries createdAt updatedAt')
             .sort({ updatedAt: -1 });
 
-        // Add custom libraries with their paths
-        const projectsData = await Promise.all(projects.map(async (project) => {
+        // Add file paths to custom libraries
+        const projectsData = projects.map(project => {
             const projectObj = project.toObject();
-            const customLibraries = await getProjectLibraries(project._id.toString());
-            projectObj.customLibraries = customLibraries.map(lib => ({
-                ...lib,
-                path: `/uploads/libraries/${project._id}/${lib.fileName}`
-            }));
+            if (projectObj.customLibraries && projectObj.customLibraries.length > 0) {
+                projectObj.customLibraries = projectObj.customLibraries.map((lib: any) => ({
+                    ...lib,
+                    path: `/uploads/libraries/${project._id}/${lib.fileName}`
+                }));
+            }
             return projectObj;
-        }));
+        });
 
         res.json({
             success: true,
@@ -105,11 +106,14 @@ router.get('/:projectId', async (req: AuthRequest, res: Response) => {
         }
 
         const projectObj = project.toObject();
-        const customLibraries = await getProjectLibraries(project._id.toString());
-        projectObj.customLibraries = customLibraries.map(lib => ({
-            ...lib,
-            path: `/uploads/libraries/${project._id}/${lib.fileName}`
-        }));
+
+        // Add file paths to custom libraries
+        if (projectObj.customLibraries && projectObj.customLibraries.length > 0) {
+            projectObj.customLibraries = projectObj.customLibraries.map((lib: any) => ({
+                ...lib,
+                path: `/uploads/libraries/${project._id}/${lib.fileName}`
+            }));
+        }
 
         res.json({
             success: true,
