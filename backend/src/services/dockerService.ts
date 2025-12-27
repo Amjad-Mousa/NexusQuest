@@ -625,6 +625,10 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
           const libContent = fs.readFileSync(libPath);
           const base64LibContent = libContent.toString('base64');
 
+          // Check if file is compressed and needs extraction
+          const isCompressed = lib.fileName.endsWith('.tar.gz') || lib.fileName.endsWith('.zip');
+
+          // Copy file to container
           const copyLibExec = await container.exec({
             Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${customLibDir}/${lib.fileName}`],
             AttachStdout: true,
@@ -640,6 +644,34 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
           });
 
           logger.info(`[executeProject] Successfully copied library: ${lib.fileName}`);
+
+          // If file is compressed, extract it
+          if (isCompressed) {
+            logger.info(`[executeProject] Extracting compressed library: ${lib.fileName}`);
+
+            let extractCmd = '';
+            if (lib.fileName.endsWith('.tar.gz')) {
+              extractCmd = `cd ${customLibDir} && tar -xzf ${lib.fileName} && rm ${lib.fileName}`;
+            } else if (lib.fileName.endsWith('.zip')) {
+              extractCmd = `cd ${customLibDir} && unzip -q ${lib.fileName} && rm ${lib.fileName}`;
+            }
+
+            const extractExec = await container.exec({
+              Cmd: ['sh', '-c', extractCmd],
+              AttachStdout: true,
+              AttachStderr: true,
+            });
+            const extractStream = await extractExec.start({ hijack: true });
+            await new Promise((resolve) => {
+              extractStream.on('end', resolve);
+              extractStream.on('error', (err: any) => {
+                logger.error(`[executeProject] Error extracting library ${lib.fileName}:`, err);
+                resolve(null);
+              });
+            });
+
+            logger.info(`[executeProject] Successfully extracted library: ${lib.fileName}`);
+          }
         } catch (error: any) {
           logger.error(`[executeProject] Error reading library file ${libPath}:`, error);
         }
