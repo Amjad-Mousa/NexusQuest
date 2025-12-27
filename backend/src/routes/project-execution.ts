@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import Docker from 'dockerode';
 import { logger } from '../utils/logger.js';
 import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 const docker = new Docker();
@@ -17,6 +19,7 @@ interface ProjectExecutionRequest extends Request {
         sessionId: string;
         projectId?: string;
         dependencies?: Record<string, string>;
+        customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>;
     };
 }
 
@@ -79,7 +82,7 @@ function getExecutionCommand(language: string, baseDir: string, files: Array<{ n
  * Execute project code (multi-file) with streaming output
  */
 router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
-    const { files, mainFile, language, sessionId, dependencies, projectId } = req.body;
+    const { files, mainFile, language, sessionId, dependencies, projectId, customLibraries } = req.body;
 
     if (!files || !Array.isArray(files) || files.length === 0) {
         return res.status(400).json({
@@ -241,6 +244,54 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 writeStream.on('error', resolve);
                 setTimeout(resolve, 1000); // Timeout after 1 second
             });
+        }
+
+        // Copy custom libraries to container if specified
+        if (customLibraries && customLibraries.length > 0 && projectId) {
+            logger.info(`[project-execution] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
+
+            const customLibDir = `/custom-libs/${projectId}`;
+
+            // Create custom libs directory
+            const mkCustomDirExec = await container.exec({
+                Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
+                AttachStdout: false,
+                AttachStderr: false
+            });
+            await mkCustomDirExec.start({});
+
+            // Copy each custom library
+            for (const lib of customLibraries) {
+                const libPath = path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName);
+                logger.info(`[project-execution] Copying library: ${libPath} to ${customLibDir}/${lib.fileName}`);
+
+                try {
+                    if (!fs.existsSync(libPath)) {
+                        logger.warn(`[project-execution] Library file not found: ${libPath}`);
+                        continue;
+                    }
+
+                    const libContent = fs.readFileSync(libPath);
+                    const base64LibContent = libContent.toString('base64');
+
+                    const copyLibExec = await container.exec({
+                        Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${customLibDir}/${lib.fileName}`],
+                        AttachStdout: true,
+                        AttachStderr: true
+                    });
+                    const copyLibStream = await copyLibExec.start({});
+                    copyLibStream.resume();
+                    await new Promise((resolve) => {
+                        copyLibStream.on('end', resolve);
+                        copyLibStream.on('error', resolve);
+                        setTimeout(resolve, 1000);
+                    });
+
+                    logger.info(`[project-execution] Successfully copied library: ${lib.fileName}`);
+                } catch (error: any) {
+                    logger.error(`[project-execution] Error copying library ${lib.fileName}:`, error);
+                }
+            }
         }
 
         // Extract JavaScript custom library tarballs into the session directory (so relative requires work)
