@@ -1,6 +1,8 @@
 import Docker from 'dockerode';
 import { logger } from '../utils/logger.js';
 import { demuxStream } from '../utils/dockerStream.js';
+import path from 'path';
+import fs from 'fs';
 
 const docker = new Docker();
 
@@ -594,6 +596,54 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
 
       // Add a small delay to ensure file is written
       await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Copy custom libraries if specified
+    if (customLibraries && customLibraries.length > 0 && projectId) {
+      logger.info(`[executeProject] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
+
+      const customLibDir = `${baseDir}/node_modules`;
+
+      // Create node_modules directory for custom libs
+      const mkLibDirExec = await container.exec({
+        Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
+        AttachStdout: false,
+        AttachStderr: false,
+      });
+      const mkLibDirStream = await mkLibDirExec.start({});
+      await new Promise((resolve) => {
+        mkLibDirStream.on('end', resolve);
+        mkLibDirStream.on('error', resolve);
+      });
+
+      // Copy each custom library
+      for (const lib of customLibraries) {
+        const libPath = path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName);
+        logger.info(`[executeProject] Copying library: ${libPath} to ${customLibDir}/${lib.fileName}`);
+
+        try {
+          const libContent = fs.readFileSync(libPath);
+          const base64LibContent = libContent.toString('base64');
+
+          const copyLibExec = await container.exec({
+            Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${customLibDir}/${lib.fileName}`],
+            AttachStdout: true,
+            AttachStderr: true,
+          });
+          const copyLibStream = await copyLibExec.start({ hijack: true });
+          await new Promise((resolve) => {
+            copyLibStream.on('end', resolve);
+            copyLibStream.on('error', (err: any) => {
+              logger.error(`[executeProject] Error copying library ${lib.fileName}:`, err);
+              resolve(null);
+            });
+          });
+
+          logger.info(`[executeProject] Successfully copied library: ${lib.fileName}`);
+        } catch (error: any) {
+          logger.error(`[executeProject] Error reading library file ${libPath}:`, error);
+        }
+      }
     }
 
     // Install dependencies if specified

@@ -148,12 +148,66 @@ export async function runProject(
   files: { name: string; content: string; language: string }[],
   mainFile: string,
   language: string,
-  input?: string
+  input?: string,
+  dependencies?: Record<string, string>,
+  customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>,
+  projectId?: string
 ): Promise<RunProjectResult> {
   const response = await fetch(`${getApiUrl()}/api/run-project`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files, mainFile, language, input }),
+    body: JSON.stringify({ files, mainFile, language, input, dependencies, customLibraries, projectId }),
   });
-  return response.json();
+  const result = await response.json();
+  return result;
+}
+
+// Upload a custom library
+export async function uploadCustomLibrary(
+  projectId: string,
+  file: File
+): Promise<{ success: boolean; library: any; error?: string }> {
+  const formData = new FormData();
+  formData.append('library', file);
+
+  const response = await fetch(
+    `${getApiUrl()}/api/projects/${projectId}/libraries`,
+    {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    }
+  );
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error);
+  return data;
+}
+
+// Get custom libraries for a project
+export async function getProjectLibraries(projectId: string): Promise<any[]> {
+  const response = await fetch(
+    `${getApiUrl()}/api/projects/${projectId}/libraries`,
+    {
+      headers: getAuthHeaders(),
+    }
+  );
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error);
+  return data.libraries || [];
+}
+
+// Delete a custom library
+export async function deleteCustomLibrary(
+  projectId: string,
+  libraryId: string
+): Promise<void> {
+  const response = await fetch(
+    `${getApiUrl()}/api/projects/${projectId}/libraries/${libraryId}`,
+    {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    }
+  );
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error);
 }
