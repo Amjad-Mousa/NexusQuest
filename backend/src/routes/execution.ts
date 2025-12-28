@@ -43,6 +43,7 @@ codeExecutionRouter.post('/run-project', async (req, res) => {
     projectPath?: string;
     customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>;
     projectId?: string;
+  };
   // Validate request
   if (!files || !Array.isArray(files) || files.length === 0) {
     res.status(400).json({
@@ -101,11 +102,13 @@ codeExecutionRouter.post('/run-project', async (req, res) => {
       mainFile,
       language,
       input,
-      dependencies
-    });
       dependencies,
       customLibraries,
       projectId
+    });
+
+    res.json({
+      success: true,
       output: result.output,
       error: result.error,
       executionTime: result.executionTime
