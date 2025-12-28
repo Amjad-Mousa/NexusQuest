@@ -1,10 +1,13 @@
 import express, { Request, Response } from 'express';
 import Docker from 'dockerode';
-import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 
 import path from 'path';
 import fs from 'fs';
+import { logger } from '../utils/logger.js';
+
+const router = express.Router();
+const docker = new Docker();
 
 // Store active streams for input handling
 const activeStreams = new Map<string, any>();
@@ -17,10 +20,11 @@ interface ProjectExecutionRequest extends Request {
         sessionId: string;
         projectId?: string;
         dependencies?: Record<string, string>;
+        customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>;
     };
 }
 
-        customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>;
+const languageImages = {
     python: 'nexusquest-python',
     java: 'nexusquest-java',
     javascript: 'nexusquest-javascript',
@@ -31,6 +35,22 @@ interface ProjectExecutionRequest extends Request {
  * Helper to get execution command based on language
  */
 function getExecutionCommand(language: string, baseDir: string, files: Array<{ name: string; content: string }>, mainFile: string): string {
+    switch (language) {
+        case 'python':
+            return `cd ${baseDir} && python ${mainFile}`;
+        case 'java':
+            const javaFiles = files.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
+            return `cd ${baseDir} && javac ${javaFiles} && java ${mainFile.replace('.java', '')}`;
+        case 'javascript':
+            return `cd ${baseDir} && node ${mainFile}`;
+        case 'cpp':
+            const cppFiles = files.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
+            return `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
+        default:
+            throw new Error(`Unsupported language: ${language}`);
+    }
+}
+
 /**
  * Helper to resolve library file on disk from multiple possible locations
  */
@@ -62,16 +82,6 @@ function resolveLibraryOnDisk(projectId: string, lib: { fileName: string; origin
     logger.error(`[resolveLibraryOnDisk] Library not found for project ${projectId}. Tried ${candidates.length} candidates. fileName="${lib.fileName}", originalName="${lib.originalName}"`);
     logger.debug(`[resolveLibraryOnDisk] Candidates: ${JSON.stringify(candidates)}`);
     return null;
-}
-
-                const cppFiles = files.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
-                return `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
-            }
-        }
-
-        default:
-            throw new Error(`Unsupported language: ${language}`);
-    }
 }
 
 /**
@@ -116,11 +126,13 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             await existingContainer.inspect();
             logger.info(`Removing existing container: ${containerName}`);
             await existingContainer.remove({ force: true });
-    const { files, mainFile, language, sessionId, dependencies, projectId, customLibraries } = req.body;
+        } catch (error: any) {
             if (error.statusCode !== 404) {
                 logger.warn(`Error checking existing container: ${error.message}`);
             }
         }
+
+        const { customLibraries } = req.body;
 
         // Check if dependencies need to be installed (requires network access)
         let needsNetwork = dependencies && Object.keys(dependencies).length > 0;
@@ -280,98 +292,98 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
                 const hasPackages = findPackageRegex.test(f.content);
                 logger.info(`[project-execution] CMakeLists.txt found, has find_package: ${hasPackages}`);
-        // Copy custom libraries to container if specified
-        if (customLibraries && customLibraries.length > 0 && projectId) {
-            logger.info(`[project-execution] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
+                // Copy custom libraries to container if specified
+                if (customLibraries && customLibraries.length > 0 && projectId) {
+                    logger.info(`[project-execution] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
 
-            const customLibDir = `/custom-libs/${projectId}`;
+                    const customLibDir = `/custom-libs/${projectId}`;
 
-            // Create custom libs directory
-            const mkCustomDirExec = await container.exec({
-                Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
-                AttachStdout: false,
-                AttachStderr: false
-            });
-            await mkCustomDirExec.start({});
-
-            // Copy each custom library
-            for (const lib of customLibraries) {
-                try {
-                    const diskPath = resolveLibraryOnDisk(projectId, lib);
-                    if (!diskPath) {
-                        logger.warn(`[project-execution] Skipping missing library: ${lib.fileName}`);
-                        continue;
-                    }
-
-                    const libContent = fs.readFileSync(diskPath);
-                    const base64LibContent = libContent.toString('base64');
-
-                    // Use originalName when possible so extraction commands match the file extension
-                    const targetName = lib.originalName || lib.fileName;
-                    const targetPathInContainer = `${customLibDir}/${targetName}`;
-
-                    logger.info(`[project-execution] Copying library to container: ${targetPathInContainer}`);
-
-                    const copyLibExec = await container.exec({
-                        Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer}`],
-                        AttachStdout: true,
-                        AttachStderr: true
+                    // Create custom libs directory
+                    const mkCustomDirExec = await container.exec({
+                        Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
+                        AttachStdout: false,
+                        AttachStderr: false
                     });
-                    const copyLibStream = await copyLibExec.start({});
-                    copyLibStream.resume();
-                    await new Promise((resolve) => {
-                        copyLibStream.on('end', resolve);
-                        copyLibStream.on('error', resolve);
-                        setTimeout(resolve, 1000);
-                    });
+                    await mkCustomDirExec.start({});
 
-                    logger.info(`[project-execution] Successfully copied library: ${targetName}`);
+                    // Copy each custom library
+                    for (const lib of customLibraries) {
+                        try {
+                            const diskPath = resolveLibraryOnDisk(projectId, lib);
+                            if (!diskPath) {
+                                logger.warn(`[project-execution] Skipping missing library: ${lib.fileName}`);
+                                continue;
+                            }
 
-                    // Detect compressed archives robustly (tar.gz, .tgz, .zip, .gz)
-                    const lower = targetName.toLowerCase();
-                    const isTarGz = /\.tar\.gz$/.test(lower) || /\.tgz$/.test(lower) || /\.gz$/.test(lower);
-                    const isZip = /\.zip$/.test(lower);
-                    const isCompressed = isTarGz || isZip;
+                            const libContent = fs.readFileSync(diskPath);
+                            const base64LibContent = libContent.toString('base64');
 
-                    if (isCompressed) {
-                        logger.info(`[project-execution] Extracting compressed library: ${targetName}`);
+                            // Use originalName when possible so extraction commands match the file extension
+                            const targetName = lib.originalName || lib.fileName;
+                            const targetPathInContainer = `${customLibDir}/${targetName}`;
 
-                        let extractCmd = '';
-                        if (isTarGz) {
-                            extractCmd = `cd ${customLibDir} && tar -xzf ${targetName} && rm -f ${targetName}`;
-                        } else if (isZip) {
-                            extractCmd = `cd ${customLibDir} && unzip -q ${targetName} && rm -f ${targetName}`;
-                        }
+                            logger.info(`[project-execution] Copying library to container: ${targetPathInContainer}`);
 
-                        if (extractCmd) {
-                            const extractExec = await container.exec({
-                                Cmd: ['sh', '-c', extractCmd],
+                            const copyLibExec = await container.exec({
+                                Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer}`],
                                 AttachStdout: true,
                                 AttachStderr: true
                             });
-                            const extractStream = await extractExec.start({});
-                            extractStream.resume();
+                            const copyLibStream = await copyLibExec.start({});
+                            copyLibStream.resume();
                             await new Promise((resolve) => {
-                                extractStream.on('end', resolve);
-                                extractStream.on('error', resolve);
+                                copyLibStream.on('end', resolve);
+                                copyLibStream.on('error', resolve);
                                 setTimeout(resolve, 1000);
                             });
 
-                            logger.info(`[project-execution] Successfully extracted library: ${targetName}`);
-                        } else {
-                            logger.warn(`[project-execution] No extraction command for: ${targetName}`);
+                            logger.info(`[project-execution] Successfully copied library: ${targetName}`);
+
+                            // Detect compressed archives robustly (tar.gz, .tgz, .zip, .gz)
+                            const lower = targetName.toLowerCase();
+                            const isTarGz = /\.tar\.gz$/.test(lower) || /\.tgz$/.test(lower) || /\.gz$/.test(lower);
+                            const isZip = /\.zip$/.test(lower);
+                            const isCompressed = isTarGz || isZip;
+
+                            if (isCompressed) {
+                                logger.info(`[project-execution] Extracting compressed library: ${targetName}`);
+
+                                let extractCmd = '';
+                                if (isTarGz) {
+                                    extractCmd = `cd ${customLibDir} && tar -xzf ${targetName} && rm -f ${targetName}`;
+                                } else if (isZip) {
+                                    extractCmd = `cd ${customLibDir} && unzip -q ${targetName} && rm -f ${targetName}`;
+                                }
+
+                                if (extractCmd) {
+                                    const extractExec = await container.exec({
+                                        Cmd: ['sh', '-c', extractCmd],
+                                        AttachStdout: true,
+                                        AttachStderr: true
+                                    });
+                                    const extractStream = await extractExec.start({});
+                                    extractStream.resume();
+                                    await new Promise((resolve) => {
+                                        extractStream.on('end', resolve);
+                                        extractStream.on('error', resolve);
+                                        setTimeout(resolve, 1000);
+                                    });
+
+                                    logger.info(`[project-execution] Successfully extracted library: ${targetName}`);
+                                } else {
+                                    logger.warn(`[project-execution] No extraction command for: ${targetName}`);
+                                }
+                            }
+                        } catch (error: any) {
+                            logger.error(`[project-execution] Error processing library ${lib.fileName}:`, error);
                         }
                     }
-                } catch (error: any) {
-                    logger.error(`[project-execution] Error processing library ${lib.fileName}:`, error);
                 }
-            }
-        }
 
-                    // Run npm install with caching logic
-                    logger.info('[project-execution] Checking dependency cache...');
-                    const npmInstallExec = await container.exec({
-                        Cmd: ['sh', '-c', `
+                // Run npm install with caching logic
+                logger.info('[project-execution] Checking dependency cache...');
+                const npmInstallExec = await container.exec({
+                    Cmd: ['sh', '-c', `
                             set -e
                             if [ -d "${cacheDir}/node_modules" ] && [ -f "${cacheDir}/.cache-complete" ]; then
                                 echo "✓ [dependency-cache] Using cached dependencies from ${cacheDir}"
@@ -396,779 +408,779 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 exit 1
                             fi
                         `],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const npmStream = await npmInstallExec.start({ hijack: true });
-
-                    // Wait for npm to complete - collect output to check for completion status
-                    let npmOutput = '';
-                    let npmCompleted = false;
-                    let logCheckerInterval: NodeJS.Timeout | null = null;
-
-                    await new Promise<void>((resolve) => {
-                        // Consume stream data
-                        npmStream.on('data', (chunk: Buffer) => {
-                            const output = chunk.toString();
-                            npmOutput += output;
-                            logger.info('[npm exec response]:', output.trim());
-
-                            // Check if we see the completion marker
-                            if (output.includes('npm_install_done')) {
-                                if (!npmCompleted) {
-                                    npmCompleted = true;
-                                    if (logCheckerInterval) clearInterval(logCheckerInterval);
-                                    logger.info('[project-execution] npm install completed successfully');
-                                    resolve();
-                                }
-                            } else if (output.includes('npm_install_failed')) {
-                                if (!npmCompleted) {
-                                    npmCompleted = true;
-                                    if (logCheckerInterval) clearInterval(logCheckerInterval);
-                                    logger.error('[project-execution] npm install failed');
-                                    resolve();
-                                }
-                            }
-                        });
-                        npmStream.on('end', () => {
-                            if (!npmCompleted) {
-                                npmCompleted = true;
-                                if (logCheckerInterval) clearInterval(logCheckerInterval);
-                                logger.info('[project-execution] npm exec stream ended');
-                                resolve();
-                            }
-                        });
-                        npmStream.on('error', (err: any) => {
-                            if (!npmCompleted) {
-                                npmCompleted = true;
-                                if (logCheckerInterval) clearInterval(logCheckerInterval);
-                                logger.error('[project-execution] npm exec stream error:', err);
-                                resolve();
-                            }
-                        });
-
-                        // Start periodic log checking while waiting
-                        let checkCount = 0;
-                        logCheckerInterval = setInterval(async () => {
-                            checkCount++;
-                            if (checkCount > 60) { // Stop after 2 minutes
-                                if (logCheckerInterval) clearInterval(logCheckerInterval);
-                                return;
-                            }
-
-                            try {
-                                // Check log file for progress
-                                const progressExec = await container.exec({
-                                    Cmd: ['sh', '-c', `tail -1 ${baseDir}/npm-install.log 2>/dev/null || echo ""`],
-                                    AttachStdout: true,
-                                    AttachStderr: true
-                                });
-                                const progressStream = await progressExec.start({ hijack: true });
-                                let logLine = '';
-                                await new Promise<void>((resolve) => {
-                                    progressStream.on('data', (chunk: Buffer) => {
-                                        logLine += chunk.toString();
-                                    });
-                                    progressStream.on('end', () => {
-                                        if (logLine.trim() && !logLine.includes('npm_install_done') && !logLine.includes('npm_install_failed')) {
-                                            logger.info(`[npm progress ${checkCount * 2}s]: ${logLine.trim().substring(0, 150)}`);
-                                        }
-                                        resolve();
-                                    });
-                                    progressStream.on('error', () => resolve());
-                                    setTimeout(() => resolve(), 1000);
-                                });
-                            } catch (err) {
-                                // Ignore errors in progress checking
-                            }
-                        }, 2000); // Check every 2 seconds
-
-                        // Increased timeout to 120 seconds (2 minutes) for npm install
-                        setTimeout(() => {
-                            if (logCheckerInterval) clearInterval(logCheckerInterval);
-                            if (!npmCompleted) {
-                                npmCompleted = true;
-                                logger.warn('[project-execution] npm exec timeout after 120s, checking status...');
-                                resolve();
-                            }
-                        }, 120000);
-                    });
-
-                    // Poll to check if npm install actually completed
-                    let installSuccess = false;
-                    logger.info('[project-execution] Starting verification polling...');
-
-                    // First, check if we got the completion marker from stream
-                    if (npmOutput.includes('npm_install_done')) {
-                        installSuccess = true;
-                        logger.info('[project-execution] npm install completed (from stream output)');
-                    } else {
-                        // Poll up to 30 times (60 seconds total) to check status
-                        let npmStillRunning = true;
-                        let maxAttempts = 30;
-                        let npmFinishedAt = -1;
-
-                        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                            logger.info(`[project-execution] Verification attempt ${attempt + 1}/${maxAttempts}`);
-
-                            // Check if npm process is still running first
-                            const procCheckExec = await container.exec({
-                                Cmd: ['sh', '-c', `ps aux | grep -E "[n]pm install" | wc -l`],
-                                AttachStdout: true,
-                                AttachStderr: true
-                            });
-                            const procStream = await procCheckExec.start({ hijack: true });
-                            let procOutput = '';
-                            await new Promise((resolve) => {
-                                procStream.on('data', (chunk: Buffer) => {
-                                    procOutput += chunk.toString();
-                                });
-                                procStream.on('end', resolve);
-                                procStream.on('error', resolve);
-                                setTimeout(resolve, 1000);
-                            });
-
-                            const runningCount = parseInt(procOutput.trim()) || 0;
-                            const wasRunning = npmStillRunning;
-                            npmStillRunning = runningCount > 0;
-
-                            if (wasRunning && !npmStillRunning) {
-                                npmFinishedAt = attempt;
-                                logger.info(`[project-execution] npm process finished at attempt ${attempt + 1}`);
-                            }
-
-                            logger.info(`[project-execution] npm process check: ${runningCount} process(es) running`);
-
-                            // Check if node_modules exists
-                            const checkModulesExec = await container.exec({
-                                Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                                AttachStdout: true,
-                                AttachStderr: true
-                            });
-                            const checkStream = await checkModulesExec.start({ hijack: true });
-                            let checkOutput = '';
-                            await new Promise((resolve) => {
-                                checkStream.on('data', (chunk: Buffer) => {
-                                    checkOutput += chunk.toString();
-                                });
-                                checkStream.on('end', resolve);
-                                checkStream.on('error', resolve);
-                                setTimeout(resolve, 2000);
-                            });
-
-                            logger.info(`[project-execution] node_modules check result: ${checkOutput.trim()}`);
-
-                            if (checkOutput.includes('exists')) {
-                                installSuccess = true;
-                                logger.info('[project-execution] ✓ node_modules found, npm install succeeded');
-                                break;
-                            }
-
-                            // If npm finished but node_modules not found yet, wait a bit more
-                            if (!npmStillRunning && !checkOutput.includes('exists') && npmFinishedAt >= 0 && attempt - npmFinishedAt < 3) {
-                                logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                                // Check again
-                                const retryCheckExec = await container.exec({
-                                    Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                                    AttachStdout: true,
-                                    AttachStderr: true
-                                });
-                                const retryStream = await retryCheckExec.start({ hijack: true });
-                                let retryOutput = '';
-                                await new Promise((resolve) => {
-                                    retryStream.on('data', (chunk: Buffer) => {
-                                        retryOutput += chunk.toString();
-                                    });
-                                    retryStream.on('end', resolve);
-                                    retryStream.on('error', resolve);
-                                    setTimeout(resolve, 2000);
-                                });
-
-                                logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
-                                if (retryOutput.includes('exists')) {
-                                    installSuccess = true;
-                                    logger.info('[project-execution] ✓ node_modules found on retry, npm install succeeded');
-                                    break;
-                                }
-                            }
-
-                            // If npm finished but node_modules not found yet, wait a bit more
-                            if (!npmStillRunning && !checkOutput.includes('exists')) {
-                                logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                                // Check again
-                                const retryCheckExec = await container.exec({
-                                    Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                                    AttachStdout: true,
-                                    AttachStderr: true
-                                });
-                                const retryStream = await retryCheckExec.start({ hijack: true });
-                                let retryOutput = '';
-                                await new Promise((resolve) => {
-                                    retryStream.on('data', (chunk: Buffer) => {
-                                        retryOutput += chunk.toString();
-                                    });
-                                    retryStream.on('end', resolve);
-                                    retryStream.on('error', resolve);
-                                    setTimeout(resolve, 2000);
-                                });
-
-                                logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
-                                if (retryOutput.includes('exists')) {
-                                    installSuccess = true;
-                                    logger.info('[project-execution] ✓ node_modules found on retry, npm install succeeded');
-                                    break;
-                                }
-                            }
-
-                            // Also check the log for completion indicators and errors
-                            const logExec = await container.exec({
-                                Cmd: ['sh', '-c', `tail -30 ${baseDir}/npm-install.log 2>/dev/null || echo "no_log"`],
-                                AttachStdout: true,
-                                AttachStderr: true
-                            });
-                            const logStream = await logExec.start({ hijack: true });
-                            let logOutput = '';
-                            await new Promise((resolve) => {
-                                logStream.on('data', (chunk: Buffer) => {
-                                    logOutput += chunk.toString();
-                                });
-                                logStream.on('end', resolve);
-                                logStream.on('error', resolve);
-                                setTimeout(resolve, 2000);
-                            });
-
-                            // Check for npm errors first
-                            if (logOutput.includes('npm error')) {
-                                let errorMsg = 'npm install failed';
-                                if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
-                                    errorMsg = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
-                                } else if (logOutput.includes('ENOTFOUND')) {
-                                    errorMsg = 'DNS resolution failed: Cannot resolve npm registry hostname.';
-                                } else if (logOutput.includes('ETIMEDOUT') || logOutput.includes('timeout')) {
-                                    errorMsg = 'Network timeout: Connection to npm registry timed out.';
-                                } else if (logOutput.includes('ECONNREFUSED')) {
-                                    errorMsg = 'Connection refused: Cannot connect to npm registry.';
-                                }
-
-                                logger.error(`[project-execution] npm install error detected: ${errorMsg}`);
-                                // Don't break here, continue to final check to get full error details
-                            }
-
-                            // Check for various completion indicators
-                            if (logOutput.includes('added') ||
-                                logOutput.includes('up to date') ||
-                                logOutput.includes('npm_install_done') ||
-                                logOutput.includes('packages in') ||
-                                (logOutput.includes('audited') && !logOutput.includes('npm ERR'))) {
-                                // Double-check node_modules exists
-                                const verifyExec = await container.exec({
-                                    Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                                    AttachStdout: true,
-                                    AttachStderr: true
-                                });
-                                const verifyStream = await verifyExec.start({ hijack: true });
-                                let verifyOutput = '';
-                                await new Promise((resolve) => {
-                                    verifyStream.on('data', (chunk: Buffer) => {
-                                        verifyOutput += chunk.toString();
-                                    });
-                                    verifyStream.on('end', resolve);
-                                    verifyStream.on('error', resolve);
-                                    setTimeout(resolve, 2000);
-                                });
-
-                                if (verifyOutput.includes('exists')) {
-                                    installSuccess = true;
-                                    logger.info('[project-execution] npm install completed based on log indicators');
-                                    break;
-                                }
-                            }
-
-                            // If npm finished but we haven't found success yet, continue checking a bit more
-                            if (!npmStillRunning && attempt < 5) {
-                                logger.info('[project-execution] npm process finished, continuing verification...');
-                            }
-                        }
-
-                        if (!installSuccess && !npmStillRunning) {
-                            // Final check - npm finished but we didn't detect success
-                            logger.warn('[project-execution] npm process finished but success not confirmed, doing final check...');
-                            const finalCheckExec = await container.exec({
-                                Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                                AttachStdout: true,
-                                AttachStderr: true
-                            });
-                            const finalStream = await finalCheckExec.start({ hijack: true });
-                            let finalOutput = '';
-                            await new Promise((resolve) => {
-                                finalStream.on('data', (chunk: Buffer) => {
-                                    finalOutput += chunk.toString();
-                                });
-                                finalStream.on('end', resolve);
-                                finalStream.on('error', resolve);
-                                setTimeout(resolve, 2000);
-                            });
-
-                            if (finalOutput.includes('exists')) {
-                                installSuccess = true;
-                                logger.info('[project-execution] npm install succeeded - node_modules found on final check');
-                            }
-                        }
-                    }
-
-                    // Final check - read full npm log for debugging and error detection
-                    logger.info('[project-execution] Reading npm install log');
-                    const logExec = await container.exec({
-                        Cmd: ['sh', '-c', `cat ${baseDir}/npm-install.log 2>/dev/null || echo "no log"`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const logStream = await logExec.start({ hijack: true });
-                    let logOutput = '';
-                    await new Promise((resolve) => {
-                        logStream.on('data', (chunk: Buffer) => {
-                            logOutput += chunk.toString();
-                        });
-                        logStream.on('end', resolve);
-                        logStream.on('error', resolve);
-                        setTimeout(resolve, 3000);
-                    });
-                    logger.info('[npm install log]:', logOutput.substring(0, 500));
-
-                    // Check for npm errors in the log
-                    let npmError = '';
-                    if (logOutput.includes('npm error')) {
-                        // Extract error message
-                        const errorMatch = logOutput.match(/npm error[^\n]*(?:\n[^\n]*)*/);
-                        if (errorMatch) {
-                            npmError = errorMatch[0].trim();
-                        }
-
-                        // Check for specific error types
-                        if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
-                            npmError = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
-                        } else if (logOutput.includes('ENOTFOUND')) {
-                            npmError = 'DNS resolution failed: Cannot resolve npm registry hostname.';
-                        } else if (logOutput.includes('ETIMEDOUT') || logOutput.includes('timeout')) {
-                            npmError = 'Network timeout: Connection to npm registry timed out.';
-                        } else if (logOutput.includes('ECONNREFUSED')) {
-                            npmError = 'Connection refused: Cannot connect to npm registry.';
-                        }
-                    }
-
-                    if (!installSuccess) {
-                        if (npmError) {
-                            logger.error('[project-execution] npm install failed:', npmError);
-                            // Return error response instead of proceeding
-                            res.status(500).json({
-                                success: false,
-                                error: `Dependency installation failed: ${npmError}`,
-                                details: logOutput.substring(0, 1000)
-                            });
-                            return;
-                        } else if (!npmOutput.includes('npm_install_done')) {
-                            logger.warn('[project-execution] npm install may not have completed, but proceeding anyway');
-                        }
-                    } else {
-                        logger.info('[project-execution] npm install completed successfully');
-                    }
-                }
-            } else if (language === 'python') {
-                logger.info('[project-execution] Installing Python dependencies');
-                const requirementsContent = Object.entries(dependencies || {})
-                    .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
-                    .join('\n');
-                const base64Requirements = Buffer.from(requirementsContent).toString('base64');
-                const writePipExec = await container.exec({
-                    Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
                     AttachStdout: true,
                     AttachStderr: true
                 });
-                const pipFileStream = await writePipExec.start({});
-                pipFileStream.resume();
-                await new Promise(resolve => {
-                    pipFileStream.on('end', resolve);
-                    pipFileStream.on('error', resolve);
-                    setTimeout(resolve, 1000);
-                });
+                const npmStream = await npmInstallExec.start({ hijack: true });
 
-                // Run pip install
-                const pipInstallExec = await container.exec({
-                    Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1`],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-                const pipStream = await pipInstallExec.start({ hijack: true });
+                // Wait for npm to complete - collect output to check for completion status
+                let npmOutput = '';
+                let npmCompleted = false;
+                let logCheckerInterval: NodeJS.Timeout | null = null;
 
-                let pipOutput = '';
-                // Properly wait for completion
                 await new Promise<void>((resolve) => {
-                    let completed = false;
-                    pipStream.on('end', () => {
-                        if (!completed) {
-                            completed = true;
-                            logger.info('[project-execution] pip stream ended');
+                    // Consume stream data
+                    npmStream.on('data', (chunk: Buffer) => {
+                        const output = chunk.toString();
+                        npmOutput += output;
+                        logger.info('[npm exec response]:', output.trim());
+
+                        // Check if we see the completion marker
+                        if (output.includes('npm_install_done')) {
+                            if (!npmCompleted) {
+                                npmCompleted = true;
+                                if (logCheckerInterval) clearInterval(logCheckerInterval);
+                                logger.info('[project-execution] npm install completed successfully');
+                                resolve();
+                            }
+                        } else if (output.includes('npm_install_failed')) {
+                            if (!npmCompleted) {
+                                npmCompleted = true;
+                                if (logCheckerInterval) clearInterval(logCheckerInterval);
+                                logger.error('[project-execution] npm install failed');
+                                resolve();
+                            }
+                        }
+                    });
+                    npmStream.on('end', () => {
+                        if (!npmCompleted) {
+                            npmCompleted = true;
+                            if (logCheckerInterval) clearInterval(logCheckerInterval);
+                            logger.info('[project-execution] npm exec stream ended');
                             resolve();
                         }
                     });
-                    pipStream.on('error', (err: any) => {
-                        if (!completed) {
-                            completed = true;
-                            logger.error('[project-execution] pip stream error:', err);
+                    npmStream.on('error', (err: any) => {
+                        if (!npmCompleted) {
+                            npmCompleted = true;
+                            if (logCheckerInterval) clearInterval(logCheckerInterval);
+                            logger.error('[project-execution] npm exec stream error:', err);
                             resolve();
                         }
                     });
-                    pipStream.on('data', (chunk: Buffer) => {
-                        pipOutput += chunk.toString();
-                    });
-                    // Safety timeout
+
+                    // Start periodic log checking while waiting
+                    let checkCount = 0;
+                    logCheckerInterval = setInterval(async () => {
+                        checkCount++;
+                        if (checkCount > 60) { // Stop after 2 minutes
+                            if (logCheckerInterval) clearInterval(logCheckerInterval);
+                            return;
+                        }
+
+                        try {
+                            // Check log file for progress
+                            const progressExec = await container.exec({
+                                Cmd: ['sh', '-c', `tail -1 ${baseDir}/npm-install.log 2>/dev/null || echo ""`],
+                                AttachStdout: true,
+                                AttachStderr: true
+                            });
+                            const progressStream = await progressExec.start({ hijack: true });
+                            let logLine = '';
+                            await new Promise<void>((resolve) => {
+                                progressStream.on('data', (chunk: Buffer) => {
+                                    logLine += chunk.toString();
+                                });
+                                progressStream.on('end', () => {
+                                    if (logLine.trim() && !logLine.includes('npm_install_done') && !logLine.includes('npm_install_failed')) {
+                                        logger.info(`[npm progress ${checkCount * 2}s]: ${logLine.trim().substring(0, 150)}`);
+                                    }
+                                    resolve();
+                                });
+                                progressStream.on('error', () => resolve());
+                                setTimeout(() => resolve(), 1000);
+                            });
+                        } catch (err) {
+                            // Ignore errors in progress checking
+                        }
+                    }, 2000); // Check every 2 seconds
+
+                    // Increased timeout to 120 seconds (2 minutes) for npm install
                     setTimeout(() => {
-                        if (!completed) {
-                            completed = true;
-                            logger.warn('[project-execution] pip install timeout after 120 seconds');
+                        if (logCheckerInterval) clearInterval(logCheckerInterval);
+                        if (!npmCompleted) {
+                            npmCompleted = true;
+                            logger.warn('[project-execution] npm exec timeout after 120s, checking status...');
                             resolve();
                         }
                     }, 120000);
                 });
 
-                if (pipOutput.includes('ERROR:') || pipOutput.includes('Could not find a version') || pipOutput.includes('command not found')) {
-                    logger.error('[project-execution] pip install failed:', pipOutput);
-                    res.status(500).json({
-                        success: false,
-                        error: 'Dependency installation failed',
-                        details: pipOutput
-                    });
-                    return;
-                }
+                // Poll to check if npm install actually completed
+                let installSuccess = false;
+                logger.info('[project-execution] Starting verification polling...');
 
-                logger.info('[project-execution] pip install completed successfully');
-            } else if (language === 'cpp') {
-                // Check if project has a conanfile (conanfile.txt or conanfile.py)
-                const hasConanfile = files.some(f => f.name === 'conanfile.txt' || f.name === 'conanfile.py');
+                // First, check if we got the completion marker from stream
+                if (npmOutput.includes('npm_install_done')) {
+                    installSuccess = true;
+                    logger.info('[project-execution] npm install completed (from stream output)');
+                } else {
+                    // Poll up to 30 times (60 seconds total) to check status
+                    let npmStillRunning = true;
+                    let maxAttempts = 30;
+                    let npmFinishedAt = -1;
 
-                // Parse CMakeLists.txt to extract find_package() calls
-                const cmakeFile = files.find(f => f.name === 'CMakeLists.txt');
-                const requiredPackages: string[] = [];
+                    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        logger.info(`[project-execution] Verification attempt ${attempt + 1}/${maxAttempts}`);
 
-                if (cmakeFile) {
-                    // Extract find_package() calls from CMakeLists.txt
-                    const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
-                    let match;
-                    while ((match = findPackageRegex.exec(cmakeFile.content)) !== null) {
-                        const packageName = match[1];
-                        // Skip common system packages
-                        if (!['Threads', 'OpenMP', 'CUDA', 'MPI', 'Boost'].includes(packageName)) {
-                            requiredPackages.push(packageName);
-                        }
-                    }
-
-                    if (requiredPackages.length > 0) {
-                        logger.info('[project-execution] Found packages in CMakeLists.txt:', requiredPackages);
-                    }
-                }
-
-                if (hasConanfile || requiredPackages.length > 0 || (dependencies && Object.keys(dependencies).length > 0)) {
-                    logger.info('[project-execution] Installing C++ dependencies with Conan');
-
-                    // Generate conanfile.txt from CMakeLists.txt packages or dependencies object
-                    if (!hasConanfile) {
-                        let conanContent = '[requires]\n';
-
-                        // Add packages from CMakeLists.txt with default versions
-                        const packageVersionMap: Record<string, string> = {
-                            'fmt': '10.1.1',
-                            'nlohmann_json': '3.11.2',
-                            'spdlog': '1.12.0',
-                            'catch2': '3.4.0',
-                            'gtest': '1.14.0'
-                        };
-
-                        requiredPackages.forEach(pkg => {
-                            const version = packageVersionMap[pkg] || 'latest';
-                            conanContent += `${pkg}/${version}\n`;
-                        });
-
-                        // Add explicit dependencies if provided
-                        if (dependencies && Object.keys(dependencies).length > 0) {
-                            Object.entries(dependencies).forEach(([pkg, version]) => {
-                                if (!requiredPackages.includes(pkg)) {
-                                    conanContent += `${pkg}/${version}\n`;
-                                }
-                            });
-                        }
-
-                        conanContent += '\n[generators]\nCMakeDeps\nCMakeToolchain\n';
-
-                        // Write conanfile.txt
-                        const base64Conan = Buffer.from(conanContent).toString('base64');
-                        await container.exec({
-                            Cmd: ['sh', '-c', `echo "${base64Conan}" | base64 -d > ${baseDir}/conanfile.txt`],
+                        // Check if npm process is still running first
+                        const procCheckExec = await container.exec({
+                            Cmd: ['sh', '-c', `ps aux | grep -E "[n]pm install" | wc -l`],
                             AttachStdout: true,
                             AttachStderr: true
-                        }).then(e => e.start({}));
-
-                        logger.info('[project-execution] Generated conanfile.txt with packages:', requiredPackages);
-                    }
-
-                    // Run conan profile detect
-                    logger.info('[project-execution] Setting up Conan profile');
-                    const profileExec = await container.exec({
-                        Cmd: ['sh', '-c', 'conan profile detect --force 2>&1'],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const profileStream = await profileExec.start({ hijack: true });
-
-                    let profileOutput = '';
-                    await new Promise<void>((resolve) => {
-                        profileStream.on('data', (chunk: Buffer) => {
-                            profileOutput += chunk.toString();
                         });
-                        profileStream.on('end', () => {
-                            logger.info('[project-execution] Conan profile setup completed');
-                            logger.info('[project-execution] Profile output:', profileOutput.substring(0, 500));
-                            resolve();
+                        const procStream = await procCheckExec.start({ hijack: true });
+                        let procOutput = '';
+                        await new Promise((resolve) => {
+                            procStream.on('data', (chunk: Buffer) => {
+                                procOutput += chunk.toString();
+                            });
+                            procStream.on('end', resolve);
+                            procStream.on('error', resolve);
+                            setTimeout(resolve, 1000);
                         });
-                        profileStream.on('error', (err: any) => {
-                            logger.error('[project-execution] Conan profile error:', err);
-                            resolve();
+
+                        const runningCount = parseInt(procOutput.trim()) || 0;
+                        const wasRunning = npmStillRunning;
+                        npmStillRunning = runningCount > 0;
+
+                        if (wasRunning && !npmStillRunning) {
+                            npmFinishedAt = attempt;
+                            logger.info(`[project-execution] npm process finished at attempt ${attempt + 1}`);
+                        }
+
+                        logger.info(`[project-execution] npm process check: ${runningCount} process(es) running`);
+
+                        // Check if node_modules exists
+                        const checkModulesExec = await container.exec({
+                            Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
+                            AttachStdout: true,
+                            AttachStderr: true
                         });
-                        // Timeout for profile detection
-                        setTimeout(() => {
-                            logger.warn('[project-execution] Conan profile detection timeout');
-                            resolve();
-                        }, 30000); // 30 seconds
-                    });
-
-                    // Run conan install
-                    logger.info('[project-execution] Running conan install');
-                    const installExec = await container.exec({
-                        Cmd: ['sh', '-c', `cd ${baseDir} && conan install . --output-folder=build --build=missing 2>&1`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const installStream = await installExec.start({ hijack: true });
-
-                    let conanOutput = '';
-                    await new Promise<void>((resolve) => {
-                        installStream.on('data', (chunk: Buffer) => {
-                            conanOutput += chunk.toString();
+                        const checkStream = await checkModulesExec.start({ hijack: true });
+                        let checkOutput = '';
+                        await new Promise((resolve) => {
+                            checkStream.on('data', (chunk: Buffer) => {
+                                checkOutput += chunk.toString();
+                            });
+                            checkStream.on('end', resolve);
+                            checkStream.on('error', resolve);
+                            setTimeout(resolve, 2000);
                         });
-                        installStream.on('end', resolve);
-                        installStream.on('error', resolve);
-                        // Timeout for conan install (can be slow)
-                        setTimeout(resolve, 300000); // 5 minutes
-                    });
 
-                    if (conanOutput.includes('ERROR:')) {
-                        logger.error('[project-execution] Conan install failed:', conanOutput);
-                        res.status(500).json({
-                            success: false,
-                            error: 'Dependency installation failed (Conan)',
-                            details: conanOutput
-                        });
-                        return;
-                    }
-                    logger.info('[project-execution] Conan install completed');
-                } else {
-                    logger.info('[project-execution] No Conan dependencies to install for C++ project');
-                }
-            } else if (language === 'java') {
-                // Check if project has pom.xml
-                const hasPomXml = files.some(f => f.name === 'pom.xml');
+                        logger.info(`[project-execution] node_modules check result: ${checkOutput.trim()}`);
 
-                if (hasPomXml) {
-                    logger.info('[project-execution] Installing Java dependencies with Maven');
+                        if (checkOutput.includes('exists')) {
+                            installSuccess = true;
+                            logger.info('[project-execution] ✓ node_modules found, npm install succeeded');
+                            break;
+                        }
 
-                    // Run mvn dependency:resolve to download dependencies
-                    logger.info('[project-execution] Running mvn dependency:resolve');
-                    const mvnExec = await container.exec({
-                        Cmd: ['sh', '-c', `cd ${baseDir} && mvn dependency:resolve 2>&1`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const mvnStream = await mvnExec.start({ hijack: true });
+                        // If npm finished but node_modules not found yet, wait a bit more
+                        if (!npmStillRunning && !checkOutput.includes('exists') && npmFinishedAt >= 0 && attempt - npmFinishedAt < 3) {
+                            logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
+                            await new Promise(resolve => setTimeout(resolve, 1000));
 
-                    let mvnOutput = '';
-                    await new Promise<void>((resolve) => {
-                        mvnStream.on('data', (chunk: Buffer) => {
-                            mvnOutput += chunk.toString();
-                        });
-                        mvnStream.on('end', () => {
-                            logger.info('[project-execution] Maven dependency resolution completed');
-                            resolve();
-                        });
-                        mvnStream.on('error', (err: any) => {
-                            logger.error('[project-execution] Maven error:', err);
-                            resolve();
-                        });
-                        // Timeout for Maven (can be slow on first run)
-                        setTimeout(() => {
-                            logger.warn('[project-execution] Maven dependency resolution timeout');
-                            resolve();
-                        }, 180000); // 3 minutes
-                    });
+                            // Check again
+                            const retryCheckExec = await container.exec({
+                                Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
+                                AttachStdout: true,
+                                AttachStderr: true
+                            });
+                            const retryStream = await retryCheckExec.start({ hijack: true });
+                            let retryOutput = '';
+                            await new Promise((resolve) => {
+                                retryStream.on('data', (chunk: Buffer) => {
+                                    retryOutput += chunk.toString();
+                                });
+                                retryStream.on('end', resolve);
+                                retryStream.on('error', resolve);
+                                setTimeout(resolve, 2000);
+                            });
 
-                    if (mvnOutput.includes('BUILD FAILURE') || mvnOutput.includes('ERROR')) {
-                        logger.error('[project-execution] Maven dependency resolution failed:', mvnOutput.substring(0, 500));
-                        res.status(500).json({
-                            success: false,
-                            error: 'Dependency installation failed (Maven)',
-                            details: mvnOutput.substring(0, 1000)
-                        });
-                        return;
-                    }
-                    logger.info('[project-execution] Maven dependencies installed successfully');
-                } else {
-                    logger.info('[project-execution] No pom.xml found for Java project');
-                }
-            }
-        }
-
-        // Prepare execution command
-        const execCommand = getExecutionCommand(language, baseDir, files, mainFile);
-        logger.info(`Project execution command: ${execCommand}`);
-        logger.info('[project-execution] About to execute main code');
-
-        // Execute code
-        const exec = await container.exec({
-            Cmd: ['sh', '-c', execCommand],
-            AttachStdin: true,
-            AttachStdout: true,
-            AttachStderr: true,
-            Tty: false
-        });
-
-        const stream = await exec.start({
-            hijack: true,
-            stdin: true
-        });
-
-        // Store stream for input handling
-        activeStreams.set(sessionId, stream);
-
-        // Handle client disconnect
-        req.on('close', async () => {
-            try {
-                activeStreams.delete(sessionId);
-                stream.end();
-
-                // Wait a bit before removing container
-                setTimeout(async () => {
-                    try {
-                        // Stop container first if it's still running
-                        try {
-                            await container.stop();
-                        } catch (stopErr: any) {
-                            // Container might already be stopped, ignore
-                            if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
-                                logger.warn(`Error stopping container: ${stopErr.message}`);
+                            logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
+                            if (retryOutput.includes('exists')) {
+                                installSuccess = true;
+                                logger.info('[project-execution] ✓ node_modules found on retry, npm install succeeded');
+                                break;
                             }
                         }
 
-                        // Small delay before removal
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        // If npm finished but node_modules not found yet, wait a bit more
+                        if (!npmStillRunning && !checkOutput.includes('exists')) {
+                            logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
+                            await new Promise(resolve => setTimeout(resolve, 1000));
 
-                        await container.remove({ force: true });
-                        logger.info(`Container removed after client disconnect: ${containerName}`);
-                    } catch (err: any) {
-                        // Ignore "container not found" errors as they're expected after cleanup
-                        if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                            logger.error(`Error cleaning up container: ${err}`);
+                            // Check again
+                            const retryCheckExec = await container.exec({
+                                Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
+                                AttachStdout: true,
+                                AttachStderr: true
+                            });
+                            const retryStream = await retryCheckExec.start({ hijack: true });
+                            let retryOutput = '';
+                            await new Promise((resolve) => {
+                                retryStream.on('data', (chunk: Buffer) => {
+                                    retryOutput += chunk.toString();
+                                });
+                                retryStream.on('end', resolve);
+                                retryStream.on('error', resolve);
+                                setTimeout(resolve, 2000);
+                            });
+
+                            logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
+                            if (retryOutput.includes('exists')) {
+                                installSuccess = true;
+                                logger.info('[project-execution] ✓ node_modules found on retry, npm install succeeded');
+                                break;
+                            }
+                        }
+
+                        // Also check the log for completion indicators and errors
+                        const logExec = await container.exec({
+                            Cmd: ['sh', '-c', `tail -30 ${baseDir}/npm-install.log 2>/dev/null || echo "no_log"`],
+                            AttachStdout: true,
+                            AttachStderr: true
+                        });
+                        const logStream = await logExec.start({ hijack: true });
+                        let logOutput = '';
+                        await new Promise((resolve) => {
+                            logStream.on('data', (chunk: Buffer) => {
+                                logOutput += chunk.toString();
+                            });
+                            logStream.on('end', resolve);
+                            logStream.on('error', resolve);
+                            setTimeout(resolve, 2000);
+                        });
+
+                        // Check for npm errors first
+                        if (logOutput.includes('npm error')) {
+                            let errorMsg = 'npm install failed';
+                            if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
+                                errorMsg = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
+                            } else if (logOutput.includes('ENOTFOUND')) {
+                                errorMsg = 'DNS resolution failed: Cannot resolve npm registry hostname.';
+                            } else if (logOutput.includes('ETIMEDOUT') || logOutput.includes('timeout')) {
+                                errorMsg = 'Network timeout: Connection to npm registry timed out.';
+                            } else if (logOutput.includes('ECONNREFUSED')) {
+                                errorMsg = 'Connection refused: Cannot connect to npm registry.';
+                            }
+
+                            logger.error(`[project-execution] npm install error detected: ${errorMsg}`);
+                            // Don't break here, continue to final check to get full error details
+                        }
+
+                        // Check for various completion indicators
+                        if (logOutput.includes('added') ||
+                            logOutput.includes('up to date') ||
+                            logOutput.includes('npm_install_done') ||
+                            logOutput.includes('packages in') ||
+                            (logOutput.includes('audited') && !logOutput.includes('npm ERR'))) {
+                            // Double-check node_modules exists
+                            const verifyExec = await container.exec({
+                                Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
+                                AttachStdout: true,
+                                AttachStderr: true
+                            });
+                            const verifyStream = await verifyExec.start({ hijack: true });
+                            let verifyOutput = '';
+                            await new Promise((resolve) => {
+                                verifyStream.on('data', (chunk: Buffer) => {
+                                    verifyOutput += chunk.toString();
+                                });
+                                verifyStream.on('end', resolve);
+                                verifyStream.on('error', resolve);
+                                setTimeout(resolve, 2000);
+                            });
+
+                            if (verifyOutput.includes('exists')) {
+                                installSuccess = true;
+                                logger.info('[project-execution] npm install completed based on log indicators');
+                                break;
+                            }
+                        }
+
+                        // If npm finished but we haven't found success yet, continue checking a bit more
+                        if (!npmStillRunning && attempt < 5) {
+                            logger.info('[project-execution] npm process finished, continuing verification...');
                         }
                     }
-                }, 1000); // 1 second delay
-            } catch (err) {
-                logger.error(`Error in client disconnect handler: ${err}`);
-            }
-        });
 
-        // Stream output to client
-        stream.on('data', (chunk: Buffer) => {
-            const output = chunk.toString('utf8').replace(/[\x00-\x08]/g, '');
-            if (output.trim()) {
-                res.write(`data: ${JSON.stringify({ type: 'stdout', data: output })}\n\n`);
-            }
-        });
+                    if (!installSuccess && !npmStillRunning) {
+                        // Final check - npm finished but we didn't detect success
+                        logger.warn('[project-execution] npm process finished but success not confirmed, doing final check...');
+                        const finalCheckExec = await container.exec({
+                            Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
+                            AttachStdout: true,
+                            AttachStderr: true
+                        });
+                        const finalStream = await finalCheckExec.start({ hijack: true });
+                        let finalOutput = '';
+                        await new Promise((resolve) => {
+                            finalStream.on('data', (chunk: Buffer) => {
+                                finalOutput += chunk.toString();
+                            });
+                            finalStream.on('end', resolve);
+                            finalStream.on('error', resolve);
+                            setTimeout(resolve, 2000);
+                        });
 
-        stream.on('end', async () => {
-            res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
-            res.end();
-
-            // Clean up
-            activeStreams.delete(sessionId);
-
-            // Wait a bit for Docker to finish processing, then remove container
-            setTimeout(async () => {
-                try {
-                    // Stop container first if it's still running
-                    try {
-                        await container.stop();
-                    } catch (stopErr: any) {
-                        // Container might already be stopped, ignore
-                        if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
-                            logger.warn(`Error stopping container: ${stopErr.message}`);
+                        if (finalOutput.includes('exists')) {
+                            installSuccess = true;
+                            logger.info('[project-execution] npm install succeeded - node_modules found on final check');
                         }
-                    }
-
-                    // Small delay before removal
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    await container.remove({ force: true });
-                    logger.info(`Container removed after execution: ${containerName}`);
-                } catch (err: any) {
-                    // Ignore "container not found" errors as they're expected after cleanup
-                    if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                        logger.error(`Error removing container: ${err}`);
                     }
                 }
-            }, 1000); // 1 second delay
-        });
 
-        stream.on('error', async (error: Error) => {
-            logger.error(`Stream error: ${error.message}`);
-            res.write(`data: ${JSON.stringify({ type: 'stderr', data: error.message })}\n\n`);
-            res.end();
+                // Final check - read full npm log for debugging and error detection
+                logger.info('[project-execution] Reading npm install log');
+                const logExec = await container.exec({
+                    Cmd: ['sh', '-c', `cat ${baseDir}/npm-install.log 2>/dev/null || echo "no log"`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const logStream = await logExec.start({ hijack: true });
+                let logOutput = '';
+                await new Promise((resolve) => {
+                    logStream.on('data', (chunk: Buffer) => {
+                        logOutput += chunk.toString();
+                    });
+                    logStream.on('end', resolve);
+                    logStream.on('error', resolve);
+                    setTimeout(resolve, 3000);
+                });
+                logger.info('[npm install log]:', logOutput.substring(0, 500));
 
-            // Clean up
-            activeStreams.delete(sessionId);
-
-            // Wait a bit for Docker to finish processing, then remove container
-            setTimeout(async () => {
-                try {
-                    // Stop container first if it's still running
-                    try {
-                        await container.stop();
-                    } catch (stopErr: any) {
-                        // Container might already be stopped, ignore
-                        if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
-                            logger.warn(`Error stopping container: ${stopErr.message}`);
-                        }
+                // Check for npm errors in the log
+                let npmError = '';
+                if (logOutput.includes('npm error')) {
+                    // Extract error message
+                    const errorMatch = logOutput.match(/npm error[^\n]*(?:\n[^\n]*)*/);
+                    if (errorMatch) {
+                        npmError = errorMatch[0].trim();
                     }
 
-                    // Small delay before removal
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    await container.remove({ force: true });
-                } catch (err: any) {
-                    // Ignore "container not found" errors as they're expected after cleanup
-                    if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                        logger.error(`Error removing container after error: ${err}`);
+                    // Check for specific error types
+                    if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
+                        npmError = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
+                    } else if (logOutput.includes('ENOTFOUND')) {
+                        npmError = 'DNS resolution failed: Cannot resolve npm registry hostname.';
+                    } else if (logOutput.includes('ETIMEDOUT') || logOutput.includes('timeout')) {
+                        npmError = 'Network timeout: Connection to npm registry timed out.';
+                    } else if (logOutput.includes('ECONNREFUSED')) {
+                        npmError = 'Connection refused: Cannot connect to npm registry.';
                     }
                 }
-            }, 1000); // 1 second delay
-        });
 
-    } catch (error: any) {
-        logger.error('Project execution failed:', error);
-        res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
-        res.end();
+                if (!installSuccess) {
+                    if (npmError) {
+                        logger.error('[project-execution] npm install failed:', npmError);
+                        // Return error response instead of proceeding
+                        res.status(500).json({
+                            success: false,
+                            error: `Dependency installation failed: ${npmError}`,
+                            details: logOutput.substring(0, 1000)
+                        });
+                        return;
+                    } else if (!npmOutput.includes('npm_install_done')) {
+                        logger.warn('[project-execution] npm install may not have completed, but proceeding anyway');
+                    }
+                } else {
+                    logger.info('[project-execution] npm install completed successfully');
+                }
+            }
+        } else if (language === 'python') {
+            logger.info('[project-execution] Installing Python dependencies');
+            const requirementsContent = Object.entries(dependencies || {})
+                .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
+                .join('\n');
+            const base64Requirements = Buffer.from(requirementsContent).toString('base64');
+            const writePipExec = await container.exec({
+                Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+            const pipFileStream = await writePipExec.start({});
+            pipFileStream.resume();
+            await new Promise(resolve => {
+                pipFileStream.on('end', resolve);
+                pipFileStream.on('error', resolve);
+                setTimeout(resolve, 1000);
+            });
+
+            // Run pip install
+            const pipInstallExec = await container.exec({
+                Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1`],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+            const pipStream = await pipInstallExec.start({ hijack: true });
+
+            let pipOutput = '';
+            // Properly wait for completion
+            await new Promise<void>((resolve) => {
+                let completed = false;
+                pipStream.on('end', () => {
+                    if (!completed) {
+                        completed = true;
+                        logger.info('[project-execution] pip stream ended');
+                        resolve();
+                    }
+                });
+                pipStream.on('error', (err: any) => {
+                    if (!completed) {
+                        completed = true;
+                        logger.error('[project-execution] pip stream error:', err);
+                        resolve();
+                    }
+                });
+                pipStream.on('data', (chunk: Buffer) => {
+                    pipOutput += chunk.toString();
+                });
+                // Safety timeout
+                setTimeout(() => {
+                    if (!completed) {
+                        completed = true;
+                        logger.warn('[project-execution] pip install timeout after 120 seconds');
+                        resolve();
+                    }
+                }, 120000);
+            });
+
+            if (pipOutput.includes('ERROR:') || pipOutput.includes('Could not find a version') || pipOutput.includes('command not found')) {
+                logger.error('[project-execution] pip install failed:', pipOutput);
+                res.status(500).json({
+                    success: false,
+                    error: 'Dependency installation failed',
+                    details: pipOutput
+                });
+                return;
+            }
+
+            logger.info('[project-execution] pip install completed successfully');
+        } else if (language === 'cpp') {
+            // Check if project has a conanfile (conanfile.txt or conanfile.py)
+            const hasConanfile = files.some(f => f.name === 'conanfile.txt' || f.name === 'conanfile.py');
+
+            // Parse CMakeLists.txt to extract find_package() calls
+            const cmakeFile = files.find(f => f.name === 'CMakeLists.txt');
+            const requiredPackages: string[] = [];
+
+            if (cmakeFile) {
+                // Extract find_package() calls from CMakeLists.txt
+                const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
+                let match;
+                while ((match = findPackageRegex.exec(cmakeFile.content)) !== null) {
+                    const packageName = match[1];
+                    // Skip common system packages
+                    if (!['Threads', 'OpenMP', 'CUDA', 'MPI', 'Boost'].includes(packageName)) {
+                        requiredPackages.push(packageName);
+                    }
+                }
+
+                if (requiredPackages.length > 0) {
+                    logger.info('[project-execution] Found packages in CMakeLists.txt:', requiredPackages);
+                }
+            }
+
+            if (hasConanfile || requiredPackages.length > 0 || (dependencies && Object.keys(dependencies).length > 0)) {
+                logger.info('[project-execution] Installing C++ dependencies with Conan');
+
+                // Generate conanfile.txt from CMakeLists.txt packages or dependencies object
+                if (!hasConanfile) {
+                    let conanContent = '[requires]\n';
+
+                    // Add packages from CMakeLists.txt with default versions
+                    const packageVersionMap: Record<string, string> = {
+                        'fmt': '10.1.1',
+                        'nlohmann_json': '3.11.2',
+                        'spdlog': '1.12.0',
+                        'catch2': '3.4.0',
+                        'gtest': '1.14.0'
+                    };
+
+                    requiredPackages.forEach(pkg => {
+                        const version = packageVersionMap[pkg] || 'latest';
+                        conanContent += `${pkg}/${version}\n`;
+                    });
+
+                    // Add explicit dependencies if provided
+                    if (dependencies && Object.keys(dependencies).length > 0) {
+                        Object.entries(dependencies).forEach(([pkg, version]) => {
+                            if (!requiredPackages.includes(pkg)) {
+                                conanContent += `${pkg}/${version}\n`;
+                            }
+                        });
+                    }
+
+                    conanContent += '\n[generators]\nCMakeDeps\nCMakeToolchain\n';
+
+                    // Write conanfile.txt
+                    const base64Conan = Buffer.from(conanContent).toString('base64');
+                    await container.exec({
+                        Cmd: ['sh', '-c', `echo "${base64Conan}" | base64 -d > ${baseDir}/conanfile.txt`],
+                        AttachStdout: true,
+                        AttachStderr: true
+                    }).then(e => e.start({}));
+
+                    logger.info('[project-execution] Generated conanfile.txt with packages:', requiredPackages);
+                }
+
+                // Run conan profile detect
+                logger.info('[project-execution] Setting up Conan profile');
+                const profileExec = await container.exec({
+                    Cmd: ['sh', '-c', 'conan profile detect --force 2>&1'],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const profileStream = await profileExec.start({ hijack: true });
+
+                let profileOutput = '';
+                await new Promise<void>((resolve) => {
+                    profileStream.on('data', (chunk: Buffer) => {
+                        profileOutput += chunk.toString();
+                    });
+                    profileStream.on('end', () => {
+                        logger.info('[project-execution] Conan profile setup completed');
+                        logger.info('[project-execution] Profile output:', profileOutput.substring(0, 500));
+                        resolve();
+                    });
+                    profileStream.on('error', (err: any) => {
+                        logger.error('[project-execution] Conan profile error:', err);
+                        resolve();
+                    });
+                    // Timeout for profile detection
+                    setTimeout(() => {
+                        logger.warn('[project-execution] Conan profile detection timeout');
+                        resolve();
+                    }, 30000); // 30 seconds
+                });
+
+                // Run conan install
+                logger.info('[project-execution] Running conan install');
+                const installExec = await container.exec({
+                    Cmd: ['sh', '-c', `cd ${baseDir} && conan install . --output-folder=build --build=missing 2>&1`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const installStream = await installExec.start({ hijack: true });
+
+                let conanOutput = '';
+                await new Promise<void>((resolve) => {
+                    installStream.on('data', (chunk: Buffer) => {
+                        conanOutput += chunk.toString();
+                    });
+                    installStream.on('end', resolve);
+                    installStream.on('error', resolve);
+                    // Timeout for conan install (can be slow)
+                    setTimeout(resolve, 300000); // 5 minutes
+                });
+
+                if (conanOutput.includes('ERROR:')) {
+                    logger.error('[project-execution] Conan install failed:', conanOutput);
+                    res.status(500).json({
+                        success: false,
+                        error: 'Dependency installation failed (Conan)',
+                        details: conanOutput
+                    });
+                    return;
+                }
+                logger.info('[project-execution] Conan install completed');
+            } else {
+                logger.info('[project-execution] No Conan dependencies to install for C++ project');
+            }
+        } else if (language === 'java') {
+            // Check if project has pom.xml
+            const hasPomXml = files.some(f => f.name === 'pom.xml');
+
+            if (hasPomXml) {
+                logger.info('[project-execution] Installing Java dependencies with Maven');
+
+                // Run mvn dependency:resolve to download dependencies
+                logger.info('[project-execution] Running mvn dependency:resolve');
+                const mvnExec = await container.exec({
+                    Cmd: ['sh', '-c', `cd ${baseDir} && mvn dependency:resolve 2>&1`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const mvnStream = await mvnExec.start({ hijack: true });
+
+                let mvnOutput = '';
+                await new Promise<void>((resolve) => {
+                    mvnStream.on('data', (chunk: Buffer) => {
+                        mvnOutput += chunk.toString();
+                    });
+                    mvnStream.on('end', () => {
+                        logger.info('[project-execution] Maven dependency resolution completed');
+                        resolve();
+                    });
+                    mvnStream.on('error', (err: any) => {
+                        logger.error('[project-execution] Maven error:', err);
+                        resolve();
+                    });
+                    // Timeout for Maven (can be slow on first run)
+                    setTimeout(() => {
+                        logger.warn('[project-execution] Maven dependency resolution timeout');
+                        resolve();
+                    }, 180000); // 3 minutes
+                });
+
+                if (mvnOutput.includes('BUILD FAILURE') || mvnOutput.includes('ERROR')) {
+                    logger.error('[project-execution] Maven dependency resolution failed:', mvnOutput.substring(0, 500));
+                    res.status(500).json({
+                        success: false,
+                        error: 'Dependency installation failed (Maven)',
+                        details: mvnOutput.substring(0, 1000)
+                    });
+                    return;
+                }
+                logger.info('[project-execution] Maven dependencies installed successfully');
+            } else {
+                logger.info('[project-execution] No pom.xml found for Java project');
+            }
+        }
     }
+
+        // Prepare execution command
+        const execCommand = getExecutionCommand(language, baseDir, files, mainFile);
+    logger.info(`Project execution command: ${execCommand}`);
+    logger.info('[project-execution] About to execute main code');
+
+    // Execute code
+    const exec = await container.exec({
+        Cmd: ['sh', '-c', execCommand],
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+        Tty: false
+    });
+
+    const stream = await exec.start({
+        hijack: true,
+        stdin: true
+    });
+
+    // Store stream for input handling
+    activeStreams.set(sessionId, stream);
+
+    // Handle client disconnect
+    req.on('close', async () => {
+        try {
+            activeStreams.delete(sessionId);
+            stream.end();
+
+            // Wait a bit before removing container
+            setTimeout(async () => {
+                try {
+                    // Stop container first if it's still running
+                    try {
+                        await container.stop();
+                    } catch (stopErr: any) {
+                        // Container might already be stopped, ignore
+                        if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
+                            logger.warn(`Error stopping container: ${stopErr.message}`);
+                        }
+                    }
+
+                    // Small delay before removal
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    await container.remove({ force: true });
+                    logger.info(`Container removed after client disconnect: ${containerName}`);
+                } catch (err: any) {
+                    // Ignore "container not found" errors as they're expected after cleanup
+                    if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
+                        logger.error(`Error cleaning up container: ${err}`);
+                    }
+                }
+            }, 1000); // 1 second delay
+        } catch (err) {
+            logger.error(`Error in client disconnect handler: ${err}`);
+        }
+    });
+
+    // Stream output to client
+    stream.on('data', (chunk: Buffer) => {
+        const output = chunk.toString('utf8').replace(/[\x00-\x08]/g, '');
+        if (output.trim()) {
+            res.write(`data: ${JSON.stringify({ type: 'stdout', data: output })}\n\n`);
+        }
+    });
+
+    stream.on('end', async () => {
+        res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
+        res.end();
+
+        // Clean up
+        activeStreams.delete(sessionId);
+
+        // Wait a bit for Docker to finish processing, then remove container
+        setTimeout(async () => {
+            try {
+                // Stop container first if it's still running
+                try {
+                    await container.stop();
+                } catch (stopErr: any) {
+                    // Container might already be stopped, ignore
+                    if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
+                        logger.warn(`Error stopping container: ${stopErr.message}`);
+                    }
+                }
+
+                // Small delay before removal
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                await container.remove({ force: true });
+                logger.info(`Container removed after execution: ${containerName}`);
+            } catch (err: any) {
+                // Ignore "container not found" errors as they're expected after cleanup
+                if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
+                    logger.error(`Error removing container: ${err}`);
+                }
+            }
+        }, 1000); // 1 second delay
+    });
+
+    stream.on('error', async (error: Error) => {
+        logger.error(`Stream error: ${error.message}`);
+        res.write(`data: ${JSON.stringify({ type: 'stderr', data: error.message })}\n\n`);
+        res.end();
+
+        // Clean up
+        activeStreams.delete(sessionId);
+
+        // Wait a bit for Docker to finish processing, then remove container
+        setTimeout(async () => {
+            try {
+                // Stop container first if it's still running
+                try {
+                    await container.stop();
+                } catch (stopErr: any) {
+                    // Container might already be stopped, ignore
+                    if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
+                        logger.warn(`Error stopping container: ${stopErr.message}`);
+                    }
+                }
+
+                // Small delay before removal
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                await container.remove({ force: true });
+            } catch (err: any) {
+                // Ignore "container not found" errors as they're expected after cleanup
+                if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
+                    logger.error(`Error removing container after error: ${err}`);
+                }
+            }
+        }, 1000); // 1 second delay
+    });
+
+} catch (error: any) {
+    logger.error('Project execution failed:', error);
+    res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
+    res.end();
+}
 });
 
 /**
