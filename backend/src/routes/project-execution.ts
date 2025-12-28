@@ -60,9 +60,6 @@ function resolveLibraryOnDisk(projectId: string, lib: { fileName: string; origin
         path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName),
         // Try with originalName (might be more descriptive)
         path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
-        // Try from __dirname context (for different working directories)
-        path.resolve(__dirname, '..', 'uploads', 'libraries', projectId, lib.fileName),
-        path.resolve(__dirname, '..', 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
         // Fallback: try appending extensions in case they're missing
         path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.gz`),
         path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.tar.gz`),
@@ -118,6 +115,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
 
     const containerName = `nexusquest-project-${sessionId}`;
     const baseDir = `/tmp/project-${sessionId}`;
+    const cacheDir = `/dependencies/${sessionId}`;
 
     try {
         // Check and remove existing container
@@ -391,22 +389,24 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             const npmInstallExec = await container.exec({
                 Cmd: ['sh', '-c', `
                         set -e
-                        if [ -d "${cacheDir}/node_modules" ] && [ -f "${cacheDir}/.cache-complete" ]; then
-                            echo "✓ [dependency-cache] Using cached dependencies from ${cacheDir}"
-                            cp -r ${cacheDir}/node_modules ${baseDir}/ 2>&1 || echo "Cache copy failed, will install fresh"
-                            if [ -d "${baseDir}/node_modules" ]; then
+                        CACHE_DIR="${cacheDir}"
+                        BASE_DIR="${baseDir}"
+                        if [ -d "$CACHE_DIR/node_modules" ] && [ -f "$CACHE_DIR/.cache-complete" ]; then
+                            echo "✓ [dependency-cache] Using cached dependencies from $CACHE_DIR"
+                            cp -r $CACHE_DIR/node_modules $BASE_DIR/ 2>&1 || echo "Cache copy failed, will install fresh"
+                            if [ -d "$BASE_DIR/node_modules" ]; then
                                 echo "npm_install_done"
                                 exit 0
                             fi
                         fi
                         echo "⚙ [dependency-cache] Installing dependencies (first time for this combination)..."
-                        cd ${baseDir}
+                        cd $BASE_DIR
                         npm install --legacy-peer-deps > npm-install.log 2>&1
                         if [ $? -eq 0 ]; then
-                            echo "[dependency-cache] Caching dependencies to ${cacheDir}..."
-                            mkdir -p ${cacheDir}
-                            cp -r ${baseDir}/node_modules ${cacheDir}/ 2>&1 || echo "Warning: Failed to cache dependencies"
-                            touch ${cacheDir}/.cache-complete
+                            echo "[dependency-cache] Caching dependencies to $CACHE_DIR..."
+                            mkdir -p $CACHE_DIR
+                            cp -r $BASE_DIR/node_modules $CACHE_DIR/ 2>&1 || echo "Warning: Failed to cache dependencies"
+                            touch $CACHE_DIR/.cache-complete
                             echo "✓ [dependency-cache] Dependencies cached successfully"
                             echo "npm_install_done"
                         else
