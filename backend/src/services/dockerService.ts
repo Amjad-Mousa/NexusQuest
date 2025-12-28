@@ -407,9 +407,6 @@ const resolveLibraryOnDisk = (projectId: string, lib: CustomLibrary): string | n
     path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName),
     // Try with originalName (might be more descriptive)
     path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
-    // Try from __dirname context (for different working directories)
-    path.resolve(__dirname, '..', '..', 'uploads', 'libraries', projectId, lib.fileName),
-    path.resolve(__dirname, '..', '..', 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
     // Fallback: try appending extensions in case they're missing
     path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.gz`),
     path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.tar.gz`),
