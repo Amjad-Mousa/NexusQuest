@@ -26,14 +26,6 @@ const storage = multer.diskStorage({
         }
 
         cb(null, projectLibDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-        const ext = path.extname(file.originalname);
-        cb(null, `${uniqueSuffix}${ext}`);
-    }
-});
-
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const allowedExtensions = ['.jar', '.whl', '.so', '.dll', '.dylib', '.a', '.lib', '.tar.gz', '.zip'];
     const ext = path.extname(file.originalname).toLowerCase();
@@ -119,6 +111,14 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
         res.json({
             success: true,
             library: {
+                id: project.customLibraries[project.customLibraries.length - 1]._id,
+                ...library
+            }
+        });
+    } catch (error: any) {
+        logger.error('[libraries] Upload error:', error);
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
                 _id: project.customLibraries[project.customLibraries.length - 1]._id,
                 fileName: library.fileName,
                 originalName: library.originalName,
@@ -126,19 +126,6 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
                 size: library.size,
                 uploadedAt: library.uploadedAt,
                 path: `/uploads/libraries/${projectId}/${library.fileName}`
-            }
-        });
-    } catch (error: any) {
-        logger.error('[libraries] Upload error:', error);
-        if (req.file) {
-            fs.unlinkSync(req.file.path);
-        }
-        res.status(500).json({ error: error.message || 'Failed to upload library' });
-    }
-});
-
-router.get('/:projectId/libraries', auth, async (req: Request, res: Response) => {
-    try {
         const { projectId } = req.params;
         const userId = (req as any).userId;
 
@@ -147,6 +134,19 @@ router.get('/:projectId/libraries', auth, async (req: Request, res: Response) =>
             return res.status(404).json({ error: 'Project not found' });
         }
 
+        res.json({
+            success: true,
+            libraries: librariesWithPaths
+            libraries: project.customLibraries || []
+    } catch (error: any) {
+        logger.error('[libraries] List error:', error);
+        res.status(500).json({ error: error.message || 'Failed to list libraries' });
+    }
+});
+
+router.delete('/:projectId/libraries/:libraryId', auth, async (req: Request, res: Response) => {
+    try {
+        const { projectId, libraryId } = req.params;
         // Convert Mongoose documents to plain objects
         const projectObj = project.toObject();
         const librariesWithPaths = (projectObj.customLibraries || []).map((lib: any) => ({
@@ -159,35 +159,10 @@ router.get('/:projectId/libraries', auth, async (req: Request, res: Response) =>
             path: `/uploads/libraries/${projectId}/${lib.fileName}`
         }));
 
-        res.json({
-            success: true,
-            libraries: librariesWithPaths
-        });
-    } catch (error: any) {
-        logger.error('[libraries] List error:', error);
-        res.status(500).json({ error: error.message || 'Failed to list libraries' });
-    }
-});
-
-router.delete('/:projectId/libraries/:libraryId', auth, async (req: Request, res: Response) => {
-    try {
-        const { projectId, libraryId } = req.params;
-        const userId = (req as any).userId;
-
-        const project = await Project.findOne({ _id: projectId, owner: userId });
-        if (!project) {
-            return res.status(404).json({ error: 'Project not found' });
-        }
-
-        const libraryIndex = project.customLibraries?.findIndex(
-            (lib: any) => lib._id.toString() === libraryId
-        );
-
-        if (libraryIndex === undefined || libraryIndex === -1) {
             return res.status(404).json({ error: 'Library not found' });
         }
 
-        const library = project.customLibraries![libraryIndex];
+        });
         const filePath = path.join(UPLOAD_DIR, library.fileName);
 
         if (fs.existsSync(filePath)) {

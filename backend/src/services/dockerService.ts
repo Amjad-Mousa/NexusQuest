@@ -4,8 +4,6 @@ import { demuxStream } from '../utils/dockerStream.js';
 import path from 'path';
 import fs from 'fs';
 
-const docker = new Docker();
-
 interface ExecutionResult {
   output: string;
   error: string;
@@ -358,6 +356,8 @@ async function markDependenciesInstalled(
   }
 }
 
+// Helper to install dependencies for JavaScript projects
+async function installJavaScriptDependencies(
 // Helper to resolve library file on disk from multiple possible locations
 function resolveLibraryOnDisk(projectId: string, lib: CustomLibrary): string | null {
   const candidates = [
@@ -389,42 +389,8 @@ function resolveLibraryOnDisk(projectId: string, lib: CustomLibrary): string | n
   return null;
 }
 
-// Helper to install dependencies for JavaScript projects
-
-async function installJavaScriptDependencies(
-  container: Docker.Container,
-  baseDir: string,
-  projectId: string,
-  dependencies?: Record<string, string>
-): Promise<{ success: boolean; output: string; error: string }> {
-  try {
-    if (!dependencies || Object.keys(dependencies).length === 0) {
-      logger.info('[npm install] No dependencies specified');
-      return { success: true, output: 'No dependencies to install', error: '' };
-    }
-
-    // Create package.json with dependencies
-    const packageJson = {
-      name: 'nexusquest-project',
-      version: '1.0.0',
-      description: 'NexusQuest Project',
-      main: 'index.js',
-      dependencies,
-    };
-
-    const packageJsonContent = JSON.stringify(packageJson, null, 2);
-    const base64PackageJson = Buffer.from(packageJsonContent).toString('base64');
-
-    logger.info('[npm install] Creating package.json with dependencies');
-    const writeExec = await container.exec({
-      Cmd: ['sh', '-c', `echo "${base64PackageJson}" | base64 -d > ${baseDir}/package.json`],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-
-    const writeStream = await writeExec.start({ hijack: true });
     await new Promise((resolve) => {
-      writeStream.on('end', resolve);
+
       writeStream.on('error', (err: any) => {
         logger.error('[npm install] write error:', err);
         resolve(null);
@@ -630,6 +596,40 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
+    // Install dependencies if specified
+    if (dependencies && Object.keys(dependencies).length > 0) {
+      logger.info(`[executeProject] Installing dependencies for ${language}`);
+
+      if (language.toLowerCase() === 'javascript') {
+        const depResult = await installJavaScriptDependencies(container, baseDir, projectId || '', dependencies);
+        if (!depResult.success) {
+          logger.error('[executeProject] Dependency installation failed:', depResult.error);
+          return {
+            output: depResult.output,
+            error: `Dependency installation failed: ${depResult.error}`,
+            executionTime: Date.now() - startTime,
+          };
+        }
+      } else if (language.toLowerCase() === 'python') {
+        const depResult = await installPythonDependencies(container, baseDir, dependencies);
+        if (!depResult.success) {
+          logger.error('[executeProject] Dependency installation failed:', depResult.error);
+          return {
+            output: depResult.output,
+            error: `Dependency installation failed: ${depResult.error}`,
+            executionTime: Date.now() - startTime,
+          };
+        }
+      }
+    }
+
+    // Execute the main file
+    const execCommand = getExecutionCommand(language, `${baseDir}/${mainFile}`);
+    logger.info(`Executing project: ${execCommand}`);
+
+    const exec = await container.exec({
+      Cmd: ['sh', '-c', execCommand],
+      AttachStdin: true,
     // Copy custom libraries if specified
     if (customLibraries && customLibraries.length > 0 && projectId) {
       logger.info(`[executeProject] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
@@ -725,110 +725,3 @@ export async function executeProject(request: ProjectExecutionRequest): Promise<
       }
     }
 
-    // Install dependencies if specified
-    if (dependencies && Object.keys(dependencies).length > 0) {
-      logger.info(`[executeProject] Installing dependencies for ${language}`);
-
-      if (language.toLowerCase() === 'javascript') {
-        const depResult = await installJavaScriptDependencies(container, baseDir, projectId || '', dependencies);
-        if (!depResult.success) {
-          logger.error('[executeProject] Dependency installation failed:', depResult.error);
-          return {
-            output: depResult.output,
-            error: `Dependency installation failed: ${depResult.error}`,
-            executionTime: Date.now() - startTime,
-          };
-        }
-      } else if (language.toLowerCase() === 'python') {
-        const depResult = await installPythonDependencies(container, baseDir, dependencies);
-        if (!depResult.success) {
-          logger.error('[executeProject] Dependency installation failed:', depResult.error);
-          return {
-            output: depResult.output,
-            error: `Dependency installation failed: ${depResult.error}`,
-            executionTime: Date.now() - startTime,
-          };
-        }
-      }
-    }
-
-    // Execute the main file
-    const execCommand = getExecutionCommand(language, `${baseDir}/${mainFile}`);
-    logger.info(`Executing project: ${execCommand}`);
-
-    const exec = await container.exec({
-      Cmd: ['sh', '-c', execCommand],
-      AttachStdin: true,
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: false,
-    });
-
-    const stream = await exec.start({
-      hijack: true,
-      stdin: true,
-    });
-
-    // Send input if provided
-    if (input) {
-      stream.write(input);
-      stream.write('\n');
-      await new Promise(resolve => setTimeout(resolve, 100));
-      stream.end();
-    } else {
-      stream.end();
-    }
-
-    // Set timeout
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        stream.destroy();
-        reject(new Error('Execution timeout (15 seconds)'));
-      }, 15000);
-    });
-
-    // Get output
-    const outputPromise = demuxStream(stream);
-    const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
-
-    // Cleanup files
-    try {
-      const cleanupExec = await container.exec({
-        Cmd: ['sh', '-c', `rm -rf ${baseDir}`],
-        AttachStdout: false,
-        AttachStderr: false,
-      });
-      const cleanStream = await cleanupExec.start({});
-      await new Promise((resolve) => {
-        cleanStream.on('end', resolve);
-        cleanStream.on('error', resolve);
-      });
-    } catch (cleanupErr) {
-      logger.warn('Cleanup warning:', cleanupErr);
-    }
-
-    const executionTime = Date.now() - startTime;
-
-    return {
-      output: stdout.trim() || 'Code executed successfully (no output)',
-      error: stderr.trim(),
-      executionTime,
-    };
-  } catch (error: any) {
-    logger.error('Project execution error:', error);
-
-    if (error.message?.includes('timeout')) {
-      return {
-        output: '',
-        error: 'Execution timed out (maximum 15 seconds allowed)',
-        executionTime: Date.now() - startTime,
-      };
-    }
-
-    return {
-      output: '',
-      error: error.message || 'Execution failed',
-      executionTime: Date.now() - startTime,
-    };
-  }
-}

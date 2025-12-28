@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { getTutorial, getTutorials, Tutorial } from '../services/tutorialService';
 import type { TutorialSection } from '../services/tutorialService';
 import { getStoredUser } from '../services/authService';
+import { getApiUrl } from '../utils/apiHelpers';
 import { NotificationsBell } from '../components/NotificationsBell';
 import { UserSidePanel } from '../components/UserSidePanel';
 import { connectChat, getChatSocket, type ChatMessage } from '../services/chatService';

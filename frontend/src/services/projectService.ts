@@ -17,6 +17,7 @@ export interface Project {
   language: string;
   files: ProjectFile[];
   dependencies?: Record<string, string>;
+  customLibraries?: Array<{ fileName: string; originalName: string; fileType: string; _id?: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -158,6 +159,3 @@ export async function runProject(
   const result = await response.json();
   return result;
 }
-  return response.json();
-export async function uploadCustomLibrary(
-  projectId: string,

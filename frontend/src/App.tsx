@@ -521,7 +521,7 @@ function App({ user, onLogout }: AppProps) {
         customLibraries: currentProject.customLibraries || []
       });
 
-      addToConsole(` Running project with ${filesForExecution.length} file(s)...`, 'info');
+      addToConsole(`Running project with ${filesForExecution.length} file(s)...`, 'info');
     } else {
       // Single file mode (no project)
       setCodeToExecute({ code: code.trim(), timestamp: Date.now() });

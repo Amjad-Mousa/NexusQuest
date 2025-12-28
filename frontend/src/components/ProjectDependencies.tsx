@@ -42,10 +42,9 @@ const ProjectDependencies: React.FC<ProjectDependenciesProps> = ({
   const loadLibraries = async () => {
     try {
       setLoading(true);
+      const headers = getAuthHeaders() as Record<string, string>;
       const response = await axios.get(`${getApiUrl()}/api/projects/${projectId}/libraries`, {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        headers,
       });
       setLibraries(response.data.libraries || []);
     } catch (err: any) {
@@ -79,15 +78,13 @@ const ProjectDependencies: React.FC<ProjectDependenciesProps> = ({
       const formData = new FormData();
       formData.append('library', file);
 
+      const headers = getAuthHeaders() as Record<string, string>;
+      headers['Content-Type'] = 'multipart/form-data';
+
       await axios.post(
         `${getApiUrl()}/api/projects/${projectId}/libraries`,
         formData,
-        {
-          headers: {
-            ...getAuthHeaders(),
-            'Content-Type': 'multipart/form-data',
-          },
-        }
+        { headers }
       );
 
       setSuccess(`Successfully uploaded ${file.name}`);
@@ -105,10 +102,9 @@ const ProjectDependencies: React.FC<ProjectDependenciesProps> = ({
 
     try {
       setError(null);
+      const headers = getAuthHeaders() as Record<string, string>;
       await axios.delete(`${getApiUrl()}/api/projects/${projectId}/libraries/${libraryId}`, {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        headers,
       });
       setSuccess(`Successfully deleted ${name}`);
       await loadLibraries();
@@ -159,10 +155,9 @@ const ProjectDependencies: React.FC<ProjectDependenciesProps> = ({
 
     try {
       setError(null);
+      const headers = getAuthHeaders() as Record<string, string>;
       await axios.post(`${getApiUrl()}/api/projects/${projectId}/dependencies/clear-cache`, {}, {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        headers,
       });
       setSuccess('Dependency cache cleared successfully');
     } catch (err: any) {
