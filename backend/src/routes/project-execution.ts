@@ -1,13 +1,10 @@
 import express, { Request, Response } from 'express';
 import Docker from 'dockerode';
 import express, { Request, Response } from 'express';
-import { logger } from '../utils/logger.js';
 import crypto from 'crypto';
+
 import path from 'path';
 import fs from 'fs';
-
-const router = express.Router();
-const docker = new Docker();
 
 // Store active streams for input handling
 const activeStreams = new Map<string, any>();
@@ -20,17 +17,20 @@ interface ProjectExecutionRequest extends Request {
         sessionId: string;
         projectId?: string;
         dependencies?: Record<string, string>;
-        customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>;
     };
 }
 
-const languageImages: Record<string, string> = {
+        customLibraries?: Array<{ fileName: string; originalName: string; fileType: string }>;
     python: 'nexusquest-python',
     java: 'nexusquest-java',
     javascript: 'nexusquest-javascript',
     cpp: 'nexusquest-cpp',
 };
 
+/**
+ * Helper to get execution command based on language
+ */
+function getExecutionCommand(language: string, baseDir: string, files: Array<{ name: string; content: string }>, mainFile: string): string {
 /**
  * Helper to resolve library file on disk from multiple possible locations
  */
@@ -64,43 +64,6 @@ function resolveLibraryOnDisk(projectId: string, lib: { fileName: string; origin
     return null;
 }
 
-/**
- * Helper to get execution command based on language
- */
-function getExecutionCommand(language: string, baseDir: string, files: Array<{ name: string; content: string }>, mainFile: string): string {
-    switch (language.toLowerCase()) {
-        case 'python':
-            return `cd ${baseDir} && export PYTHONPATH=${baseDir}:/app/.local/lib/python3.10/site-packages && python3 -u ${mainFile}`;
-
-        case 'javascript':
-            return `cd ${baseDir} && node ${mainFile}`;
-
-        case 'java': {
-            const mainFileContent = files.find(f => f.name === mainFile)?.content || '';
-            const classMatch = mainFileContent.match(/public\s+class\s+(\w+)/);
-            const className = classMatch ? classMatch[1] : 'Main';
-
-            // Check if project uses Maven (has pom.xml)
-            const hasPomXml = files.some(f => f.name === 'pom.xml');
-
-            if (hasPomXml) {
-                // Use Maven to compile and run with dependencies
-                // Maven compiles to target/classes, so we need to set classpath properly
-                return `cd ${baseDir} && mvn compile -q && java -cp "target/classes:$(mvn dependency:build-classpath -q -DincludeScope=runtime -Dmdep.outputFile=/dev/stdout)" ${className}`;
-            } else {
-                // Plain Java without dependencies
-                const javaFiles = files.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
-                return `cd ${baseDir} && javac ${javaFiles} -d . && java -cp . ${className}`;
-            }
-        }
-
-        case 'cpp': {
-            const hasCMake = files.some(f => f.name === 'CMakeLists.txt');
-            if (hasCMake) {
-                // Use CMake build system
-                // Conan generates conan_toolchain.cmake in the build folder when running: conan install . --output-folder=build
-                return `cd ${baseDir} && mkdir -p build && cd build && if [ -f conan_toolchain.cmake ]; then cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake; else cmake .. -DCMAKE_BUILD_TYPE=Release; fi && cmake --build . && find . -maxdepth 1 -type f -executable -exec {} \\;`;
-            } else {
                 const cppFiles = files.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
                 return `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
             }
@@ -116,7 +79,7 @@ function getExecutionCommand(language: string, baseDir: string, files: Array<{ n
  * Execute project code (multi-file) with streaming output
  */
 router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
-    const { files, mainFile, language, sessionId, dependencies, projectId, customLibraries } = req.body;
+    const { files, mainFile, language, sessionId, dependencies, projectId } = req.body;
 
     if (!files || !Array.isArray(files) || files.length === 0) {
         return res.status(400).json({
@@ -153,7 +116,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             await existingContainer.inspect();
             logger.info(`Removing existing container: ${containerName}`);
             await existingContainer.remove({ force: true });
-        } catch (error: any) {
+    const { files, mainFile, language, sessionId, dependencies, projectId, customLibraries } = req.body;
             if (error.statusCode !== 404) {
                 logger.warn(`Error checking existing container: ${error.message}`);
             }
@@ -280,6 +243,43 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             });
         }
 
+        // Extract JavaScript custom library tarballs into the session directory (so relative requires work)
+        if (language === 'javascript' && projectId) {
+            const extractExec = await container.exec({
+                Cmd: ['sh', '-c', `
+                    set -e
+                    CUSTOM_DIR="/custom-libs/${projectId}"
+                    if [ -d "$CUSTOM_DIR" ]; then
+                      echo "[custom-libs] Found $CUSTOM_DIR"
+                      cd ${baseDir}
+                      for f in "$CUSTOM_DIR"/*.tar.gz "$CUSTOM_DIR"/*.tgz; do
+                        if [ -f "$f" ]; then
+                          echo "[custom-libs] Extracting $(basename "$f")"
+                          tar -xzf "$f" -C ${baseDir} 2>/dev/null || tar -xzf "$f" -C ${baseDir}
+                        fi
+                      done
+                    else
+                      echo "[custom-libs] No custom lib dir for project"
+                    fi
+                `],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+            const extractStream = await extractExec.start({ hijack: true });
+            extractStream.resume();
+            await new Promise((resolve) => {
+                extractStream.on('end', resolve);
+                extractStream.on('error', resolve);
+                setTimeout(resolve, 3000);
+            });
+        }
+
+        // Check if C++ project has CMakeLists.txt with find_package() calls
+        const hasCppDependencies = language === 'cpp' && files.some(f => {
+            if (f.name === 'CMakeLists.txt') {
+                const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
+                const hasPackages = findPackageRegex.test(f.content);
+                logger.info(`[project-execution] CMakeLists.txt found, has find_package: ${hasPackages}`);
         // Copy custom libraries to container if specified
         if (customLibraries && customLibraries.length > 0 && projectId) {
             logger.info(`[project-execution] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
@@ -367,131 +367,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 }
             }
         }
-
-        // Extract JavaScript custom library tarballs into the session directory (so relative requires work)
-        if (language === 'javascript' && projectId) {
-            const extractExec = await container.exec({
-                Cmd: ['sh', '-c', `
-                    set -e
-                    CUSTOM_DIR="/custom-libs/${projectId}"
-                    if [ -d "$CUSTOM_DIR" ]; then
-                      echo "[custom-libs] Found $CUSTOM_DIR"
-                      cd ${baseDir}
-                      for f in "$CUSTOM_DIR"/*.tar.gz "$CUSTOM_DIR"/*.tgz; do
-                        if [ -f "$f" ]; then
-                          echo "[custom-libs] Extracting $(basename "$f")"
-                          tar -xzf "$f" -C ${baseDir} 2>/dev/null || tar -xzf "$f" -C ${baseDir}
-                        fi
-                      done
-                    else
-                      echo "[custom-libs] No custom lib dir for project"
-                    fi
-                `],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const extractStream = await extractExec.start({ hijack: true });
-            extractStream.resume();
-            await new Promise((resolve) => {
-                extractStream.on('end', resolve);
-                extractStream.on('error', resolve);
-                setTimeout(resolve, 3000);
-            });
-        }
-
-        // Check if C++ project has CMakeLists.txt with find_package() calls
-        const hasCppDependencies = language === 'cpp' && files.some(f => {
-            if (f.name === 'CMakeLists.txt') {
-                const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
-                const hasPackages = findPackageRegex.test(f.content);
-                logger.info(`[project-execution] CMakeLists.txt found, has find_package: ${hasPackages}`);
-                if (hasPackages) {
-                    logger.info(`[project-execution] CMakeLists.txt content preview: ${f.content.substring(0, 200)}`);
-                }
-                return hasPackages;
-            }
-            return false;
-        });
-
-        // Check if Java project has pom.xml with dependencies
-        const hasJavaDependencies = language === 'java' && files.some(f => f.name === 'pom.xml');
-
-        // Install dependencies if specified OR if project has dependency files
-        if ((dependencies && Object.keys(dependencies).length > 0) || hasCppDependencies || hasJavaDependencies) {
-            if (language === 'javascript') {
-                logger.info('[project-execution] Installing JavaScript dependencies');
-
-                // Check if npm is available
-                const npmCheckExec = await container.exec({
-                    Cmd: ['sh', '-c', 'npm --version'],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-                const npmCheckStream = await npmCheckExec.start({});
-                let npmVersionOutput = '';
-                const npmAvailable = await new Promise<boolean>(resolve => {
-                    npmCheckStream.on('data', (chunk: any) => {
-                        npmVersionOutput += chunk.toString();
-                    });
-                    npmCheckStream.on('end', () => {
-                        logger.info('[npm version check]:', npmVersionOutput.trim());
-                        resolve(npmVersionOutput.length > 0);
-                    });
-                    npmCheckStream.on('error', (err: any) => {
-                        logger.error('[npm check error]:', err);
-                        resolve(false);
-                    });
-                    setTimeout(() => resolve(npmVersionOutput.length > 0), 2000);
-                });
-
-                if (!npmAvailable) {
-                    logger.warn('[project-execution] npm not available in container, proceeding without dependency installation');
-                } else {
-                    const packageJson = {
-                        name: 'nexusquest-project',
-                        version: '1.0.0',
-                        dependencies
-                    };
-                    const packageJsonContent = JSON.stringify(packageJson, null, 2);
-                    const base64PackageJson = Buffer.from(packageJsonContent).toString('base64');
-
-                    logger.info('[project-execution] Writing package.json to', baseDir);
-                    const writePackageExec = await container.exec({
-                        Cmd: ['sh', '-c', `echo "${base64PackageJson}" | base64 -d > ${baseDir}/package.json`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const pkgStream = await writePackageExec.start({});
-                    pkgStream.resume();
-                    await new Promise((resolve) => {
-                        pkgStream.on('end', resolve);
-                        pkgStream.on('error', resolve);
-                        setTimeout(resolve, 1000);
-                    });
-
-                    // Verify package.json was written
-                    logger.info('[project-execution] Verifying package.json exists');
-                    const verifyExec = await container.exec({
-                        Cmd: ['sh', '-c', `cat ${baseDir}/package.json`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const verifyStream = await verifyExec.start({});
-                    let verifyOutput = '';
-                    await new Promise((resolve) => {
-                        verifyStream.on('data', (chunk: Buffer) => {
-                            verifyOutput += chunk.toString();
-                        });
-                        verifyStream.on('end', resolve);
-                        verifyStream.on('error', resolve);
-                        setTimeout(resolve, 1000);
-                    });
-                    logger.info('[project-execution] package.json content:', verifyOutput.substring(0, 200));
-
-                    // Generate dependency hash for caching (stable order)
-                    const sortedDepsObj = Object.keys(dependencies || {}).sort().reduce((acc: Record<string, string>, k) => { acc[k] = (dependencies as any)[k]; return acc; }, {} as Record<string, string>);
-                    const depsHash = crypto.createHash('md5').update(JSON.stringify(sortedDepsObj)).digest('hex');
-                    const cacheDir = `/dependencies/js-${depsHash}`;
 
                     // Run npm install with caching logic
                     logger.info('[project-execution] Checking dependency cache...');

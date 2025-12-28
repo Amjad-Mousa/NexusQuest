@@ -115,11 +115,6 @@ export function Terminal({ height = '400px', theme = 'dark', language, codeToExe
           requestBody.customLibraries = codeToExecute.customLibraries;
           console.log('[Terminal] Including custom libraries:', codeToExecute.customLibraries);
         }
-      } else {
-        console.log('[Terminal] Using task endpoint (single code)');
-        // Single code execution (task or playground) - use task endpoint which supports streaming
-        endpoint = `${getApiUrl()}/api/tasks/execute`;
-        requestBody.code = code;
       }
 
       console.log('[Terminal] Request endpoint:', endpoint);
