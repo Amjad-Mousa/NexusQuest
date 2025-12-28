@@ -68,7 +68,6 @@ export default function CollaborativeEditor({
   const currentUser = getStoredUser();
   const currentParticipant = participants.find(p => p.userId === currentUser?.id);
   const isViewer = currentParticipant?.role === 'viewer';
-  const isOwner = currentSession?.owner === currentUser?.id;
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
   const isRemoteChange = useRef(false);

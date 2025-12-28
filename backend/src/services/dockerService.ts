@@ -358,46 +358,13 @@ async function markDependenciesInstalled(
 
 // Helper to install dependencies for JavaScript projects
 async function installJavaScriptDependencies(
-// Helper to resolve library file on disk from multiple possible locations
-function resolveLibraryOnDisk(projectId: string, lib: CustomLibrary): string | null {
-  const candidates = [
-    // Try with exact fileName first
-    path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName),
-    // Try with originalName (might be more descriptive)
-    path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
-    // Try from __dirname context (for different working directories)
-    path.resolve(__dirname, '..', '..', 'uploads', 'libraries', projectId, lib.fileName),
-    path.resolve(__dirname, '..', '..', 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
-    // Fallback: try appending extensions in case they're missing
-    path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.gz`),
-    path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.tar.gz`),
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) {
-        logger.info(`[resolveLibraryOnDisk] Found library at: ${candidate}`);
-        return candidate;
-      }
-    } catch (err) {
-      logger.debug(`[resolveLibraryOnDisk] fs.existsSync check failed for ${candidate}:`, err);
-    }
-  }
-
-  logger.error(`[resolveLibraryOnDisk] Library not found for project ${projectId}. Tried ${candidates.length} candidates. fileName="${lib.fileName}", originalName="${lib.originalName}"`);
-  logger.debug(`[resolveLibraryOnDisk] Candidates: ${JSON.stringify(candidates)}`);
-  return null;
-}
-
-    await new Promise((resolve) => {
-
-      writeStream.on('error', (err: any) => {
-        logger.error('[npm install] write error:', err);
-        resolve(null);
-      });
-    });
-
-    // Run npm install
+  container: any,
+  baseDir: string,
+  dependencies?: Record<string, string>,
+  cacheDir?: string
+): Promise<{ success: boolean; output: string; error?: string }> {
+  try {
+    logger.info('[npm install] Installing JavaScript dependencies');
     logger.info('[npm install] Running npm install in ' + baseDir);
     const installExec = await container.exec({
       Cmd: ['sh', '-c', `cd ${baseDir} && npm install --legacy-peer-deps 2>&1`],
@@ -432,6 +399,37 @@ function resolveLibraryOnDisk(projectId: string, lib: CustomLibrary): string | n
     };
   }
 }
+
+// Helper to resolve library file on disk from multiple possible locations
+const resolveLibraryOnDisk = (projectId: string, lib: CustomLibrary): string | null => {
+  const candidates = [
+    // Try with exact fileName first
+    path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName),
+    // Try with originalName (might be more descriptive)
+    path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
+    // Try from __dirname context (for different working directories)
+    path.resolve(__dirname, '..', '..', 'uploads', 'libraries', projectId, lib.fileName),
+    path.resolve(__dirname, '..', '..', 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
+    // Fallback: try appending extensions in case they're missing
+    path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.gz`),
+    path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.tar.gz`),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        logger.info(`[resolveLibraryOnDisk] Found library at: ${candidate}`);
+        return candidate;
+      }
+    } catch (err) {
+      logger.debug(`[resolveLibraryOnDisk] fs.existsSync check failed for ${candidate}:`, err);
+    }
+  }
+
+  logger.error(`[resolveLibraryOnDisk] Library not found for project ${projectId}. Tried ${candidates.length} candidates. fileName="${lib.fileName}", originalName="${lib.originalName}"`);
+  logger.debug(`[resolveLibraryOnDisk] Candidates: ${JSON.stringify(candidates)}`);
+  return null;
+};
 
 // Helper to install dependencies for Python projects
 async function installPythonDependencies(
@@ -496,232 +494,307 @@ async function installPythonDependencies(
 }
 
 // Execute multi-file project using PERSISTENT containers
+// Execute multi-file project using PERSISTENT containers
 export async function executeProject(request: ProjectExecutionRequest): Promise<ExecutionResult> {
-  const startTime = Date.now();
-  const { files, mainFile, language, input, dependencies, customLibraries, projectId } = request;
-  const containerName = persistentContainers[language.toLowerCase()];
+    const startTime = Date.now();
+    const { files, mainFile, language, input, dependencies, customLibraries, projectId } = request;
+    const containerName = persistentContainers[language.toLowerCase()];
 
-  if (!containerName) {
-    return {
-      output: '',
-      error: `Unsupported language: ${language}`,
-      executionTime: Date.now() - startTime,
-    };
-  }
-
-  try {
-    const container = docker.getContainer(containerName);
-
-    // Check if container is running, start if needed
-    const info = await container.inspect();
-    if (!info.State.Running) {
-      logger.info(`Starting container: ${containerName}`);
-      await container.start();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // Use a unique temp directory
-    const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Check if we should use cached dependencies
-    let useCachedDeps = false;
-    let depDir = '';
-    if (projectId && (dependencies || customLibraries)) {
-      const depHash = computeDependencyHash(dependencies || {}, customLibraries);
-      depDir = `/dependencies/${projectId}`;
-      useCachedDeps = await checkDependenciesInstalled(container, projectId, language, depHash);
-
-      if (useCachedDeps) {
-        logger.info(`[executeProject] Using cached dependencies for project ${projectId}`);
-      } else {
-        logger.info(`[executeProject] Dependencies changed or not cached, will install for project ${projectId}`);
-      }
-    }
-
-    // Create base directory
-    const mkdirExec = await container.exec({
-      Cmd: ['sh', '-c', `mkdir -p ${baseDir}`],
-      AttachStdout: false,
-      AttachStderr: false,
-    });
-    const mkdirStream = await mkdirExec.start({});
-    await new Promise((resolve) => {
-      mkdirStream.on('end', resolve);
-      mkdirStream.on('error', resolve);
-    });
-
-    // Create subdirectories if needed
-    const dirs = new Set<string>();
-    files.forEach(f => {
-      const parts = f.name.split('/');
-      if (parts.length > 1) {
-        for (let i = 1; i < parts.length; i++) {
-          dirs.add(parts.slice(0, i).join('/'));
-        }
-      }
-    });
-
-    if (dirs.size > 0) {
-      const mkdirCmd = Array.from(dirs).map(d => `mkdir -p ${baseDir}/${d}`).join(' && ');
-      const mkdirExec = await container.exec({
-        Cmd: ['sh', '-c', mkdirCmd],
-        AttachStdout: false,
-        AttachStderr: false,
-      });
-      const mkdirStream = await mkdirExec.start({});
-      await new Promise((resolve) => {
-        mkdirStream.on('end', resolve);
-        mkdirStream.on('error', resolve);
-      });
-    }
-
-    // Write all files to container using base64 to preserve newlines
-    for (const file of files) {
-      const base64Content = Buffer.from(file.content).toString('base64');
-      const writeExec = await container.exec({
-        Cmd: ['sh', '-c', `echo "${base64Content}" | base64 -d > ${baseDir}/${file.name}`],
-        AttachStdout: true,
-        AttachStderr: true,
-      });
-      const writeStream = await writeExec.start({ hijack: true });
-      await new Promise((resolve) => {
-        writeStream.on('end', resolve);
-        writeStream.on('error', (err: any) => {
-          logger.error(`[executeProject] Error writing file ${file.name}:`, err);
-          resolve(null);
-        });
-      });
-
-      // Add a small delay to ensure file is written
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    // Install dependencies if specified
-    if (dependencies && Object.keys(dependencies).length > 0) {
-      logger.info(`[executeProject] Installing dependencies for ${language}`);
-
-      if (language.toLowerCase() === 'javascript') {
-        const depResult = await installJavaScriptDependencies(container, baseDir, projectId || '', dependencies);
-        if (!depResult.success) {
-          logger.error('[executeProject] Dependency installation failed:', depResult.error);
-          return {
-            output: depResult.output,
-            error: `Dependency installation failed: ${depResult.error}`,
+    if (!containerName) {
+        return {
+            output: '',
+            error: `Unsupported language: ${language}`,
             executionTime: Date.now() - startTime,
-          };
-        }
-      } else if (language.toLowerCase() === 'python') {
-        const depResult = await installPythonDependencies(container, baseDir, dependencies);
-        if (!depResult.success) {
-          logger.error('[executeProject] Dependency installation failed:', depResult.error);
-          return {
-            output: depResult.output,
-            error: `Dependency installation failed: ${depResult.error}`,
-            executionTime: Date.now() - startTime,
-          };
-        }
-      }
+        };
     }
 
-    // Execute the main file
-    const execCommand = getExecutionCommand(language, `${baseDir}/${mainFile}`);
-    logger.info(`Executing project: ${execCommand}`);
+    try {
+        const container = docker.getContainer(containerName);
 
-    const exec = await container.exec({
-      Cmd: ['sh', '-c', execCommand],
-      AttachStdin: true,
-    // Copy custom libraries if specified
-    if (customLibraries && customLibraries.length > 0 && projectId) {
-      logger.info(`[executeProject] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
+        // Check if container is running, start if needed
+        const info = await container.inspect();
+        if (!info.State.Running) {
+            logger.info(`Starting container: ${containerName}`);
+            await container.start();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
 
-      const customLibDir = `${baseDir}/node_modules`;
+        // Use a unique temp directory
+        const baseDir = `/tmp/nexusquest-project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // Create node_modules directory for custom libs
-      const mkLibDirExec = await container.exec({
-        Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
-        AttachStdout: false,
-        AttachStderr: false,
-      });
-      const mkLibDirStream = await mkLibDirExec.start({});
-      await new Promise((resolve) => {
-        mkLibDirStream.on('end', resolve);
-        mkLibDirStream.on('error', resolve);
-      });
+        // Check if we should use cached dependencies
+        let useCachedDeps = false;
+        let depDir = '';
+        if (projectId && (dependencies || customLibraries)) {
+            const depHash = computeDependencyHash(dependencies || {}, customLibraries);
+            depDir = `/dependencies/${projectId}`;
+            useCachedDeps = await checkDependenciesInstalled(container, projectId, language, depHash);
 
-      // Copy each custom library
-      for (const lib of customLibraries) {
-        try {
-          const diskPath = resolveLibraryOnDisk(projectId, lib);
-          if (!diskPath) {
-            logger.warn(`[executeProject] Skipping missing library: ${lib.fileName}`);
-            continue;
-          }
-
-          const libContent = fs.readFileSync(diskPath);
-          const base64LibContent = libContent.toString('base64');
-
-          // Use originalName when possible so extraction commands match the file extension
-          const targetName = lib.originalName || lib.fileName;
-          const targetPathInContainer = `${customLibDir}/${targetName}`;
-
-          logger.info(`[executeProject] Copying library to container: ${targetPathInContainer}`);
-
-          const copyLibExec = await container.exec({
-            Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer}`],
-            AttachStdout: true,
-            AttachStderr: true,
-          });
-          const copyLibStream = await copyLibExec.start({ hijack: true });
-          await new Promise((resolve) => {
-            copyLibStream.on('end', resolve);
-            copyLibStream.on('error', (err: any) => {
-              logger.error(`[executeProject] Error copying library ${targetName}:`, err);
-              resolve(null);
-            });
-          });
-
-          logger.info(`[executeProject] Successfully copied library: ${targetName}`);
-
-          // Detect compressed archives robustly (tar.gz, .tgz, .zip, .gz)
-          const lower = targetName.toLowerCase();
-          const isTarGz = /\.tar\.gz$/.test(lower) || /\.tgz$/.test(lower) || /\.gz$/.test(lower);
-          const isZip = /\.zip$/.test(lower);
-          const isCompressed = isTarGz || isZip;
-
-          if (isCompressed) {
-            logger.info(`[executeProject] Extracting compressed library: ${targetName}`);
-
-            let extractCmd = '';
-            if (isTarGz) {
-              // tar -xzf works for .tar.gz and many .gz tarballs
-              extractCmd = `cd ${customLibDir} && tar -xzf ${targetName} && rm -f ${targetName}`;
-            } else if (isZip) {
-              extractCmd = `cd ${customLibDir} && unzip -q ${targetName} && rm -f ${targetName}`;
+            if (useCachedDeps) {
+                logger.info(`[executeProject] Using cached dependencies for project ${projectId}`);
+            } else {
+                logger.info(`[executeProject] Dependencies changed or not cached, will install for project ${projectId}`);
             }
+        }
 
-            if (extractCmd) {
-              const extractExec = await container.exec({
-                Cmd: ['sh', '-c', extractCmd],
+        // Create base directory
+        const mkdirExec = await container.exec({
+            Cmd: ['sh', '-c', `mkdir -p ${baseDir}`],
+            AttachStdout: false,
+            AttachStderr: false,
+        });
+        const mkdirStream = await mkdirExec.start({});
+        await new Promise((resolve) => {
+            mkdirStream.on('end', resolve);
+            mkdirStream.on('error', resolve);
+        });
+
+        // Create subdirectories if needed
+        const dirs = new Set<string>();
+        files.forEach(f => {
+            const parts = f.name.split('/');
+            if (parts.length > 1) {
+                for (let i = 1; i < parts.length; i++) {
+                    dirs.add(parts.slice(0, i).join('/'));
+                }
+            }
+        });
+
+        if (dirs.size > 0) {
+            const mkdirCmd = Array.from(dirs).map(d => `mkdir -p ${baseDir}/${d}`).join(' && ');
+            const subdirExec = await container.exec({
+                Cmd: ['sh', '-c', mkdirCmd],
+                AttachStdout: false,
+                AttachStderr: false,
+            });
+            const subdirStream = await subdirExec.start({});
+            await new Promise((resolve) => {
+                subdirStream.on('end', resolve);
+                subdirStream.on('error', resolve);
+            });
+        }
+
+        // Write all files to container using base64 to preserve newlines
+        for (const file of files) {
+            const base64Content = Buffer.from(file.content).toString('base64');
+            const writeExec = await container.exec({
+                Cmd: ['sh', '-c', `echo "${base64Content}" | base64 -d > ${baseDir}/${file.name}`],
                 AttachStdout: true,
                 AttachStderr: true,
-              });
-              const extractStream = await extractExec.start({ hijack: true });
-              await new Promise((resolve) => {
-                extractStream.on('end', resolve);
-                extractStream.on('error', (err: any) => {
-                  logger.error(`[executeProject] Error extracting library ${targetName}:`, err);
-                  resolve(null);
+            });
+            const writeStream = await writeExec.start({ hijack: true });
+            await new Promise((resolve) => {
+                writeStream.on('end', resolve);
+                writeStream.on('error', (err: any) => {
+                    logger.error(`[executeProject] Error writing file ${file.name}:`, err);
+                    resolve(null);
                 });
-              });
+            });
 
-              logger.info(`[executeProject] Successfully extracted library: ${targetName}`);
-            } else {
-              logger.warn(`[executeProject] No extraction command for: ${targetName}`);
-            }
-          }
-        } catch (error: any) {
-          logger.error(`[executeProject] Error processing library ${lib.fileName}:`, error);
+            // Add a small delay to ensure file is written
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
-      }
+
+        // Copy custom libraries if specified (BEFORE installing dependencies)
+        if (customLibraries && customLibraries.length > 0 && projectId) {
+            logger.info(`[executeProject] Copying ${customLibraries.length} custom libraries for project ${projectId}`);
+
+            const customLibDir = `${baseDir}/node_modules`;
+
+            // Create node_modules directory for custom libs
+            const mkLibDirExec = await container.exec({
+                Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
+                AttachStdout: false,
+                AttachStderr: false,
+            });
+            const mkLibDirStream = await mkLibDirExec.start({});
+            await new Promise((resolve) => {
+                mkLibDirStream.on('end', resolve);
+                mkLibDirStream.on('error', resolve);
+            });
+
+            // Copy each custom library
+            for (const lib of customLibraries) {
+                try {
+                    const diskPath = resolveLibraryOnDisk(projectId, lib);
+                    if (!diskPath) {
+                        logger.warn(`[executeProject] Skipping missing library: ${lib.fileName}`);
+                        continue;
+                    }
+
+                    const libContent = fs.readFileSync(diskPath);
+                    const base64LibContent = libContent.toString('base64');
+
+                    // Use originalName when possible so extraction commands match the file extension
+                    const targetName = lib.originalName || lib.fileName;
+                    const targetPathInContainer = `${customLibDir}/${targetName}`;
+
+                    logger.info(`[executeProject] Copying library to container: ${targetPathInContainer}`);
+
+                    const copyLibExec = await container.exec({
+                        Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer}`],
+                        AttachStdout: true,
+                        AttachStderr: true,
+                    });
+                    const copyLibStream = await copyLibExec.start({ hijack: true });
+                    await new Promise((resolve) => {
+                        copyLibStream.on('end', resolve);
+                        copyLibStream.on('error', (err: any) => {
+                            logger.error(`[executeProject] Error copying library ${targetName}:`, err);
+                            resolve(null);
+                        });
+                    });
+
+                    logger.info(`[executeProject] Successfully copied library: ${targetName}`);
+
+                    // Detect compressed archives robustly (tar.gz, .tgz, .zip, .gz)
+                    const lower = targetName.toLowerCase();
+                    const isTarGz = /\.tar\.gz$/.test(lower) || /\.tgz$/.test(lower) || /\.gz$/.test(lower);
+                    const isZip = /\.zip$/.test(lower);
+                    const isCompressed = isTarGz || isZip;
+
+                    if (isCompressed) {
+                        logger.info(`[executeProject] Extracting compressed library: ${targetName}`);
+
+                        let extractCmd = '';
+                        if (isTarGz) {
+                            // tar -xzf works for .tar.gz and many .gz tarballs
+                            extractCmd = `cd ${customLibDir} && tar -xzf ${targetName} && rm -f ${targetName}`;
+                        } else if (isZip) {
+                            extractCmd = `cd ${customLibDir} && unzip -q ${targetName} && rm -f ${targetName}`;
+                        }
+
+                        if (extractCmd) {
+                            const extractExec = await container.exec({
+                                Cmd: ['sh', '-c', extractCmd],
+                                AttachStdout: true,
+                                AttachStderr: true,
+                            });
+                            const extractStream = await extractExec.start({ hijack: true });
+                            await new Promise((resolve) => {
+                                extractStream.on('end', resolve);
+                                extractStream.on('error', (err: any) => {
+                                    logger.error(`[executeProject] Error extracting library ${targetName}:`, err);
+                                    resolve(null);
+                                });
+                            });
+
+                            logger.info(`[executeProject] Successfully extracted library: ${targetName}`);
+                        } else {
+                            logger.warn(`[executeProject] No extraction command for: ${targetName}`);
+                        }
+                    }
+                } catch (error: any) {
+                    logger.error(`[executeProject] Error processing library ${lib.fileName}:`, error);
+                }
+            }
+        }
+
+        // Install dependencies if specified (AFTER copying custom libraries)
+        if (dependencies && Object.keys(dependencies).length > 0) {
+            logger.info(`[executeProject] Installing dependencies for ${language}`);
+
+            if (language.toLowerCase() === 'javascript') {
+                const depResult = await installJavaScriptDependencies(container, baseDir, dependencies);
+                if (!depResult.success) {
+                    logger.error('[executeProject] Dependency installation failed:', depResult.error);
+                    return {
+                        output: depResult.output,
+                        error: `Dependency installation failed: ${depResult.error}`,
+                        executionTime: Date.now() - startTime,
+                    };
+                }
+            } else if (language.toLowerCase() === 'python') {
+                const depResult = await installPythonDependencies(container, baseDir, dependencies);
+                if (!depResult.success) {
+                    logger.error('[executeProject] Dependency installation failed:', depResult.error);
+                    return {
+                        output: depResult.output,
+                        error: `Dependency installation failed: ${depResult.error}`,
+                        executionTime: Date.now() - startTime,
+                    };
+                }
+            }
+        }
+
+        // Execute the main file (AFTER all setup is complete)
+        const execCommand = getExecutionCommand(language, `${baseDir}/${mainFile}`);
+        logger.info(`Executing project: ${execCommand}`);
+
+        const exec = await container.exec({
+            Cmd: ['sh', '-c', execCommand],
+            AttachStdin: true,
+            AttachStdout: true,
+            AttachStderr: true,
+            Tty: false,
+        });
+
+        const stream = await exec.start({
+            hijack: true,
+            stdin: true,
+        });
+
+        // Send input if provided
+        if (input) {
+            stream.write(input);
+            stream.write('\n');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            stream.end();
+        } else {
+            stream.end();
+        }
+
+        // Set timeout
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => {
+                logger.error('[executeProject] TIMEOUT - destroying stream');
+                stream.destroy();
+                reject(new Error('Execution timeout (10 seconds)'));
+            }, 10000);
+        });
+
+        // Get output
+        const outputPromise = demuxStream(stream);
+        const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
+
+        // Cleanup
+        try {
+            const cleanupExec = await container.exec({
+                Cmd: ['sh', '-c', `rm -rf ${baseDir}`],
+                AttachStdout: false,
+                AttachStderr: false,
+            });
+            const cleanStream = await cleanupExec.start({});
+            cleanStream.resume();
+        } catch (cleanupErr) {
+            logger.warn('[executeProject] Cleanup warning:', cleanupErr);
+        }
+
+        const executionTime = Date.now() - startTime;
+        return {
+            output: stdout.trim() || 'Project executed successfully (no output)',
+            error: stderr.trim(),
+            executionTime,
+        };
+    } catch (error: any) {
+        logger.error('[executeProject] Project execution error:', error);
+
+        if (error.message?.includes('timeout')) {
+            return {
+                output: '',
+                error: 'Execution timed out (maximum 10 seconds allowed)',
+                executionTime: Date.now() - startTime,
+            };
+        }
+
+        return {
+            output: '',
+            error: error.message || 'Execution failed',
+            executionTime: Date.now() - startTime,
+        };
     }
+}
+
+// Instantiate the Docker client
+const docker = new Docker();
 
