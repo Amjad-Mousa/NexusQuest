@@ -56,15 +56,26 @@ function getExecutionCommand(language: string, baseDir: string, files: Array<{ n
  * Helper to resolve library file on disk from multiple possible locations
  */
 function resolveLibraryOnDisk(projectId: string, lib: { fileName: string; originalName: string }): string | null {
-    const candidates = [
-        // Try with exact fileName first
-        path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.fileName),
-        // Try with originalName (might be more descriptive)
-        path.join(process.cwd(), 'uploads', 'libraries', projectId, lib.originalName || lib.fileName),
-        // Fallback: try appending extensions in case they're missing
-        path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.gz`),
-        path.join(process.cwd(), 'uploads', 'libraries', projectId, `${lib.fileName}.tar.gz`),
+    const roots = [
+        // Current working dir uploads (when app is started from project root)
+        path.join(process.cwd(), 'uploads', 'libraries', projectId),
+        // Backend-relative uploads (when app cwd is backend/)
+        path.join(process.cwd(), 'backend', 'uploads', 'libraries', projectId),
     ];
+
+    const names = [
+        lib.fileName,
+        lib.originalName || lib.fileName,
+        `${lib.fileName}.gz`,
+        `${lib.fileName}.tar.gz`,
+    ];
+
+    const candidates: string[] = [];
+    for (const root of roots) {
+        for (const name of names) {
+            candidates.push(path.join(root, name));
+        }
+    }
 
     for (const candidate of candidates) {
         try {
