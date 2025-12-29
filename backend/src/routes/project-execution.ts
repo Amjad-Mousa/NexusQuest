@@ -329,12 +329,45 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             });
             await mkCustomDirExec.start({});
 
+            // Load project record once for DB-based fallback resolution
+            let projectRecord: any = null;
+            try {
+                projectRecord = await Project.findById(projectId).lean();
+            } catch (e: any) {
+                logger.warn(`[project-execution] Unable to load project ${projectId} for library fallback mapping: ${e?.message || e}`);
+            }
+
             // Copy each custom library
             for (const lib of customLibraries) {
                 try {
-                    const diskPath = resolveLibraryOnDisk(projectId, lib);
+                    let diskPath = resolveLibraryOnDisk(projectId, lib);
+
+                    // Fallback: if not found on disk, try to resolve via project DB mapping
+                    if (!diskPath && projectRecord?.customLibraries?.length) {
+                        const libAny: any = lib as any;
+                        const dbLib = (projectRecord.customLibraries as any[]).find((d: any) => {
+                            // Match by _id when provided
+                            if (libAny?._id && d?._id) {
+                                return d._id.toString() === libAny._id.toString();
+                            }
+                            // Otherwise, match by originalName
+                            return d.originalName === lib.originalName;
+                        });
+                        if (dbLib) {
+                            const mapped = { fileName: dbLib.fileName, originalName: dbLib.originalName };
+                            diskPath = resolveLibraryOnDisk(projectId, mapped);
+                            if (diskPath) {
+                                logger.info(`[project-execution] Resolved missing library via DB mapping: requested ${lib.fileName || lib.originalName} -> on-disk ${dbLib.fileName}`);
+                                // Also normalize lib fields for downstream steps
+                                (lib as any).fileName = dbLib.fileName;
+                                (lib as any).originalName = dbLib.originalName;
+                                (lib as any).fileType = dbLib.fileType;
+                            }
+                        }
+                    }
+
                     if (!diskPath) {
-                        logger.warn(`[project-execution] Skipping missing library: ${lib.fileName}`);
+                        logger.warn(`[project-execution] Skipping missing library: ${lib.fileName || lib.originalName}`);
                         continue;
                     }
 
