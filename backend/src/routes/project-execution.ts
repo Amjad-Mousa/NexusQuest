@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { logger } from '../utils/logger.js';
+import { Project } from '../models/Project.js';
 
 const router = express.Router();
 const docker = new Docker();
@@ -130,7 +131,26 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             }
         }
 
-        const { customLibraries } = req.body;
+        let { customLibraries } = req.body;
+        // Auto-include project libraries when none explicitly provided
+        if (language === 'javascript' && projectId && (!customLibraries || customLibraries.length === 0)) {
+            try {
+                const project = await Project.findById(projectId).lean();
+                const libs = (project?.customLibraries || []) as any[];
+                if (libs.length > 0) {
+                    customLibraries = libs.map((lib: any) => ({
+                        fileName: lib.fileName,
+                        originalName: lib.originalName,
+                        fileType: lib.fileType
+                    }));
+                    logger.info(`[project-execution] Auto-including ${customLibraries.length} custom libraries from project ${projectId}`);
+                } else {
+                    logger.info(`[project-execution] No custom libraries found on project ${projectId} to auto-include`);
+                }
+            } catch (e: any) {
+                logger.warn(`[project-execution] Failed to load project libraries for ${projectId}: ${e?.message || e}`);
+            }
+        }
 
         // Check if dependencies need to be installed (requires network access)
         let needsNetwork = dependencies && Object.keys(dependencies).length > 0;
