@@ -354,7 +354,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             return d.originalName === lib.originalName;
                         });
                         if (dbLib) {
-                            const mapped = { fileName: dbLib.fileName, originalName: dbLib.originalName };
+                            const mapped = {fileName: dbLib.fileName, originalName: dbLib.originalName};
                             diskPath = resolveLibraryOnDisk(projectId, mapped);
                             if (diskPath) {
                                 logger.info(`[project-execution] Resolved missing library via DB mapping: requested ${lib.fileName || lib.originalName} -> on-disk ${dbLib.fileName}`);
@@ -471,48 +471,111 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 }
             }
 
-            // After copying/extracting, sync extracted folders into the project base directory for relative and package-style requires
             try {
                 if (language === 'javascript') {
                     const syncExec = await container.exec({
                         Cmd: ['sh', '-c', `
-                            set -e
-                            CUSTOM_DIR="/custom-libs/${projectId}"
-                            if [ -d "$CUSTOM_DIR" ]; then
-                              echo "[custom-libs] Syncing extracted libraries into project workspace"
-                              mkdir -p ${baseDir}/node_modules
-                              for item in "$CUSTOM_DIR"/*; do
-                                name=$(basename "$item")
-                                if [ -d "$item" ]; then
-                                  # Sync directory into baseDir for simple relative requires like ./<lib>/...
-                                  if [ ! -d "${baseDir}/$name" ]; then
-                                    cp -r "$item" "${baseDir}/$name" 2>/dev/null || cp -r "$item" "${baseDir}/$name"
-                                  fi
-                                  # Also make it available under node_modules/<name> to support require('<name>')
-                                  if [ ! -d "${baseDir}/node_modules/$name" ]; then
-                                    cp -r "$item" "${baseDir}/node_modules/$name" 2>/dev/null || cp -r "$item" "${baseDir}/node_modules/$name"
-                                  fi
-                                elif [ -f "$item" ]; then
-                                  # Copy any loose files too
-                                  if [ ! -f "${baseDir}/$name" ]; then
-                                    cp "$item" "${baseDir}/$name" 2>/dev/null || cp "$item" "${baseDir}/$name"
-                                  fi
-                                fi
-                              done
-                            else
-                              echo "[custom-libs] No custom libs directory present after copy"
-                            fi
-                        `],
+                set -e
+                CUSTOM_DIR="/custom-libs/${projectId}"
+                if [ -d "$CUSTOM_DIR" ]; then
+                  echo "[custom-libs] Syncing extracted libraries into project workspace"
+                  mkdir -p ${baseDir}/node_modules
+                  
+                  for item in "$CUSTOM_DIR"/*; do
+                    name=$(basename "$item")
+                    if [ -d "$item" ]; then
+                      echo "[custom-libs] Processing directory: $name"
+                      
+                      # Sync directory into baseDir for relative requires like ./<lib>/...
+                      if [ ! -d "${baseDir}/$name" ]; then
+                        cp -r "$item" "${baseDir}/$name" 2>/dev/null || cp -r "$item" "${baseDir}/$name"
+                        echo "[custom-libs] Copied $name to baseDir"
+                      fi
+                      
+                      # Also make it available under node_modules/<name>
+                      if [ ! -d "${baseDir}/node_modules/$name" ]; then
+                        cp -r "$item" "${baseDir}/node_modules/$name" 2>/dev/null || cp -r "$item" "${baseDir}/node_modules/$name"
+                        echo "[custom-libs] Copied $name to node_modules"
+                      fi
+
+                      # Find the main entry point for this library
+                      entry_file=""
+                      
+                      # Check for package.json first
+                      if [ -f "$item/package.json" ]; then
+                        # Try to extract main field from package.json
+                        main_field=$(grep -o '"main"[[:space:]]*:[[:space:]]*"[^"]*"' "$item/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/')
+                        if [ -n "$main_field" ]; then
+                          entry_file="$main_field"
+                          echo "[custom-libs] Found main entry in package.json: $entry_file"
+                        fi
+                      fi
+                      
+                      # If no package.json or no main field, look for common entry files
+                      if [ -z "$entry_file" ]; then
+                        if [ -f "$item/index.js" ]; then
+                          entry_file="index.js"
+                        elif [ -f "$item/src/index.js" ]; then
+                          entry_file="src/index.js"
+                        elif [ -f "$item/lib/index.js" ]; then
+                          entry_file="lib/index.js"
+                        else
+                          # Find first .js file
+                          first_js=$(find "$item" -maxdepth 2 -type f -name "*.js" | head -n1)
+                          if [ -n "$first_js" ]; then
+                            entry_file=$(echo "$first_js" | sed "s|$item/||")
+                          fi
+                        fi
+                      fi
+                      
+                      # Create a main entry file if one doesn't exist
+                      if [ -n "$entry_file" ]; then
+                        echo "[custom-libs] Creating main entry file for $name pointing to $entry_file"
+                        
+                        # Create in baseDir
+                        printf "module.exports = require('./$name/%s');\n" "$entry_file" > "${baseDir}/$name.js"
+                        
+                        # Create in node_modules if the library name doesn't have index.js at root
+                        if [ ! -f "$item/index.js" ]; then
+                          printf "module.exports = require('./%s');\n" "$entry_file" > "${baseDir}/node_modules/$name/index.js"
+                        fi
+                        
+                        echo "[custom-libs] Created entry file for $name"
+                      else
+                        echo "[custom-libs] WARNING: Could not find entry point for $name"
+                      fi
+                      
+                    elif [ -f "$item" ]; then
+                      # Copy any loose files too
+                      if [ ! -f "${baseDir}/$name" ]; then
+                        cp "$item" "${baseDir}/$name" 2>/dev/null || cp "$item" "${baseDir}/$name"
+                      fi
+                    fi
+                  done
+                  
+                  echo "[custom-libs] Sync complete"
+                else
+                  echo "[custom-libs] No custom libs directory present after copy"
+                fi
+            `],
                         AttachStdout: true,
                         AttachStderr: true
                     });
                     const syncStream = await syncExec.start({});
-                    syncStream.resume();
+
+                    let syncOutput = '';
                     await new Promise((resolve) => {
+                        syncStream.on('data', (chunk: Buffer) => {
+                            const output = chunk.toString();
+                            syncOutput += output;
+                            logger.info('[custom-libs sync]:', output.trim());
+                        });
                         syncStream.on('end', resolve);
                         syncStream.on('error', resolve);
                         setTimeout(resolve, 3000);
                     });
+
+                    logger.info('[project-execution] Library sync output:', syncOutput);
                 }
             } catch (e: any) {
                 logger.warn(`[project-execution] Failed to sync custom libraries into project dir: ${e?.message || e}`);
