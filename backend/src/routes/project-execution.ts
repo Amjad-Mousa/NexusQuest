@@ -410,18 +410,18 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 set -e
                                 cd ${customLibDir}
                                 alias_name=$(echo "${targetName}" | sed -E 's/\.(tar\.gz|tgz|gz)$//' )
-                                mkdir -p "${customLibDir}/${alias_name}"
-                                tar -xzf "${targetName}" -C "${customLibDir}/${alias_name}"
+                                mkdir -p "${customLibDir}/$alias_name"
+                                tar -xzf "${targetName}" -C "${customLibDir}/$alias_name"
                                 rm -f "${targetName}"
                                 # If extraction created a single nested dir, flatten it
-                                subdir_count=$(find "${customLibDir}/${alias_name}" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-                                file_count=$(find "${customLibDir}/${alias_name}" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')
+                                subdir_count=$(find "${customLibDir}/$alias_name" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+                                file_count=$(find "${customLibDir}/$alias_name" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')
                                 if [ "$subdir_count" = "1" ] && [ "$file_count" = "0" ]; then
-                                  nested_dir=$(find "${customLibDir}/${alias_name}" -mindepth 1 -maxdepth 1 -type d | head -n1)
+                                  nested_dir=$(find "${customLibDir}/$alias_name" -mindepth 1 -maxdepth 1 -type d | head -n1)
                                   # Move contents up one level
                                   if [ -n "$nested_dir" ]; then
                                     shopt -s dotglob || true
-                                    mv "$nested_dir"/* "${customLibDir}/${alias_name}/" 2>/dev/null || true
+                                    mv "$nested_dir"/* "${customLibDir}/$alias_name/" 2>/dev/null || true
                                     rmdir "$nested_dir" 2>/dev/null || true
                                   fi
                                 fi
@@ -431,16 +431,16 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 set -e
                                 cd ${customLibDir}
                                 alias_name=$(echo "${targetName}" | sed -E 's/\.(zip)$//' )
-                                mkdir -p "${customLibDir}/${alias_name}"
-                                unzip -q "${targetName}" -d "${customLibDir}/${alias_name}"
+                                mkdir -p "${customLibDir}/$alias_name"
+                                unzip -q "${targetName}" -d "${customLibDir}/$alias_name"
                                 rm -f "${targetName}"
-                                subdir_count=$(find "${customLibDir}/${alias_name}" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-                                file_count=$(find "${customLibDir}/${alias_name}" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')
+                                subdir_count=$(find "${customLibDir}/$alias_name" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+                                file_count=$(find "${customLibDir}/$alias_name" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')
                                 if [ "$subdir_count" = "1" ] && [ "$file_count" = "0" ]; then
-                                  nested_dir=$(find "${customLibDir}/${alias_name}" -mindepth 1 -maxdepth 1 -type d | head -n1)
+                                  nested_dir=$(find "${customLibDir}/$alias_name" -mindepth 1 -maxdepth 1 -type d | head -n1)
                                   if [ -n "$nested_dir" ]; then
                                     shopt -s dotglob || true
-                                    mv "$nested_dir"/* "${customLibDir}/${alias_name}/" 2>/dev/null || true
+                                    mv "$nested_dir"/* "${customLibDir}/$alias_name/" 2>/dev/null || true
                                     rmdir "$nested_dir" 2>/dev/null || true
                                   fi
                                 fi
