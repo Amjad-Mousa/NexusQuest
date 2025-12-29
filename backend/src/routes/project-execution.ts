@@ -370,6 +370,53 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     logger.error(`[project-execution] Error processing library ${lib.fileName}:`, error);
                 }
             }
+
+            // After copying/extracting, sync extracted folders into the project base directory for relative and package-style requires
+            try {
+                if (language === 'javascript') {
+                    const syncExec = await container.exec({
+                        Cmd: ['sh', '-c', `
+                            set -e
+                            CUSTOM_DIR="/custom-libs/${projectId}"
+                            if [ -d "$CUSTOM_DIR" ]; then
+                              echo "[custom-libs] Syncing extracted libraries into project workspace"
+                              mkdir -p ${baseDir}/node_modules
+                              for item in "$CUSTOM_DIR"/*; do
+                                name=$(basename "$item")
+                                if [ -d "$item" ]; then
+                                  # Sync directory into baseDir for simple relative requires like ./<lib>/...
+                                  if [ ! -d "${baseDir}/$name" ]; then
+                                    cp -r "$item" "${baseDir}/$name" 2>/dev/null || cp -r "$item" "${baseDir}/$name"
+                                  fi
+                                  # Also make it available under node_modules/<name> to support require('<name>')
+                                  if [ ! -d "${baseDir}/node_modules/$name" ]; then
+                                    cp -r "$item" "${baseDir}/node_modules/$name" 2>/dev/null || cp -r "$item" "${baseDir}/node_modules/$name"
+                                  fi
+                                elif [ -f "$item" ]; then
+                                  # Copy any loose files too
+                                  if [ ! -f "${baseDir}/$name" ]; then
+                                    cp "$item" "${baseDir}/$name" 2>/dev/null || cp "$item" "${baseDir}/$name"
+                                  fi
+                                fi
+                              done
+                            else
+                              echo "[custom-libs] No custom libs directory present after copy"
+                            fi
+                        `],
+                        AttachStdout: true,
+                        AttachStderr: true
+                    });
+                    const syncStream = await syncExec.start({});
+                    syncStream.resume();
+                    await new Promise((resolve) => {
+                        syncStream.on('end', resolve);
+                        syncStream.on('error', resolve);
+                        setTimeout(resolve, 3000);
+                    });
+                }
+            } catch (e: any) {
+                logger.warn(`[project-execution] Failed to sync custom libraries into project dir: ${e?.message || e}`);
+            }
         }
 
         // Check if C++ project has CMakeLists.txt with find_package() calls
