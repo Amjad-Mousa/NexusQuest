@@ -334,9 +334,11 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             }
 
             // STEP 3: Copy each library to container
+            // STEP 3: Copy each library to container
             for (const lib of customLibraries) {
                 try {
                     let libContent: Buffer | null = null;
+                    const targetName = lib.originalName || lib.fileName;
 
                     // Get from database
                     if (projectRecord?.customLibraries?.length) {
@@ -349,7 +351,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         });
 
                         if (dbLib) {
-                            logger.info(`[project-execution] Found library in database: ${lib.originalName || lib.fileName}`);
+                            logger.info(`[project-execution] Found library in database: ${targetName}`);
 
                             // Get file content from database
                             if (dbLib.fileContent) {
@@ -358,13 +360,19 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                                 } else if (dbLib.fileContent.buffer) {
                                     // MongoDB Binary type
                                     libContent = Buffer.from(dbLib.fileContent.buffer);
+                                } else if (dbLib.fileContent.data) {
+                                    // Another MongoDB Binary format
+                                    libContent = Buffer.from(dbLib.fileContent.data);
                                 } else if (typeof dbLib.fileContent === 'string') {
                                     libContent = Buffer.from(dbLib.fileContent, 'base64');
                                 }
-                                logger.info(`[project-execution] Loaded ${libContent.length} bytes from database`);
+
+                                if (libContent) {
+                                    logger.info(`[project-execution] Loaded ${libContent.length} bytes from database`);
+                                }
                             }
 
-                            // Update lib metadata for later use
+                            // Update lib metadata
                             (lib as any).fileName = dbLib.fileName;
                             (lib as any).originalName = dbLib.originalName;
                             (lib as any).fileType = dbLib.fileType;
@@ -376,22 +384,38 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         logger.info(`[project-execution] Library not in database, checking filesystem...`);
                         let diskPath = resolveLibraryOnDisk(projectId, lib);
 
-                        if (!diskPath) {
-                            logger.warn(`[project-execution] Skipping missing library: ${lib.fileName || lib.originalName}`);
-                            continue;
+                        if (!diskPath && projectRecord?.customLibraries?.length) {
+                            const libAny: any = lib as any;
+                            const dbLib = (projectRecord.customLibraries as any[]).find((d: any) => {
+                                if (libAny?._id && d?._id) {
+                                    return d._id.toString() === libAny._id.toString();
+                                }
+                                return d.originalName === lib.originalName;
+                            });
+                            if (dbLib) {
+                                const mapped = { fileName: dbLib.fileName, originalName: dbLib.originalName };
+                                diskPath = resolveLibraryOnDisk(projectId, mapped);
+                                if (diskPath) {
+                                    logger.info(`[project-execution] Resolved via DB mapping: ${lib.fileName || lib.originalName} -> ${dbLib.fileName}`);
+                                    (lib as any).fileName = dbLib.fileName;
+                                    (lib as any).originalName = dbLib.originalName;
+                                    (lib as any).fileType = dbLib.fileType;
+                                }
+                            }
                         }
 
-                        libContent = fs.readFileSync(diskPath);
-                        logger.info(`[project-execution] Loaded ${libContent.length} bytes from disk`);
+                        if (diskPath) {
+                            libContent = fs.readFileSync(diskPath);
+                            logger.info(`[project-execution] Loaded ${libContent.length} bytes from disk`);
+                        }
                     }
 
                     if (!libContent) {
-                        logger.warn(`[project-execution] No content found for library: ${lib.fileName || lib.originalName}`);
+                        logger.warn(`[project-execution] Skipping library (no content): ${targetName}`);
                         continue;
                     }
 
                     const base64LibContent = libContent.toString('base64');
-                    const targetName = lib.originalName || lib.fileName;
                     const targetPathInContainer = `${customLibDir}/${targetName}`;
 
                     logger.info(`[project-execution] Copying library: ${targetName} (${libContent.length} bytes)`);

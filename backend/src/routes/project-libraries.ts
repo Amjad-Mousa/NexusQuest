@@ -73,6 +73,7 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
         const fileExtWithoutDot = path.extname(req.file.originalname).substring(1);
 
         const fileContent = fs.readFileSync(req.file.path);
+        logger.info(`[libraries] Read file content: ${fileContent.length} bytes`);
 
         const library = {
             fileName: req.file.filename,
@@ -89,6 +90,8 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
 
         project.customLibraries.push(library as any);
         await project.save();
+
+        logger.info(`[libraries] Saved library to database: ${req.file.originalname}`);
 
         res.json({
             success: true,
