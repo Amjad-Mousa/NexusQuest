@@ -284,56 +284,48 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             });
         }
 
-        // Extract JavaScript custom library tarballs into the session directory (so relative requires work)
-        if (language === 'javascript' && projectId) {
-            const extractExec = await container.exec({
-                Cmd: ['sh', '-c', `
-                    set -e
-                    CUSTOM_DIR="/custom-libs/${projectId}"
-                    if [ -d "$CUSTOM_DIR" ]; then
-                      echo "[custom-libs] Found $CUSTOM_DIR"
-                      cd ${baseDir}
-                      for f in "$CUSTOM_DIR"/*.tar.gz "$CUSTOM_DIR"/*.tgz; do
-                        if [ -f "$f" ]; then
-                          echo "[custom-libs] Extracting $(basename "$f")"
-                          tar -xzf "$f" -C ${baseDir} 2>/dev/null || tar -xzf "$f" -C ${baseDir}
-                        fi
-                      done
-                    else
-                      echo "[custom-libs] No custom lib dir for project"
-                    fi
-                `],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const extractStream = await extractExec.start({ hijack: true });
-            extractStream.resume();
-            await new Promise((resolve) => {
-                extractStream.on('end', resolve);
-                extractStream.on('error', resolve);
-                setTimeout(resolve, 3000);
-            });
-        }
-
-        // Copy custom libraries to container if specified
-        // Replace the ENTIRE custom library handling section in project-execution.ts
-// This includes the copying, extraction, AND sync - all in one comprehensive step
-// Replace from "// Copy custom libraries to container" through the sync section
-
         if (customLibraries && customLibraries.length > 0 && projectId) {
             logger.info(`[project-execution] Processing ${customLibraries.length} custom libraries for project ${projectId}`);
 
             const customLibDir = `/custom-libs/${projectId}`;
 
-            // Create custom libs directory
-            const mkCustomDirExec = await container.exec({
-                Cmd: ['sh', '-c', `mkdir -p ${customLibDir}`],
-                AttachStdout: false,
-                AttachStderr: false
-            });
-            await mkCustomDirExec.start({});
+            // STEP 1: Create directory as root with proper permissions
+            logger.info(`[project-execution] Creating custom libs directory: ${customLibDir}`);
+            try {
+                const mkCustomDirExec = await container.exec({
+                    User: 'root',
+                    Cmd: ['sh', '-c', `
+                mkdir -p ${customLibDir} && \
+                chown -R 1001:1001 ${customLibDir} && \
+                chmod -R 0775 ${customLibDir} && \
+                ls -la /custom-libs/ && \
+                test -d ${customLibDir} && echo "DIRECTORY_CREATED" || echo "DIRECTORY_FAILED"
+            `],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const setupStream = await mkCustomDirExec.start({ hijack: true });
+                let setupOutput = '';
+                await new Promise((resolve) => {
+                    setupStream.on('data', (chunk: Buffer) => {
+                        setupOutput += chunk.toString();
+                    });
+                    setupStream.on('end', resolve);
+                    setupStream.on('error', resolve);
+                    setTimeout(resolve, 2000);
+                });
 
-            // Load project record for DB-based fallback resolution
+                logger.info('[project-execution] Directory setup output:', setupOutput.trim());
+
+                if (!setupOutput.includes('DIRECTORY_CREATED')) {
+                    throw new Error('Failed to create custom libs directory');
+                }
+                logger.info('[project-execution] ✓ Custom libs directory created successfully');
+            } catch (e: any) {
+                logger.error(`[project-execution] Failed to create directory: ${e?.message || e}`);
+            }
+
+            // STEP 2: Load project record for fallback resolution
             let projectRecord: any = null;
             try {
                 projectRecord = await Project.findById(projectId).lean();
@@ -341,7 +333,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 logger.warn(`[project-execution] Unable to load project ${projectId}: ${e?.message || e}`);
             }
 
-            // Copy each custom library to container
+            // STEP 3: Copy each library to container
             for (const lib of customLibraries) {
                 try {
                     let diskPath = resolveLibraryOnDisk(projectId, lib);
@@ -359,7 +351,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             const mapped = { fileName: dbLib.fileName, originalName: dbLib.originalName };
                             diskPath = resolveLibraryOnDisk(projectId, mapped);
                             if (diskPath) {
-                                logger.info(`[project-execution] Resolved via DB mapping: ${lib.fileName || lib.originalName} -> ${dbLib.fileName}`);
+                                logger.info(`[project-execution] Resolved via DB: ${lib.fileName || lib.originalName} -> ${dbLib.fileName}`);
                                 (lib as any).fileName = dbLib.fileName;
                                 (lib as any).originalName = dbLib.originalName;
                                 (lib as any).fileType = dbLib.fileType;
@@ -377,22 +369,59 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     const targetName = lib.originalName || lib.fileName;
                     const targetPathInContainer = `${customLibDir}/${targetName}`;
 
-                    logger.info(`[project-execution] Copying library: ${targetName}`);
+                    logger.info(`[project-execution] Copying library: ${targetName} (${libContent.length} bytes)`);
 
                     const copyLibExec = await container.exec({
-                        Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer}`],
+                        Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer} && ls -lh ${targetPathInContainer} && echo "COPY_SUCCESS"`],
                         AttachStdout: true,
                         AttachStderr: true
                     });
-                    await copyLibExec.start({});
+                    const copyStream = await copyLibExec.start({ hijack: true });
+                    let copyOutput = '';
+                    await new Promise((resolve) => {
+                        copyStream.on('data', (chunk: Buffer) => {
+                            copyOutput += chunk.toString();
+                        });
+                        copyStream.on('end', resolve);
+                        copyStream.on('error', resolve);
+                        setTimeout(resolve, 2000);
+                    });
 
-                    logger.info(`[project-execution] Successfully copied: ${targetName}`);
+                    logger.info(`[project-execution] Copy result: ${copyOutput.trim()}`);
+                    if (!copyOutput.includes('COPY_SUCCESS')) {
+                        logger.error(`[project-execution] Failed to copy: ${targetName}`);
+                    } else {
+                        logger.info(`[project-execution] ✓ Successfully copied: ${targetName}`);
+                    }
                 } catch (error: any) {
                     logger.error(`[project-execution] Error copying library ${lib.fileName}:`, error);
                 }
             }
 
-            // NOW: Extract and sync all libraries in one comprehensive step
+            // STEP 4: Verify files were copied
+            logger.info('[project-execution] Verifying copied libraries...');
+            try {
+                const verifyExec = await container.exec({
+                    Cmd: ['sh', '-c', `ls -la ${customLibDir}/ && echo "VERIFY_DONE"`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const verifyStream = await verifyExec.start({ hijack: true });
+                let verifyOutput = '';
+                await new Promise((resolve) => {
+                    verifyStream.on('data', (chunk: Buffer) => {
+                        verifyOutput += chunk.toString();
+                    });
+                    verifyStream.on('end', resolve);
+                    verifyStream.on('error', resolve);
+                    setTimeout(resolve, 2000);
+                });
+                logger.info('[project-execution] Directory contents:', verifyOutput.trim());
+            } catch (e: any) {
+                logger.warn(`[project-execution] Could not verify: ${e?.message || e}`);
+            }
+
+            // STEP 5: Extract and sync (JavaScript only)
             if (language === 'javascript') {
                 logger.info('[project-execution] Extracting and syncing JavaScript libraries');
 
@@ -402,27 +431,38 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 CUSTOM_DIR="${customLibDir}"
                 BASE_DIR="${baseDir}"
                 
-                echo "[custom-libs] Starting extraction and sync process"
+                echo "[custom-libs] =========================================="
+                echo "[custom-libs] Starting extraction and sync"
                 echo "[custom-libs] Custom dir: $CUSTOM_DIR"
                 echo "[custom-libs] Base dir: $BASE_DIR"
+                echo "[custom-libs] =========================================="
                 
-                # Check if custom dir exists
+                # Verify directory exists
                 if [ ! -d "$CUSTOM_DIR" ]; then
-                    echo "[custom-libs] ERROR: Custom libs directory does not exist!"
+                    echo "[custom-libs] ERROR: Directory does not exist: $CUSTOM_DIR"
+                    ls -la /custom-libs/ || echo "Cannot list /custom-libs/"
                     exit 1
                 fi
                 
-                # List what we have
-                echo "[custom-libs] Files in custom dir:"
-                ls -la "$CUSTOM_DIR" || echo "Cannot list directory"
+                # List files
+                echo "[custom-libs] Files in custom libs directory:"
+                ls -la "$CUSTOM_DIR"
                 
-                # Create node_modules in base directory
+                # Count files
+                file_count=$(ls -1 "$CUSTOM_DIR" 2>/dev/null | wc -l | tr -d ' ')
+                echo "[custom-libs] Found $file_count file(s)"
+                
+                if [ "$file_count" = "0" ]; then
+                    echo "[custom-libs] No files to process"
+                    exit 0
+                fi
+                
+                # Create node_modules
                 mkdir -p "$BASE_DIR/node_modules"
                 
                 # Process each file
                 for libfile in "$CUSTOM_DIR"/*; do
                     if [ ! -f "$libfile" ]; then
-                        echo "[custom-libs] Skipping non-file: $libfile"
                         continue
                     fi
                     
@@ -431,9 +471,14 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     echo "[custom-libs] =========================================="
                     echo "[custom-libs] Processing: $filename"
                     
-                    # Check if it's an archive
+                    # Check file size
+                    file_size=$(stat -c%s "$libfile" 2>/dev/null || echo "unknown")
+                    echo "[custom-libs] File size: $file_size bytes"
+                    
+                    # Detect archive type
                     is_archive=0
-                    if echo "$filename" | grep -iE '\\.(tar\\.gz|tgz|tar)$' >/dev/null; then
+                    archive_type=""
+                    if echo "$filename" | grep -iE '\\.(tar\\.gz|tgz)$' >/dev/null; then
                         is_archive=1
                         archive_type="tar.gz"
                     elif echo "$filename" | grep -iE '\\.gz$' >/dev/null; then
@@ -445,130 +490,122 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     fi
                     
                     if [ $is_archive -eq 1 ]; then
-                        echo "[custom-libs] Detected archive type: $archive_type"
+                        echo "[custom-libs] Archive type: $archive_type"
                         
-                        # Determine library name (remove extensions)
-                        lib_name=$(echo "$filename" | sed -E 's/\\.(tar\\.gz|tgz|tar|gz|zip)$//')
+                        # Get library name (remove extension)
+                        lib_name=$(echo "$filename" | sed -E 's/\\.(tar\\.gz|tgz|gz|zip)$//')
                         echo "[custom-libs] Library name: $lib_name"
                         
                         # Create extraction directory
                         extract_dir="$CUSTOM_DIR/extracted_$lib_name"
+                        rm -rf "$extract_dir" 2>/dev/null || true
                         mkdir -p "$extract_dir"
                         
-                        # Extract based on type
+                        # Extract
                         echo "[custom-libs] Extracting to: $extract_dir"
                         if [ "$archive_type" = "tar.gz" ]; then
-                            tar -xzf "$libfile" -C "$extract_dir" 2>&1 || {
-                                echo "[custom-libs] tar extraction failed, trying without compression flag"
-                                tar -xf "$libfile" -C "$extract_dir" 2>&1
-                            }
+                            tar -xzf "$libfile" -C "$extract_dir" 2>&1 || tar -xf "$libfile" -C "$extract_dir" 2>&1
                         elif [ "$archive_type" = "gz" ]; then
                             gunzip -c "$libfile" > "$extract_dir/$(basename "$filename" .gz)" 2>&1
                         elif [ "$archive_type" = "zip" ]; then
                             unzip -q "$libfile" -d "$extract_dir" 2>&1 || unzip "$libfile" -d "$extract_dir"
                         fi
                         
-                        echo "[custom-libs] Extraction complete. Contents:"
+                        echo "[custom-libs] ✓ Extracted"
+                        echo "[custom-libs] Contents (first 30 lines):"
                         ls -laR "$extract_dir" | head -30
                         
-                        # Check if we have a single nested directory (common in npm tarballs)
+                        # Check for nested directory
                         subdir_count=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
                         file_count=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
                         
-                        echo "[custom-libs] Found $subdir_count subdirs and $file_count files at root"
+                        echo "[custom-libs] Root level: $subdir_count dirs, $file_count files"
                         
+                        # Flatten if single nested directory
                         if [ "$subdir_count" = "1" ] && [ "$file_count" = "0" ]; then
                             nested_dir=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
                             if [ -n "$nested_dir" ]; then
-                                echo "[custom-libs] Flattening nested directory: $(basename "$nested_dir")"
-                                # Move contents up one level
-                                temp_dir="$CUSTOM_DIR/temp_flatten_$$"
+                                echo "[custom-libs] Flattening: $(basename "$nested_dir")"
+                                temp_dir="$CUSTOM_DIR/temp_$$"
                                 mv "$nested_dir" "$temp_dir"
                                 rm -rf "$extract_dir"
                                 mv "$temp_dir" "$extract_dir"
-                                echo "[custom-libs] Flattened. New contents:"
-                                ls -la "$extract_dir" | head -20
+                                echo "[custom-libs] ✓ Flattened"
                             fi
                         fi
                         
                         # Find entry point
                         entry_point=""
-                        package_json="$extract_dir/package.json"
-                        
-                        if [ -f "$package_json" ]; then
-                            echo "[custom-libs] Found package.json, reading main field..."
-                            # Extract main field
-                            main_field=$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "$package_json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
+                        if [ -f "$extract_dir/package.json" ]; then
+                            echo "[custom-libs] Found package.json"
+                            main_field=$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
                             if [ -n "$main_field" ]; then
                                 entry_point="$main_field"
-                                echo "[custom-libs] Found main field: $entry_point"
+                                echo "[custom-libs] Main field: $entry_point"
                             fi
                         fi
                         
-                        # Fallback entry point detection
+                        # Fallback entry point
                         if [ -z "$entry_point" ]; then
-                            echo "[custom-libs] No main field, searching for entry point..."
-                            if [ -f "$extract_dir/index.js" ]; then
-                                entry_point="index.js"
-                                echo "[custom-libs] Using index.js"
-                            elif [ -f "$extract_dir/src/index.js" ]; then
-                                entry_point="src/index.js"
-                                echo "[custom-libs] Using src/index.js"
-                            elif [ -f "$extract_dir/lib/index.js" ]; then
-                                entry_point="lib/index.js"
-                                echo "[custom-libs] Using lib/index.js"
-                            elif [ -f "$extract_dir/dist/index.js" ]; then
-                                entry_point="dist/index.js"
-                                echo "[custom-libs] Using dist/index.js"
-                            elif [ -f "$extract_dir/$lib_name.js" ]; then
-                                entry_point="$lib_name.js"
-                                echo "[custom-libs] Using $lib_name.js"
-                            else
+                            echo "[custom-libs] Searching for entry point..."
+                            for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js" "$lib_name.js"; do
+                                if [ -f "$extract_dir/$candidate" ]; then
+                                    entry_point="$candidate"
+                                    echo "[custom-libs] Found: $entry_point"
+                                    break
+                                fi
+                            done
+                            
+                            if [ -z "$entry_point" ]; then
                                 first_js=$(find "$extract_dir" -maxdepth 2 -type f -name "*.js" 2>/dev/null | head -n1)
                                 if [ -n "$first_js" ]; then
                                     entry_point=$(echo "$first_js" | sed "s|$extract_dir/||")
-                                    echo "[custom-libs] Using first .js file: $entry_point"
-                                else
-                                    echo "[custom-libs] WARNING: No JavaScript entry point found!"
+                                    echo "[custom-libs] Using first .js: $entry_point"
                                 fi
                             fi
                         fi
                         
+                        if [ -z "$entry_point" ]; then
+                            echo "[custom-libs] WARNING: No entry point found"
+                        fi
+                        
                         # Copy to base directory
-                        echo "[custom-libs] Copying to: $BASE_DIR/$lib_name/"
+                        echo "[custom-libs] Copying to base..."
                         cp -r "$extract_dir" "$BASE_DIR/$lib_name"
+                        echo "[custom-libs] ✓ Copied to: $BASE_DIR/$lib_name/"
                         
                         # Copy to node_modules
-                        echo "[custom-libs] Copying to: $BASE_DIR/node_modules/$lib_name/"
+                        echo "[custom-libs] Copying to node_modules..."
                         cp -r "$extract_dir" "$BASE_DIR/node_modules/$lib_name"
+                        echo "[custom-libs] ✓ Copied to: $BASE_DIR/node_modules/$lib_name/"
                         
-                        # Create wrapper file for easy requiring
+                        # Create wrapper file
                         if [ -n "$entry_point" ]; then
                             wrapper_file="$BASE_DIR/$lib_name.js"
                             echo "[custom-libs] Creating wrapper: $wrapper_file"
                             printf "module.exports = require('./%s/%s');\n" "$lib_name" "$entry_point" > "$wrapper_file"
-                            echo "[custom-libs] Wrapper created"
+                            echo "[custom-libs] ✓ Wrapper created"
                             
-                            # Create/update index.js in node_modules if needed
+                            # Create index.js if needed
                             if [ ! -f "$BASE_DIR/node_modules/$lib_name/index.js" ] && [ "$entry_point" != "index.js" ]; then
-                                echo "[custom-libs] Creating index.js in node_modules"
                                 printf "module.exports = require('./%s');\n" "$entry_point" > "$BASE_DIR/node_modules/$lib_name/index.js"
+                                echo "[custom-libs] ✓ Created index.js"
                             fi
                         fi
                         
-                        echo "[custom-libs] Successfully processed: $lib_name"
+                        echo "[custom-libs] ✓✓ Successfully processed: $lib_name"
                     else
-                        # Not an archive, just copy
                         echo "[custom-libs] Not an archive, copying as-is"
                         cp "$libfile" "$BASE_DIR/$filename"
-                        echo "[custom-libs] Copied: $filename"
+                        echo "[custom-libs] ✓ Copied: $filename"
                     fi
                 done
                 
                 echo ""
                 echo "[custom-libs] =========================================="
-                echo "[custom-libs] Processing complete!"
-                echo "[custom-libs] Base directory contents:"
+                echo "[custom-libs] ✓✓✓ Processing complete!"
+                echo "[custom-libs] =========================================="
+                echo "[custom-libs] Base directory (first 30):"
                 ls -la "$BASE_DIR" | head -30
                 echo ""
                 echo "[custom-libs] Node modules (first 30):"
@@ -585,7 +622,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     extractStream.on('data', (chunk: Buffer) => {
                         const output = chunk.toString();
                         extractOutput += output;
-                        // Log each line for better visibility
                         output.split('\n').forEach(line => {
                             if (line.trim()) {
                                 logger.info('[custom-libs]:', line.trim());
@@ -593,27 +629,26 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         });
                     });
                     extractStream.on('end', () => {
-                        logger.info('[custom-libs] Stream ended');
+                        logger.info('[custom-libs] Extraction complete');
                         resolve(undefined);
                     });
                     extractStream.on('error', (err: any) => {
-                        logger.error('[custom-libs] Stream error:', err);
+                        logger.error('[custom-libs] Error:', err);
                         resolve(err);
                     });
                     setTimeout(() => {
-                        logger.warn('[custom-libs] Timeout after 15 seconds');
+                        logger.warn('[custom-libs] Timeout after 15s');
                         resolve(undefined);
                     }, 15000);
                 });
 
-                if (extractOutput.includes('WARNING')) {
-                    logger.warn('[project-execution] Some libraries had warnings');
-                }
-
+                // Check results
                 if (extractOutput.includes('Successfully processed')) {
-                    logger.info('[project-execution] ✓ Custom libraries processed successfully');
+                    logger.info('[project-execution] ✓✓✓ Custom libraries processed successfully');
+                } else if (extractOutput.includes('ERROR')) {
+                    logger.error('[project-execution] Library processing had errors');
                 } else {
-                    logger.warn('[project-execution] Library processing may have had issues');
+                    logger.warn('[project-execution] Library processing status unknown');
                 }
             }
         }
