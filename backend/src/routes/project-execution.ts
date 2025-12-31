@@ -404,9 +404,9 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 fi
                 
                 file_count=$(ls -1 "$CUSTOM_DIR" 2>/dev/null | wc -l | tr -d ' ')
-                echo "[custom-libs] Found $file_count file(s)"
+                echo "[custom-libs] Found \$file_count file(s)"
                 
-                if [ "$file_count" = "0" ]; then
+                if [ "\$file_count" = "0" ]; then
                     echo "[custom-libs] No files to process"
                     exit 0
                 fi
@@ -414,75 +414,118 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 mkdir -p "$BASE_DIR/node_modules"
                 
                 for libfile in "$CUSTOM_DIR"/*; do
-                    if [ ! -f "$libfile" ]; then
+                    if [ ! -f "\$libfile" ]; then
                         continue
                     fi
                     
-                    filename=$(basename "$libfile")
-                    echo "[custom-libs] Processing: $filename"
+                    filename=\$(basename "\$libfile")
+                    echo "[custom-libs] Processing: \$filename"
                     
-                    is_archive=0
-                    if echo "$filename" | grep -iE '\\.(tar\\.gz|tgz)$' >/dev/null; then
-                        is_archive=1
-                        lib_name=$(echo "$filename" | sed -E 's/\\.(tar\\.gz|tgz)$//')
-                        
-                        extract_dir="$CUSTOM_DIR/extracted_$lib_name"
-                        rm -rf "$extract_dir" 2>/dev/null || true
-                        mkdir -p "$extract_dir"
-                        
-                        tar -xzf "$libfile" -C "$extract_dir" 2>&1 || tar -xf "$libfile" -C "$extract_dir" 2>&1
-                        
-                        # Flatten if single nested directory
-                        subdir_count=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-                        file_count=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
-                        
-                        if [ "$subdir_count" = "1" ] && [ "$file_count" = "0" ]; then
-                            nested_dir=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
-                            if [ -n "$nested_dir" ]; then
-                                temp_dir="$CUSTOM_DIR/temp_$$"
-                                mv "$nested_dir" "$temp_dir"
-                                rm -rf "$extract_dir"
-                                mv "$temp_dir" "$extract_dir"
-                            fi
-                        fi
-                        
-                        # Find entry point
-                        entry_point=""
-                        if [ -f "$extract_dir/package.json" ]; then
-                            main_field=$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
-                            if [ -n "$main_field" ]; then
-                                entry_point="$main_field"
-                            fi
-                        fi
-                        
-                        if [ -z "$entry_point" ]; then
-                            for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js"; do
-                                if [ -f "$extract_dir/$candidate" ]; then
-                                    entry_point="$candidate"
-                                    break
-                                fi
-                            done
-                        fi
-                        
-                        # Copy to base and node_modules
-                        cp -r "$extract_dir" "$BASE_DIR/$lib_name"
-                        cp -r "$extract_dir" "$BASE_DIR/node_modules/$lib_name"
-                        
-                        # Create wrapper
-                        if [ -n "$entry_point" ]; then
-                            printf "module.exports = require('./%s/%s');\\n" "$lib_name" "$entry_point" > "$BASE_DIR/$lib_name.js"
-                            
-                            if [ ! -f "$BASE_DIR/node_modules/$lib_name/index.js" ] && [ "$entry_point" != "index.js" ]; then
-                                printf "module.exports = require('./%s');\\n" "$entry_point" > "$BASE_DIR/node_modules/$lib_name/index.js"
-                            fi
-                        fi
-                        
-                        echo "[custom-libs] ✓ Processed: $lib_name"
-                    else
-                        cp "$libfile" "$BASE_DIR/$filename"
-                        echo "[custom-libs] ✓ Copied: $filename"
+                    # Skip non-archive files or already extracted dirs
+                    if ! echo "\$filename" | grep -iE '\\.(tar\\.gz|tgz)$' >/dev/null; then
+                        cp "\$libfile" "$BASE_DIR/\$filename"
+                        echo "[custom-libs] ✓ Copied: \$filename"
+                        continue
                     fi
+                    
+                    # Extract archive name without extension
+                    archive_name=\$(echo "\$filename" | sed -E 's/\\.(tar\\.gz|tgz)$//')
+                    
+                    extract_dir="$CUSTOM_DIR/extracted_\$archive_name"
+                    rm -rf "\$extract_dir" 2>/dev/null || true
+                    mkdir -p "\$extract_dir"
+                    
+                    echo "[custom-libs] Extracting to: \$extract_dir"
+                    tar -xzf "\$libfile" -C "\$extract_dir" 2>&1 || tar -xf "\$libfile" -C "\$extract_dir" 2>&1
+                    
+                    # Flatten if single nested directory (npm tarballs have package/ dir)
+                    subdir_count=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+                    top_file_count=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+                    
+                    if [ "\$subdir_count" = "1" ] && [ "\$top_file_count" = "0" ]; then
+                        nested_dir=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
+                        if [ -n "\$nested_dir" ]; then
+                            echo "[custom-libs] Flattening nested directory: \$nested_dir"
+                            temp_dir="$CUSTOM_DIR/temp_\$\$"
+                            mv "\$nested_dir" "\$temp_dir"
+                            rm -rf "\$extract_dir"
+                            mv "\$temp_dir" "\$extract_dir"
+                        fi
+                    fi
+                    
+                    # Get the actual package name from package.json
+                    pkg_name=""
+                    if [ -f "\$extract_dir/package.json" ]; then
+                        pkg_name=\$(grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"name"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
+                        echo "[custom-libs] Package name from package.json: \$pkg_name"
+                    fi
+                    
+                    # Fallback to archive name without version if no package.json
+                    if [ -z "\$pkg_name" ]; then
+                        # Try to extract base name without version (e.g., dayjs-1.11.18 -> dayjs)
+                        pkg_name=\$(echo "\$archive_name" | sed -E 's/-[0-9]+\\.[0-9]+\\.[0-9]+.*$//')
+                        echo "[custom-libs] Inferred package name: \$pkg_name"
+                    fi
+                    
+                    # Find entry point from package.json
+                    entry_point=""
+                    if [ -f "\$extract_dir/package.json" ]; then
+                        main_field=\$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
+                        if [ -n "\$main_field" ]; then
+                            entry_point="\$main_field"
+                            echo "[custom-libs] Entry point from package.json: \$entry_point"
+                        fi
+                    fi
+                    
+                    # Fallback entry point detection
+                    if [ -z "\$entry_point" ]; then
+                        for candidate in "index.js" "dayjs.min.js" "src/index.js" "lib/index.js" "dist/index.js" "dist/dayjs.min.js"; do
+                            if [ -f "\$extract_dir/\$candidate" ]; then
+                                entry_point="\$candidate"
+                                echo "[custom-libs] Found fallback entry point: \$entry_point"
+                                break
+                            fi
+                        done
+                    fi
+                    
+                    # List what we have
+                    echo "[custom-libs] Contents of extracted dir:"
+                    ls -la "\$extract_dir" | head -20
+                    
+                    # Copy to node_modules with the ACTUAL package name
+                    echo "[custom-libs] Installing as: \$pkg_name"
+                    rm -rf "$BASE_DIR/node_modules/\$pkg_name" 2>/dev/null || true
+                    cp -r "\$extract_dir" "$BASE_DIR/node_modules/\$pkg_name"
+                    
+                    # Also create alias with the versioned name for backwards compatibility
+                    if [ "\$pkg_name" != "\$archive_name" ]; then
+                        rm -rf "$BASE_DIR/node_modules/\$archive_name" 2>/dev/null || true
+                        cp -r "\$extract_dir" "$BASE_DIR/node_modules/\$archive_name"
+                        echo "[custom-libs] Also installed as: \$archive_name"
+                    fi
+                    
+                    # Create index.js wrapper in node_modules if entry point is not index.js
+                    if [ -n "\$entry_point" ] && [ "\$entry_point" != "index.js" ]; then
+                        if [ ! -f "$BASE_DIR/node_modules/\$pkg_name/index.js" ]; then
+                            printf "module.exports = require('./\$entry_point');\\n" > "$BASE_DIR/node_modules/\$pkg_name/index.js"
+                            echo "[custom-libs] Created index.js wrapper pointing to \$entry_point"
+                        fi
+                    fi
+                    
+                    # Copy to project directory as well for relative requires
+                    rm -rf "$BASE_DIR/\$pkg_name" 2>/dev/null || true
+                    cp -r "\$extract_dir" "$BASE_DIR/\$pkg_name"
+                    
+                    # Create a wrapper .js file for relative require
+                    if [ -n "\$entry_point" ]; then
+                        printf "module.exports = require('./\$pkg_name/\$entry_point');\\n" > "$BASE_DIR/\$pkg_name.js"
+                    fi
+                    
+                    echo "[custom-libs] ✓ Processed: \$pkg_name (from \$filename)"
                 done
+                
+                echo "[custom-libs] Final node_modules contents:"
+                ls -la "$BASE_DIR/node_modules" | head -20
                 
                 echo "[custom-libs] ✓ Complete"
             `],
