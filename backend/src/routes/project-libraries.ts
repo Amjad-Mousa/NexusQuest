@@ -5,38 +5,14 @@ import fs from 'fs';
 import { Project } from '../models/Project.js';
 import { authMiddleware as auth } from '../middleware/auth';
 import { logger } from '../utils/logger.js';
-import Docker from 'dockerode';
 
 const router = express.Router();
-const docker = new Docker();
 
-const UPLOAD_BASE_DIR = path.join(process.cwd(), 'uploads', 'libraries');
-if (!fs.existsSync(UPLOAD_BASE_DIR)) {
-    fs.mkdirSync(UPLOAD_BASE_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req: any, file, cb) => {
-        // Create a project-specific subdirectory
-        const projectId = req.params.projectId;
-        const projectLibDir = path.join(UPLOAD_BASE_DIR, projectId);
-
-        if (!fs.existsSync(projectLibDir)) {
-            fs.mkdirSync(projectLibDir, { recursive: true });
-        }
-
-        cb(null, projectLibDir);
-    },
-    filename: (req: any, file, cb) => {
-        const timestamp = Date.now();
-        const randomStr = Math.random().toString(36).substring(2, 9);
-        const ext = path.extname(file.originalname);
-        cb(null, `${timestamp}-${randomStr}${ext}`);
-    }
-});
+// Use memory storage instead of disk storage
+const storage = multer.memoryStorage();
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedExtensions = ['.jar', '.whl', '.so', '.dll', '.dylib', '.a', '.lib', '.tar.gz', '.zip'];
+    const allowedExtensions = ['.jar', '.whl', '.so', '.dll', '.dylib', '.a', '.lib', '.tar.gz', '.zip', '.gz'];
     const ext = path.extname(file.originalname).toLowerCase();
 
     if (allowedExtensions.includes(ext) || ext === '.gz') {
@@ -50,7 +26,7 @@ const upload = multer({
     storage,
     fileFilter,
     limits: {
-        fileSize: 50 * 1024 * 1024,
+        fileSize: 50 * 1024 * 1024, // 50MB
     }
 });
 
@@ -64,22 +40,36 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
+        logger.info(`[libraries] Uploading library: ${req.file.originalname} (${req.file.size} bytes)`);
+
         const project = await Project.findOne({ _id: projectId, owner: userId });
         if (!project) {
-            if (req.file) fs.unlinkSync(req.file.path);
             return res.status(404).json({ error: 'Project not found' });
         }
 
+        // Get file content from multer's memory buffer
+        const fileContent = req.file.buffer;
+
+        if (!fileContent || fileContent.length === 0) {
+            logger.error(`[libraries] File content is empty`);
+            return res.status(400).json({ error: 'Uploaded file is empty' });
+        }
+
+        logger.info(`[libraries] File content size: ${fileContent.length} bytes`);
+
         const fileExtWithoutDot = path.extname(req.file.originalname).substring(1);
 
-        const fileContent = fs.readFileSync(req.file.path);
-        logger.info(`[libraries] Read file content: ${fileContent.length} bytes`);
+        // Generate a unique filename
+        const timestamp = Date.now();
+        const randomStr = Math.random().toString(36).substring(2, 9);
+        const ext = path.extname(req.file.originalname);
+        const fileName = `${timestamp}-${randomStr}${ext}`;
 
         const library = {
-            fileName: req.file.filename,
+            fileName: fileName,
             originalName: req.file.originalname,
             fileType: fileExtWithoutDot,
-            size: req.file.size,
+            size: fileContent.length,
             uploadedAt: new Date(),
             fileContent: fileContent
         };
@@ -89,9 +79,32 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
         }
 
         project.customLibraries.push(library as any);
+
+        // Save to database
         await project.save();
 
-        logger.info(`[libraries] Saved library to database: ${req.file.originalname}`);
+        logger.info(`[libraries] ✓ Saved library to database: ${req.file.originalname}`);
+
+        // Verify it was saved correctly
+        const savedProject = await Project.findById(projectId).lean();
+        const savedLib = savedProject?.customLibraries?.[savedProject.customLibraries.length - 1];
+
+        if (savedLib) {
+            const hasContent = savedLib.fileContent &&
+                (Buffer.isBuffer(savedLib.fileContent) ||
+                    (savedLib.fileContent as any).buffer ||
+                    (savedLib.fileContent as any).data);
+
+            if (hasContent) {
+                const contentSize = Buffer.isBuffer(savedLib.fileContent)
+                    ? savedLib.fileContent.length
+                    : ((savedLib.fileContent as any).buffer?.length || (savedLib.fileContent as any).data?.length || 0);
+                logger.info(`[libraries] ✓ Verification successful - Content size in DB: ${contentSize} bytes`);
+            } else {
+                logger.error(`[libraries] ✗ Verification failed - fileContent is missing in database!`);
+                return res.status(500).json({ error: 'Failed to store file content in database' });
+            }
+        }
 
         res.json({
             success: true,
@@ -106,9 +119,6 @@ router.post('/:projectId/libraries', auth, upload.single('library'), async (req:
         });
     } catch (error: any) {
         logger.error('[libraries] Upload error:', error);
-        if (req.file) {
-            fs.unlinkSync(req.file.path);
-        }
         res.status(500).json({ error: error.message || 'Failed to upload library' });
     }
 });
@@ -124,19 +134,36 @@ router.get('/:projectId/libraries', auth, async (req: Request, res: Response) =>
             return res.status(404).json({ error: 'Project not found' });
         }
 
-        const librariesWithPaths = (project.customLibraries || []).map(lib => ({
-            _id: lib._id,
-            fileName: lib.fileName,
-            originalName: lib.originalName,
-            fileType: lib.fileType,
-            size: lib.size,
-            uploadedAt: lib.uploadedAt,
-            path: `/uploads/libraries/${projectId}/${lib.fileName}`
-        }));
+        const libraries = (project.customLibraries || []).map(lib => {
+            // Check if content exists
+            const hasContent = lib.fileContent &&
+                (Buffer.isBuffer(lib.fileContent) ||
+                    (lib.fileContent as any).buffer ||
+                    (lib.fileContent as any).data);
+
+            const contentSize = hasContent
+                ? (Buffer.isBuffer(lib.fileContent)
+                    ? lib.fileContent.length
+                    : ((lib.fileContent as any).buffer?.length || (lib.fileContent as any).data?.length || 0))
+                : 0;
+
+            return {
+                _id: lib._id,
+                fileName: lib.fileName,
+                originalName: lib.originalName,
+                fileType: lib.fileType,
+                size: lib.size,
+                uploadedAt: lib.uploadedAt,
+                hasContent: hasContent,
+                contentSize: contentSize
+            };
+        });
+
+        logger.info(`[libraries] Listed ${libraries.length} libraries for project ${projectId}`);
 
         res.json({
             success: true,
-            libraries: librariesWithPaths || []
+            libraries: libraries
         });
     } catch (error: any) {
         logger.error('[libraries] List error:', error);
@@ -144,7 +171,52 @@ router.get('/:projectId/libraries', auth, async (req: Request, res: Response) =>
     }
 });
 
-// Delete library
+// Download library - DATABASE ONLY
+router.get('/:projectId/libraries/:libraryId/download', auth, async (req: Request, res: Response) => {
+    try {
+        const { projectId, libraryId } = req.params;
+        const userId = (req as any).userId;
+
+        const project = await Project.findOne({ _id: projectId, owner: userId });
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const lib = project.customLibraries?.find(l => l._id?.toString() === libraryId);
+        if (!lib) {
+            return res.status(404).json({ error: 'Library not found' });
+        }
+
+        // Get file content from database
+        let fileContent: Buffer | null = null;
+
+        if (lib.fileContent) {
+            if (Buffer.isBuffer(lib.fileContent)) {
+                fileContent = lib.fileContent;
+            } else if ((lib.fileContent as any).buffer) {
+                fileContent = Buffer.from((lib.fileContent as any).buffer);
+            } else if ((lib.fileContent as any).data) {
+                fileContent = Buffer.from((lib.fileContent as any).data);
+            }
+        }
+
+        if (!fileContent) {
+            return res.status(404).json({ error: 'Library file content not found in database' });
+        }
+
+        logger.info(`[libraries] Downloading library: ${lib.originalName} (${fileContent.length} bytes)`);
+
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${lib.originalName}"`);
+        res.setHeader('Content-Length', fileContent.length);
+        res.send(fileContent);
+    } catch (error: any) {
+        logger.error('[libraries] Download error:', error);
+        res.status(500).json({ error: error.message || 'Failed to download library' });
+    }
+});
+
+// Delete library - DATABASE ONLY
 router.delete('/:projectId/libraries/:libraryId', auth, async (req: Request, res: Response) => {
     try {
         const { projectId, libraryId } = req.params;
@@ -165,15 +237,13 @@ router.delete('/:projectId/libraries/:libraryId', auth, async (req: Request, res
         }
 
         const lib = project.customLibraries[libIndex];
-        const filePath = path.join(UPLOAD_BASE_DIR, projectId, lib.fileName);
+        logger.info(`[libraries] Deleting library from database: ${lib.originalName}`);
 
-        // Delete file from disk
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
-
+        // Remove from array
         project.customLibraries.splice(libIndex, 1);
         await project.save();
+
+        logger.info(`[libraries] ✓ Library deleted from database`);
 
         res.json({ success: true, message: 'Library deleted successfully' });
     } catch (error: any) {
@@ -185,23 +255,6 @@ router.delete('/:projectId/libraries/:libraryId', auth, async (req: Request, res
 // Clear dependency cache
 router.post('/:projectId/dependencies/clear-cache', auth, async (req: Request, res: Response) => {
     try {
-        const { projectId } = req.params;
-        const cacheDir = `/dependencies/cache-${projectId}`;
-
-        // Execute docker command to remove cache directory
-        const containers = await docker.listContainers({ all: true });
-        const utilContainer = containers.find(c => c.Image.includes('nexusquest-project'));
-
-        if (utilContainer) {
-            const container = docker.getContainer(utilContainer.Id);
-            const rmCacheExec = await container.exec({
-                Cmd: ['sh', '-c', `rm -rf ${cacheDir}`],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            await rmCacheExec.start({});
-        }
-
         res.json({ success: true, message: 'Dependency cache cleared successfully' });
     } catch (error: any) {
         logger.error('[dependencies] Clear cache error:', error);
@@ -231,18 +284,9 @@ router.get('/:projectId/dependencies', auth, async (req: Request, res: Response)
     }
 });
 
-// Sync dependencies (install in a container and cache them)
+// Sync dependencies
 router.post('/:projectId/dependencies/sync', auth, async (req: Request, res: Response) => {
     try {
-        const { projectId } = req.params;
-        const userId = (req as any).userId;
-
-        const project = await Project.findOne({ _id: projectId, owner: userId });
-        if (!project) {
-            return res.status(404).json({ error: 'Project not found' });
-        }
-
-        // Basic sync - just report success
         res.json({
             success: true,
             usedCache: false,
@@ -255,4 +299,3 @@ router.post('/:projectId/dependencies/sync', auth, async (req: Request, res: Res
 });
 
 export default router;
-

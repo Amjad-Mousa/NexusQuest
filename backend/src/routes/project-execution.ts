@@ -1,9 +1,5 @@
 import express, { Request, Response } from 'express';
 import Docker from 'dockerode';
-import crypto from 'crypto';
-
-import path from 'path';
-import fs from 'fs';
 import { logger } from '../utils/logger.js';
 import { Project } from '../models/Project.js';
 
@@ -50,47 +46,6 @@ function getExecutionCommand(language: string, baseDir: string, files: Array<{ n
         default:
             throw new Error(`Unsupported language: ${language}`);
     }
-}
-
-/**
- * Helper to resolve library file on disk from multiple possible locations
- */
-function resolveLibraryOnDisk(projectId: string, lib: { fileName: string; originalName: string }): string | null {
-    const roots = [
-        // Current working dir uploads (when app is started from project root)
-        path.join(process.cwd(), 'uploads', 'libraries', projectId),
-        // Backend-relative uploads (when app cwd is backend/)
-        path.join(process.cwd(), 'backend', 'uploads', 'libraries', projectId),
-    ];
-
-    const names = [
-        lib.fileName,
-        lib.originalName || lib.fileName,
-        `${lib.fileName}.gz`,
-        `${lib.fileName}.tar.gz`,
-    ];
-
-    const candidates: string[] = [];
-    for (const root of roots) {
-        for (const name of names) {
-            candidates.push(path.join(root, name));
-        }
-    }
-
-    for (const candidate of candidates) {
-        try {
-            if (fs.existsSync(candidate)) {
-                logger.info(`[resolveLibraryOnDisk] Found library at: ${candidate}`);
-                return candidate;
-            }
-        } catch (err) {
-            logger.debug(`[resolveLibraryOnDisk] fs.existsSync check failed for ${candidate}:`, err);
-        }
-    }
-
-    logger.error(`[resolveLibraryOnDisk] Library not found for project ${projectId}. Tried ${candidates.length} candidates. fileName="${lib.fileName}", originalName="${lib.originalName}"`);
-    logger.debug(`[resolveLibraryOnDisk] Candidates: ${JSON.stringify(candidates)}`);
-    return null;
 }
 
 /**
@@ -143,6 +98,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
         }
 
         let { customLibraries } = req.body;
+
         // Auto-include project libraries when none explicitly provided
         if (language === 'javascript' && projectId && (!customLibraries || customLibraries.length === 0)) {
             try {
@@ -150,6 +106,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 const libs = (project?.customLibraries || []) as any[];
                 if (libs.length > 0) {
                     customLibraries = libs.map((lib: any) => ({
+                        _id: lib._id,
                         fileName: lib.fileName,
                         originalName: lib.originalName,
                         fileType: lib.fileType
@@ -197,9 +154,8 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             HostConfig: {
                 Memory: 1024 * 1024 * 1024, // 1GB
                 AutoRemove: false,
-                // Use bridge network if dependencies need to be installed, otherwise use 'none' for security
                 NetworkMode: needsNetwork ? 'bridge' : 'none',
-                Dns: needsNetwork ? ['8.8.8.8', '8.8.4.4'] : undefined, // Google DNS for better reliability
+                Dns: needsNetwork ? ['8.8.8.8', '8.8.4.4'] : undefined,
                 Binds: [
                     `${language}-dependencies:/dependencies:rw`,
                     `${language}-custom-libs:/custom-libs:rw`
@@ -213,7 +169,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
         await container.start();
         logger.info(`Container started: ${containerName}`);
 
-        // Ensure dependency cache volume is present and writable (run as root)
+        // Ensure dependency cache volume is present and writable
         try {
             const depsPermsExec = await container.exec({
                 User: 'root',
@@ -230,12 +186,12 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 setTimeout(resolve, 1000);
             });
             if (permsOutput.includes('writable')) {
-                logger.info('[project-execution] /dependencies is writable for coderunner (uid 1001)');
+                logger.info('[project-execution] /dependencies is writable for coderunner');
             } else {
-                logger.warn('[project-execution] /dependencies is NOT writable even after root fix; caching may be skipped');
+                logger.warn('[project-execution] /dependencies is NOT writable, caching may be skipped');
             }
         } catch (e: any) {
-            logger.warn(`[project-execution] Failed to set permissions on /dependencies (root exec): ${e?.message || e}`);
+            logger.warn(`[project-execution] Failed to set permissions on /dependencies: ${e?.message || e}`);
         }
 
         // Create base directory
@@ -266,7 +222,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             await mkdirDirExec.start({});
         }
 
-        // Write all files to container using base64 encoding
+        // Write all files to container
         for (const file of files) {
             const base64Content = Buffer.from(file.content).toString('base64');
             const writeCmd = `echo "${base64Content}" | base64 -d > ${baseDir}/${file.name}`;
@@ -276,178 +232,132 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 AttachStderr: true
             });
             const writeStream = await writeExec.start({});
-            writeStream.resume(); // Consume the stream
+            writeStream.resume();
             await new Promise((resolve) => {
                 writeStream.on('end', resolve);
                 writeStream.on('error', resolve);
-                setTimeout(resolve, 1000); // Timeout after 1 second
+                setTimeout(resolve, 1000);
             });
         }
 
+        // ==========================================
+        // CUSTOM LIBRARIES - DATABASE ONLY
+        // ==========================================
         if (customLibraries && customLibraries.length > 0 && projectId) {
-            logger.info(`[project-execution] Processing ${customLibraries.length} custom libraries for project ${projectId}`);
+            logger.info(`[project-execution] Processing ${customLibraries.length} custom libraries from DATABASE`);
 
             const customLibDir = `/custom-libs/${projectId}`;
 
-            // STEP 1: Create directory as root with proper permissions
+            // Create directory
             logger.info(`[project-execution] Creating custom libs directory: ${customLibDir}`);
             try {
                 const mkCustomDirExec = await container.exec({
                     User: 'root',
-                    Cmd: ['sh', '-c', `
-                mkdir -p ${customLibDir} && \
-                chown -R 1001:1001 ${customLibDir} && \
-                chmod -R 0775 ${customLibDir} && \
-                ls -la /custom-libs/ && \
-                test -d ${customLibDir} && echo "DIRECTORY_CREATED" || echo "DIRECTORY_FAILED"
-            `],
+                    Cmd: ['sh', '-c', `mkdir -p ${customLibDir} && chown -R 1001:1001 ${customLibDir} && chmod -R 0775 ${customLibDir} && echo "DIRECTORY_CREATED"`],
                     AttachStdout: true,
                     AttachStderr: true
                 });
                 const setupStream = await mkCustomDirExec.start({ hijack: true });
                 let setupOutput = '';
                 await new Promise((resolve) => {
-                    setupStream.on('data', (chunk: Buffer) => {
-                        setupOutput += chunk.toString();
-                    });
+                    setupStream.on('data', (chunk: Buffer) => { setupOutput += chunk.toString(); });
                     setupStream.on('end', resolve);
                     setupStream.on('error', resolve);
                     setTimeout(resolve, 2000);
                 });
 
-                logger.info('[project-execution] Directory setup output:', setupOutput.trim());
-
                 if (!setupOutput.includes('DIRECTORY_CREATED')) {
                     throw new Error('Failed to create custom libs directory');
                 }
-                logger.info('[project-execution] ✓ Custom libs directory created successfully');
+                logger.info('[project-execution] ✓ Custom libs directory created');
             } catch (e: any) {
                 logger.error(`[project-execution] Failed to create directory: ${e?.message || e}`);
             }
 
-            // STEP 2: Load project record for fallback resolution
-            let projectRecord: any = null;
-            try {
-                projectRecord = await Project.findById(projectId).lean();
-            } catch (e: any) {
-                logger.warn(`[project-execution] Unable to load project ${projectId}: ${e?.message || e}`);
-            }
+            // Load project from database
+            const project = await Project.findById(projectId).lean();
+            if (!project) {
+                logger.error(`[project-execution] Project ${projectId} not found in database`);
+            } else {
+                logger.info(`[project-execution] Loaded project from database: ${project.name}`);
 
-            // STEP 3: Copy each library to container
-            // STEP 3: Copy each library to container
-            for (const lib of customLibraries) {
-                try {
-                    let libContent: Buffer | null = null;
-                    const targetName = lib.originalName || lib.fileName;
+                // Process each library - READ FROM DATABASE ONLY
+                for (const lib of customLibraries) {
+                    try {
+                        const libAny: any = lib;
 
-                    // Get from database
-                    if (projectRecord?.customLibraries?.length) {
-                        const libAny: any = lib as any;
-                        const dbLib = (projectRecord.customLibraries as any[]).find((d: any) => {
+                        // Find library in project's customLibraries array
+                        const dbLib = (project.customLibraries as any[] || []).find((d: any) => {
                             if (libAny?._id && d?._id) {
                                 return d._id.toString() === libAny._id.toString();
                             }
                             return d.originalName === lib.originalName || d.fileName === lib.fileName;
                         });
 
-                        if (dbLib) {
-                            logger.info(`[project-execution] Found library in database: ${targetName}`);
-
-                            // Get file content from database
-                            if (dbLib.fileContent) {
-                                if (Buffer.isBuffer(dbLib.fileContent)) {
-                                    libContent = dbLib.fileContent;
-                                } else if (dbLib.fileContent.buffer) {
-                                    // MongoDB Binary type
-                                    libContent = Buffer.from(dbLib.fileContent.buffer);
-                                } else if (dbLib.fileContent.data) {
-                                    // Another MongoDB Binary format
-                                    libContent = Buffer.from(dbLib.fileContent.data);
-                                } else if (typeof dbLib.fileContent === 'string') {
-                                    libContent = Buffer.from(dbLib.fileContent, 'base64');
-                                }
-
-                                if (libContent) {
-                                    logger.info(`[project-execution] Loaded ${libContent.length} bytes from database`);
-                                }
-                            }
-
-                            // Update lib metadata
-                            (lib as any).fileName = dbLib.fileName;
-                            (lib as any).originalName = dbLib.originalName;
-                            (lib as any).fileType = dbLib.fileType;
+                        if (!dbLib) {
+                            logger.warn(`[project-execution] Library not found in database: ${lib.originalName}`);
+                            continue;
                         }
-                    }
 
-                    // Fallback to filesystem if not in database
-                    if (!libContent) {
-                        logger.info(`[project-execution] Library not in database, checking filesystem...`);
-                        let diskPath = resolveLibraryOnDisk(projectId, lib);
+                        logger.info(`[project-execution] Found library in database: ${dbLib.originalName}`);
 
-                        if (!diskPath && projectRecord?.customLibraries?.length) {
-                            const libAny: any = lib as any;
-                            const dbLib = (projectRecord.customLibraries as any[]).find((d: any) => {
-                                if (libAny?._id && d?._id) {
-                                    return d._id.toString() === libAny._id.toString();
-                                }
-                                return d.originalName === lib.originalName;
-                            });
-                            if (dbLib) {
-                                const mapped = { fileName: dbLib.fileName, originalName: dbLib.originalName };
-                                diskPath = resolveLibraryOnDisk(projectId, mapped);
-                                if (diskPath) {
-                                    logger.info(`[project-execution] Resolved via DB mapping: ${lib.fileName || lib.originalName} -> ${dbLib.fileName}`);
-                                    (lib as any).fileName = dbLib.fileName;
-                                    (lib as any).originalName = dbLib.originalName;
-                                    (lib as any).fileType = dbLib.fileType;
-                                }
+                        // Extract fileContent from database
+                        let libContent: Buffer | null = null;
+
+                        if (dbLib.fileContent) {
+                            if (Buffer.isBuffer(dbLib.fileContent)) {
+                                libContent = dbLib.fileContent;
+                            } else if (dbLib.fileContent.buffer) {
+                                // MongoDB Binary type
+                                libContent = Buffer.from(dbLib.fileContent.buffer);
+                            } else if (dbLib.fileContent.data) {
+                                // Another MongoDB Binary format
+                                libContent = Buffer.from(dbLib.fileContent.data);
+                            } else if (typeof dbLib.fileContent === 'string') {
+                                libContent = Buffer.from(dbLib.fileContent, 'base64');
                             }
                         }
 
-                        if (diskPath) {
-                            libContent = fs.readFileSync(diskPath);
-                            logger.info(`[project-execution] Loaded ${libContent.length} bytes from disk`);
+                        if (!libContent || libContent.length === 0) {
+                            logger.error(`[project-execution] Library has no content in database: ${dbLib.originalName}`);
+                            continue;
                         }
-                    }
 
-                    if (!libContent) {
-                        logger.warn(`[project-execution] Skipping library (no content): ${targetName}`);
-                        continue;
-                    }
+                        logger.info(`[project-execution] Loaded ${libContent.length} bytes from database for ${dbLib.originalName}`);
 
-                    const base64LibContent = libContent.toString('base64');
-                    const targetPathInContainer = `${customLibDir}/${targetName}`;
+                        // Copy to container
+                        const targetName = dbLib.originalName;
+                        const targetPathInContainer = `${customLibDir}/${targetName}`;
+                        const base64LibContent = libContent.toString('base64');
 
-                    logger.info(`[project-execution] Copying library: ${targetName} (${libContent.length} bytes)`);
+                        logger.info(`[project-execution] Copying library to container: ${targetName} (${libContent.length} bytes)`);
 
-                    const copyLibExec = await container.exec({
-                        Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer} && ls -lh ${targetPathInContainer} && echo "COPY_SUCCESS"`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const copyStream = await copyLibExec.start({ hijack: true });
-                    let copyOutput = '';
-                    await new Promise((resolve) => {
-                        copyStream.on('data', (chunk: Buffer) => {
-                            copyOutput += chunk.toString();
+                        const copyLibExec = await container.exec({
+                            Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer} && ls -lh ${targetPathInContainer} && echo "COPY_SUCCESS"`],
+                            AttachStdout: true,
+                            AttachStderr: true
                         });
-                        copyStream.on('end', resolve);
-                        copyStream.on('error', resolve);
-                        setTimeout(resolve, 2000);
-                    });
+                        const copyStream = await copyLibExec.start({ hijack: true });
+                        let copyOutput = '';
+                        await new Promise((resolve) => {
+                            copyStream.on('data', (chunk: Buffer) => { copyOutput += chunk.toString(); });
+                            copyStream.on('end', resolve);
+                            copyStream.on('error', resolve);
+                            setTimeout(resolve, 2000);
+                        });
 
-                    logger.info(`[project-execution] Copy result: ${copyOutput.trim()}`);
-                    if (!copyOutput.includes('COPY_SUCCESS')) {
-                        logger.error(`[project-execution] Failed to copy: ${targetName}`);
-                    } else {
-                        logger.info(`[project-execution] ✓ Successfully copied: ${targetName}`);
+                        if (!copyOutput.includes('COPY_SUCCESS')) {
+                            logger.error(`[project-execution] Failed to copy: ${targetName}`);
+                        } else {
+                            logger.info(`[project-execution] ✓ Successfully copied: ${targetName}`);
+                        }
+                    } catch (error: any) {
+                        logger.error(`[project-execution] Error copying library ${lib.originalName}:`, error);
                     }
-                } catch (error: any) {
-                    logger.error(`[project-execution] Error copying library ${lib.fileName}:`, error);
                 }
             }
 
-            // STEP 4: Verify files were copied
+            // Verify copied files
             logger.info('[project-execution] Verifying copied libraries...');
             try {
                 const verifyExec = await container.exec({
@@ -458,9 +368,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 const verifyStream = await verifyExec.start({ hijack: true });
                 let verifyOutput = '';
                 await new Promise((resolve) => {
-                    verifyStream.on('data', (chunk: Buffer) => {
-                        verifyOutput += chunk.toString();
-                    });
+                    verifyStream.on('data', (chunk: Buffer) => { verifyOutput += chunk.toString(); });
                     verifyStream.on('end', resolve);
                     verifyStream.on('error', resolve);
                     setTimeout(resolve, 2000);
@@ -470,7 +378,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 logger.warn(`[project-execution] Could not verify: ${e?.message || e}`);
             }
 
-            // STEP 5: Extract and sync (JavaScript only)
+            // Extract and sync (JavaScript only)
             if (language === 'javascript') {
                 logger.info('[project-execution] Extracting and syncing JavaScript libraries');
 
@@ -480,24 +388,14 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 CUSTOM_DIR="${customLibDir}"
                 BASE_DIR="${baseDir}"
                 
-                echo "[custom-libs] =========================================="
-                echo "[custom-libs] Starting extraction and sync"
-                echo "[custom-libs] Custom dir: $CUSTOM_DIR"
-                echo "[custom-libs] Base dir: $BASE_DIR"
-                echo "[custom-libs] =========================================="
+                echo "[custom-libs] Starting extraction from $CUSTOM_DIR"
                 
-                # Verify directory exists
                 if [ ! -d "$CUSTOM_DIR" ]; then
-                    echo "[custom-libs] ERROR: Directory does not exist: $CUSTOM_DIR"
-                    ls -la /custom-libs/ || echo "Cannot list /custom-libs/"
+                    echo "[custom-libs] ERROR: Directory does not exist"
                     exit 1
                 fi
                 
-                # List files
-                echo "[custom-libs] Files in custom libs directory:"
                 ls -la "$CUSTOM_DIR"
-                
-                # Count files
                 file_count=$(ls -1 "$CUSTOM_DIR" 2>/dev/null | wc -l | tr -d ' ')
                 echo "[custom-libs] Found $file_count file(s)"
                 
@@ -506,171 +404,91 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     exit 0
                 fi
                 
-                # Create node_modules
                 mkdir -p "$BASE_DIR/node_modules"
                 
-                # Process each file
                 for libfile in "$CUSTOM_DIR"/*; do
                     if [ ! -f "$libfile" ]; then
                         continue
                     fi
                     
                     filename=$(basename "$libfile")
-                    echo ""
-                    echo "[custom-libs] =========================================="
                     echo "[custom-libs] Processing: $filename"
                     
-                    # Check file size
-                    file_size=$(stat -c%s "$libfile" 2>/dev/null || echo "unknown")
-                    echo "[custom-libs] File size: $file_size bytes"
-                    
-                    # Detect archive type
                     is_archive=0
-                    archive_type=""
                     if echo "$filename" | grep -iE '\\.(tar\\.gz|tgz)$' >/dev/null; then
                         is_archive=1
-                        archive_type="tar.gz"
-                    elif echo "$filename" | grep -iE '\\.gz$' >/dev/null; then
-                        is_archive=1
-                        archive_type="gz"
-                    elif echo "$filename" | grep -iE '\\.zip$' >/dev/null; then
-                        is_archive=1
-                        archive_type="zip"
-                    fi
-                    
-                    if [ $is_archive -eq 1 ]; then
-                        echo "[custom-libs] Archive type: $archive_type"
+                        lib_name=$(echo "$filename" | sed -E 's/\\.(tar\\.gz|tgz)$//')
                         
-                        # Get library name (remove extension)
-                        lib_name=$(echo "$filename" | sed -E 's/\\.(tar\\.gz|tgz|gz|zip)$//')
-                        echo "[custom-libs] Library name: $lib_name"
-                        
-                        # Create extraction directory
                         extract_dir="$CUSTOM_DIR/extracted_$lib_name"
                         rm -rf "$extract_dir" 2>/dev/null || true
                         mkdir -p "$extract_dir"
                         
-                        # Extract
-                        echo "[custom-libs] Extracting to: $extract_dir"
-                        if [ "$archive_type" = "tar.gz" ]; then
-                            tar -xzf "$libfile" -C "$extract_dir" 2>&1 || tar -xf "$libfile" -C "$extract_dir" 2>&1
-                        elif [ "$archive_type" = "gz" ]; then
-                            gunzip -c "$libfile" > "$extract_dir/$(basename "$filename" .gz)" 2>&1
-                        elif [ "$archive_type" = "zip" ]; then
-                            unzip -q "$libfile" -d "$extract_dir" 2>&1 || unzip "$libfile" -d "$extract_dir"
-                        fi
+                        echo "[custom-libs] Extracting..."
+                        tar -xzf "$libfile" -C "$extract_dir" 2>&1 || tar -xf "$libfile" -C "$extract_dir" 2>&1
                         
-                        echo "[custom-libs] ✓ Extracted"
-                        echo "[custom-libs] Contents (first 30 lines):"
-                        ls -laR "$extract_dir" | head -30
-                        
-                        # Check for nested directory
+                        # Flatten if single nested directory
                         subdir_count=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
                         file_count=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
                         
-                        echo "[custom-libs] Root level: $subdir_count dirs, $file_count files"
-                        
-                        # Flatten if single nested directory
                         if [ "$subdir_count" = "1" ] && [ "$file_count" = "0" ]; then
                             nested_dir=$(find "$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
                             if [ -n "$nested_dir" ]; then
-                                echo "[custom-libs] Flattening: $(basename "$nested_dir")"
                                 temp_dir="$CUSTOM_DIR/temp_$$"
                                 mv "$nested_dir" "$temp_dir"
                                 rm -rf "$extract_dir"
                                 mv "$temp_dir" "$extract_dir"
-                                echo "[custom-libs] ✓ Flattened"
                             fi
                         fi
                         
                         # Find entry point
                         entry_point=""
                         if [ -f "$extract_dir/package.json" ]; then
-                            echo "[custom-libs] Found package.json"
                             main_field=$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
                             if [ -n "$main_field" ]; then
                                 entry_point="$main_field"
-                                echo "[custom-libs] Main field: $entry_point"
                             fi
                         fi
                         
-                        # Fallback entry point
                         if [ -z "$entry_point" ]; then
-                            echo "[custom-libs] Searching for entry point..."
-                            for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js" "$lib_name.js"; do
+                            for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js"; do
                                 if [ -f "$extract_dir/$candidate" ]; then
                                     entry_point="$candidate"
-                                    echo "[custom-libs] Found: $entry_point"
                                     break
                                 fi
                             done
-                            
-                            if [ -z "$entry_point" ]; then
-                                first_js=$(find "$extract_dir" -maxdepth 2 -type f -name "*.js" 2>/dev/null | head -n1)
-                                if [ -n "$first_js" ]; then
-                                    entry_point=$(echo "$first_js" | sed "s|$extract_dir/||")
-                                    echo "[custom-libs] Using first .js: $entry_point"
-                                fi
-                            fi
                         fi
                         
-                        if [ -z "$entry_point" ]; then
-                            echo "[custom-libs] WARNING: No entry point found"
-                        fi
-                        
-                        # Copy to base directory
-                        echo "[custom-libs] Copying to base..."
+                        # Copy to base and node_modules
                         cp -r "$extract_dir" "$BASE_DIR/$lib_name"
-                        echo "[custom-libs] ✓ Copied to: $BASE_DIR/$lib_name/"
-                        
-                        # Copy to node_modules
-                        echo "[custom-libs] Copying to node_modules..."
                         cp -r "$extract_dir" "$BASE_DIR/node_modules/$lib_name"
-                        echo "[custom-libs] ✓ Copied to: $BASE_DIR/node_modules/$lib_name/"
                         
-                        # Create wrapper file
+                        # Create wrapper
                         if [ -n "$entry_point" ]; then
-                            wrapper_file="$BASE_DIR/$lib_name.js"
-                            echo "[custom-libs] Creating wrapper: $wrapper_file"
-                            printf "module.exports = require('./%s/%s');\n" "$lib_name" "$entry_point" > "$wrapper_file"
-                            echo "[custom-libs] ✓ Wrapper created"
+                            printf "module.exports = require('./%s/%s');\\n" "$lib_name" "$entry_point" > "$BASE_DIR/$lib_name.js"
                             
-                            # Create index.js if needed
                             if [ ! -f "$BASE_DIR/node_modules/$lib_name/index.js" ] && [ "$entry_point" != "index.js" ]; then
-                                printf "module.exports = require('./%s');\n" "$entry_point" > "$BASE_DIR/node_modules/$lib_name/index.js"
-                                echo "[custom-libs] ✓ Created index.js"
+                                printf "module.exports = require('./%s');\\n" "$entry_point" > "$BASE_DIR/node_modules/$lib_name/index.js"
                             fi
                         fi
                         
-                        echo "[custom-libs] ✓✓ Successfully processed: $lib_name"
+                        echo "[custom-libs] ✓ Processed: $lib_name"
                     else
-                        echo "[custom-libs] Not an archive, copying as-is"
                         cp "$libfile" "$BASE_DIR/$filename"
                         echo "[custom-libs] ✓ Copied: $filename"
                     fi
                 done
                 
-                echo ""
-                echo "[custom-libs] =========================================="
-                echo "[custom-libs] ✓✓✓ Processing complete!"
-                echo "[custom-libs] =========================================="
-                echo "[custom-libs] Base directory (first 30):"
-                ls -la "$BASE_DIR" | head -30
-                echo ""
-                echo "[custom-libs] Node modules (first 30):"
-                ls -la "$BASE_DIR/node_modules" | head -30
+                echo "[custom-libs] ✓ Complete"
             `],
                     AttachStdout: true,
                     AttachStderr: true
                 });
 
                 const extractStream = await extractAndSyncExec.start({ hijack: true });
-                let extractOutput = '';
 
                 await new Promise((resolve) => {
                     extractStream.on('data', (chunk: Buffer) => {
                         const output = chunk.toString();
-                        extractOutput += output;
                         output.split('\n').forEach(line => {
                             if (line.trim()) {
                                 logger.info('[custom-libs]:', line.trim());
@@ -690,698 +508,16 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         resolve(undefined);
                     }, 15000);
                 });
-
-                // Check results
-                if (extractOutput.includes('Successfully processed')) {
-                    logger.info('[project-execution] ✓✓✓ Custom libraries processed successfully');
-                } else if (extractOutput.includes('ERROR')) {
-                    logger.error('[project-execution] Library processing had errors');
-                } else {
-                    logger.warn('[project-execution] Library processing status unknown');
-                }
             }
         }
 
-        // Check if C++ project has CMakeLists.txt with find_package() calls
-        const hasCppDependencies = language === 'cpp' && files.some(f => {
-            if (f.name === 'CMakeLists.txt') {
-                const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
-                const hasPackages = findPackageRegex.test(f.content);
-                logger.info(`[project-execution] CMakeLists.txt found, has find_package: ${hasPackages}`);
-                return hasPackages;
-            }
-            return false;
-        });
-
-        // Install dependencies
-        if (language === 'javascript') {
-            logger.info('[project-execution] Checking dependency cache...');
-            const npmInstallExec = await container.exec({
-                Cmd: ['sh', '-c', `
-                        set -e
-                        CACHE_DIR="${cacheDir}"
-                        BASE_DIR="${baseDir}"
-                        if [ -d "$CACHE_DIR/node_modules" ] && [ -f "$CACHE_DIR/.cache-complete" ]; then
-                            echo "✓ [dependency-cache] Using cached dependencies from $CACHE_DIR"
-                            cp -r $CACHE_DIR/node_modules $BASE_DIR/ 2>&1 || echo "Cache copy failed, will install fresh"
-                            if [ -d "$BASE_DIR/node_modules" ]; then
-                                echo "npm_install_done"
-                                exit 0
-                            fi
-                        fi
-                        echo "⚙ [dependency-cache] Installing dependencies (first time for this combination)..."
-                        cd $BASE_DIR
-                        npm install --legacy-peer-deps > npm-install.log 2>&1
-                        if [ $? -eq 0 ]; then
-                            echo "[dependency-cache] Caching dependencies to $CACHE_DIR..."
-                            mkdir -p $CACHE_DIR
-                            cp -r $BASE_DIR/node_modules $CACHE_DIR/ 2>&1 || echo "Warning: Failed to cache dependencies"
-                            touch $CACHE_DIR/.cache-complete
-                            echo "✓ [dependency-cache] Dependencies cached successfully"
-                            echo "npm_install_done"
-                        else
-                            echo "npm_install_failed"
-                            exit 1
-                        fi
-                    `],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const npmStream = await npmInstallExec.start({ hijack: true });
-
-            // Wait for npm to complete - collect output to check for completion status
-            let npmOutput = '';
-            let npmCompleted = false;
-            let logCheckerInterval: NodeJS.Timeout | null = null;
-
-            await new Promise<void>((resolve) => {
-                // Consume stream data
-                npmStream.on('data', (chunk: Buffer) => {
-                    const output = chunk.toString();
-                    npmOutput += output;
-                    logger.info('[npm exec response]:', output.trim());
-
-                    // Check if we see the completion marker
-                    if (output.includes('npm_install_done')) {
-                        if (!npmCompleted) {
-                            npmCompleted = true;
-                            if (logCheckerInterval) clearInterval(logCheckerInterval);
-                            logger.info('[project-execution] npm install completed successfully');
-                            resolve();
-                        }
-                    } else if (output.includes('npm_install_failed')) {
-                        if (!npmCompleted) {
-                            npmCompleted = true;
-                            if (logCheckerInterval) clearInterval(logCheckerInterval);
-                            logger.error('[project-execution] npm install failed');
-                            resolve();
-                        }
-                    }
-                });
-                npmStream.on('end', () => {
-                    if (!npmCompleted) {
-                        npmCompleted = true;
-                        if (logCheckerInterval) clearInterval(logCheckerInterval);
-                        logger.info('[project-execution] npm exec stream ended');
-                        resolve();
-                    }
-                });
-                npmStream.on('error', (err: any) => {
-                    if (!npmCompleted) {
-                        npmCompleted = true;
-                        if (logCheckerInterval) clearInterval(logCheckerInterval);
-                        logger.error('[project-execution] npm exec stream error:', err);
-                        resolve();
-                    }
-                });
-
-                // Start periodic log checking while waiting
-                let checkCount = 0;
-                logCheckerInterval = setInterval(async () => {
-                    checkCount++;
-                    if (checkCount > 60) { // Stop after 2 minutes
-                        if (logCheckerInterval) clearInterval(logCheckerInterval);
-                        return;
-                    }
-
-                    try {
-                        // Check log file for progress
-                        const progressExec = await container.exec({
-                            Cmd: ['sh', '-c', `tail -1 ${baseDir}/npm-install.log 2>/dev/null || echo ""`],
-                            AttachStdout: true,
-                            AttachStderr: true
-                        });
-                        const progressStream = await progressExec.start({ hijack: true });
-                        let logLine = '';
-                        await new Promise<void>((resolve) => {
-                            progressStream.on('data', (chunk: Buffer) => {
-                                logLine += chunk.toString();
-                            });
-                            progressStream.on('end', () => {
-                                if (logLine.trim() && !logLine.includes('npm_install_done') && !logLine.includes('npm_install_failed')) {
-                                    logger.info(`[npm progress ${checkCount * 2}s]: ${logLine.trim().substring(0, 150)}`);
-                                }
-                                resolve();
-                            });
-                            progressStream.on('error', () => resolve());
-                            setTimeout(() => resolve(), 1000);
-                        });
-                    } catch (err) {
-                        // Ignore errors in progress checking
-                    }
-                }, 2000); // Check every 2 seconds
-
-                // Increased timeout to 120 seconds (2 minutes) for npm install
-                setTimeout(() => {
-                    if (logCheckerInterval) clearInterval(logCheckerInterval);
-                    if (!npmCompleted) {
-                        npmCompleted = true;
-                        logger.warn('[project-execution] npm exec timeout after 120s, checking status...');
-                        resolve();
-                    }
-                }, 120000);
-            });
-
-            // Poll to check if npm install actually completed
-            let installSuccess = false;
-            logger.info('[project-execution] Starting verification polling...');
-
-            // First, check if we got the completion marker from stream
-            if (npmOutput.includes('npm_install_done')) {
-                installSuccess = true;
-                logger.info('[project-execution] npm install completed (from stream output)');
-            } else {
-                // Poll up to 30 times (60 seconds total) to check status
-                let npmStillRunning = true;
-                let maxAttempts = 30;
-                let npmFinishedAt = -1;
-
-                for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    logger.info(`[project-execution] Verification attempt ${attempt + 1}/${maxAttempts}`);
-
-                    // Check if npm process is still running first
-                    const procCheckExec = await container.exec({
-                        Cmd: ['sh', '-c', `ps aux | grep -E "[n]pm install" | wc -l`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const procStream = await procCheckExec.start({ hijack: true });
-                    let procOutput = '';
-                    await new Promise((resolve) => {
-                        procStream.on('data', (chunk: Buffer) => {
-                            procOutput += chunk.toString();
-                        });
-                        procStream.on('end', resolve);
-                        procStream.on('error', resolve);
-                        setTimeout(resolve, 1000);
-                    });
-
-                    const runningCount = parseInt(procOutput.trim()) || 0;
-                    const wasRunning = npmStillRunning;
-                    npmStillRunning = runningCount > 0;
-
-                    if (wasRunning && !npmStillRunning) {
-                        npmFinishedAt = attempt;
-                        logger.info(`[project-execution] npm process finished at attempt ${attempt + 1}`);
-                    }
-
-                    logger.info(`[project-execution] npm process check: ${runningCount} process(es) running`);
-
-                    // Check if node_modules exists
-                    const checkModulesExec = await container.exec({
-                        Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const checkStream = await checkModulesExec.start({ hijack: true });
-                    let checkOutput = '';
-                    await new Promise((resolve) => {
-                        checkStream.on('data', (chunk: Buffer) => {
-                            checkOutput += chunk.toString();
-                        });
-                        checkStream.on('end', resolve);
-                        checkStream.on('error', resolve);
-                        setTimeout(resolve, 2000);
-                    });
-
-                    logger.info(`[project-execution] node_modules check result: ${checkOutput.trim()}`);
-
-                    if (checkOutput.includes('exists')) {
-                        installSuccess = true;
-                        logger.info('[project-execution] ✓ node_modules found, npm install succeeded');
-                        break;
-                    }
-
-                    // If npm finished but node_modules not found yet, wait a bit more
-                    if (!npmStillRunning && !checkOutput.includes('exists') && npmFinishedAt >= 0 && attempt - npmFinishedAt < 3) {
-                        logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-
-                        // Check again
-                        const retryCheckExec = await container.exec({
-                            Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                            AttachStdout: true,
-                            AttachStderr: true
-                        });
-                        const retryStream = await retryCheckExec.start({ hijack: true });
-                        let retryOutput = '';
-                        await new Promise((resolve) => {
-                            retryStream.on('data', (chunk: Buffer) => {
-                                retryOutput += chunk.toString();
-                            });
-                            retryStream.on('end', resolve);
-                            retryStream.on('error', resolve);
-                            setTimeout(resolve, 2000);
-                        });
-
-                        logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
-                        if (retryOutput.includes('exists')) {
-                            installSuccess = true;
-                            logger.info('[project-execution] ✓ node_modules found on retry, npm install succeeded');
-                            break;
-                        }
-                    }
-
-                    // If npm finished but node_modules not found yet, wait a bit more
-                    if (!npmStillRunning && !checkOutput.includes('exists')) {
-                        logger.info('[project-execution] npm finished but node_modules not found yet, waiting...');
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-
-                        // Check again
-                        const retryCheckExec = await container.exec({
-                            Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                            AttachStdout: true,
-                            AttachStderr: true
-                        });
-                        const retryStream = await retryCheckExec.start({ hijack: true });
-                        let retryOutput = '';
-                        await new Promise((resolve) => {
-                            retryStream.on('data', (chunk: Buffer) => {
-                                retryOutput += chunk.toString();
-                            });
-                            retryStream.on('end', resolve);
-                            retryStream.on('error', resolve);
-                            setTimeout(resolve, 2000);
-                        });
-
-                        logger.info(`[project-execution] node_modules retry check: ${retryOutput.trim()}`);
-                        if (retryOutput.includes('exists')) {
-                            installSuccess = true;
-                            logger.info('[project-execution] ✓ node_modules found on retry, npm install succeeded');
-                            break;
-                        }
-                    }
-
-                    // Also check the log for completion indicators and errors
-                    const logExec = await container.exec({
-                        Cmd: ['sh', '-c', `tail -30 ${baseDir}/npm-install.log 2>/dev/null || echo "no_log"`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const logStream = await logExec.start({ hijack: true });
-                    let logOutput = '';
-                    await new Promise((resolve) => {
-                        logStream.on('data', (chunk: Buffer) => {
-                            logOutput += chunk.toString();
-                        });
-                        logStream.on('end', resolve);
-                        logStream.on('error', resolve);
-                        setTimeout(resolve, 2000);
-                    });
-
-                    // Check for npm errors first
-                    if (logOutput.includes('npm error')) {
-                        let errorMsg = 'npm install failed';
-                        if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
-                            errorMsg = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
-                        } else if (logOutput.includes('ENOTFOUND')) {
-                            errorMsg = 'DNS resolution failed: Cannot resolve npm registry hostname.';
-                        } else if (logOutput.includes('ETIMEDOUT') || logOutput.includes('timeout')) {
-                            errorMsg = 'Network timeout: Connection to npm registry timed out.';
-                        } else if (logOutput.includes('ECONNREFUSED')) {
-                            errorMsg = 'Connection refused: Cannot connect to npm registry.';
-                        }
-
-                        logger.error(`[project-execution] npm install error detected: ${errorMsg}`);
-                        // Don't break here, continue to final check to get full error details
-                    }
-
-                    // Check for various completion indicators
-                    if (logOutput.includes('added') ||
-                        logOutput.includes('up to date') ||
-                        logOutput.includes('npm_install_done') ||
-                        logOutput.includes('packages in') ||
-                        (logOutput.includes('audited') && !logOutput.includes('npm ERR'))) {
-                        // Double-check node_modules exists
-                        const verifyExec = await container.exec({
-                            Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                            AttachStdout: true,
-                            AttachStderr: true
-                        });
-                        const verifyStream = await verifyExec.start({ hijack: true });
-                        let verifyOutput = '';
-                        await new Promise((resolve) => {
-                            verifyStream.on('data', (chunk: Buffer) => {
-                                verifyOutput += chunk.toString();
-                            });
-                            verifyStream.on('end', resolve);
-                            verifyStream.on('error', resolve);
-                            setTimeout(resolve, 2000);
-                        });
-
-                        if (verifyOutput.includes('exists')) {
-                            installSuccess = true;
-                            logger.info('[project-execution] npm install completed based on log indicators');
-                            break;
-                        }
-                    }
-
-                    // If npm finished but we haven't found success yet, continue checking a bit more
-                    if (!npmStillRunning && attempt < 5) {
-                        logger.info('[project-execution] npm process finished, continuing verification...');
-                    }
-                }
-
-                if (!installSuccess && !npmStillRunning) {
-                    // Final check - npm finished but we didn't detect success
-                    logger.warn('[project-execution] npm process finished but success not confirmed, doing final check...');
-                    const finalCheckExec = await container.exec({
-                        Cmd: ['sh', '-c', `test -d ${baseDir}/node_modules && echo "exists" || echo "not_found"`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    });
-                    const finalStream = await finalCheckExec.start({ hijack: true });
-                    let finalOutput = '';
-                    await new Promise((resolve) => {
-                        finalStream.on('data', (chunk: Buffer) => {
-                            finalOutput += chunk.toString();
-                        });
-                        finalStream.on('end', resolve);
-                        finalStream.on('error', resolve);
-                        setTimeout(resolve, 2000);
-                    });
-
-                    if (finalOutput.includes('exists')) {
-                        installSuccess = true;
-                        logger.info('[project-execution] npm install succeeded - node_modules found on final check');
-                    }
-                }
-            }
-
-            // Final check - read full npm log for debugging and error detection
-            logger.info('[project-execution] Reading npm install log');
-            const logExec = await container.exec({
-                Cmd: ['sh', '-c', `cat ${baseDir}/npm-install.log 2>/dev/null || echo "no log"`],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const logStream = await logExec.start({ hijack: true });
-            let logOutput = '';
-            await new Promise((resolve) => {
-                logStream.on('data', (chunk: Buffer) => {
-                    logOutput += chunk.toString();
-                });
-                logStream.on('end', resolve);
-                logStream.on('error', resolve);
-                setTimeout(resolve, 3000);
-            });
-            logger.info('[npm install log]:', logOutput.substring(0, 500));
-
-            // Check for npm errors in the log
-            let npmError = '';
-            if (logOutput.includes('npm error')) {
-                // Extract error message
-                const errorMatch = logOutput.match(/npm error[^\n]*(?:\n[^\n]*)*/);
-                if (errorMatch) {
-                    npmError = errorMatch[0].trim();
-                }
-
-                // Check for specific error types
-                if (logOutput.includes('EAI_AGAIN') || logOutput.includes('getaddrinfo')) {
-                    npmError = 'Network/DNS error: Cannot reach npm registry. Please check your internet connection or Docker network configuration.';
-                } else if (logOutput.includes('ENOTFOUND')) {
-                    npmError = 'DNS resolution failed: Cannot resolve npm registry hostname.';
-                } else if (logOutput.includes('ETIMEDOUT') || logOutput.includes('timeout')) {
-                    npmError = 'Network timeout: Connection to npm registry timed out.';
-                } else if (logOutput.includes('ECONNREFUSED')) {
-                    npmError = 'Connection refused: Cannot connect to npm registry.';
-                }
-            }
-
-            if (!installSuccess) {
-                if (npmError) {
-                    logger.error('[project-execution] npm install failed:', npmError);
-                    // Return error response instead of proceeding
-                    res.status(500).json({
-                        success: false,
-                        error: `Dependency installation failed: ${npmError}`,
-                        details: logOutput.substring(0, 1000)
-                    });
-                    return;
-                } else if (!npmOutput.includes('npm_install_done')) {
-                    logger.warn('[project-execution] npm install may not have completed, but proceeding anyway');
-                }
-            } else {
-                logger.info('[project-execution] npm install completed successfully');
-            }
-        } else if (language === 'python') {
-            logger.info('[project-execution] Installing Python dependencies');
-            const requirementsContent = Object.entries(dependencies || {})
-                .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
-                .join('\n');
-            const base64Requirements = Buffer.from(requirementsContent).toString('base64');
-            const writePipExec = await container.exec({
-                Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const pipFileStream = await writePipExec.start({});
-            pipFileStream.resume();
-            await new Promise(resolve => {
-                pipFileStream.on('end', resolve);
-                pipFileStream.on('error', resolve);
-                setTimeout(resolve, 1000);
-            });
-
-            // Run pip install
-            const pipInstallExec = await container.exec({
-                Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1`],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const pipStream = await pipInstallExec.start({ hijack: true });
-
-            let pipOutput = '';
-            // Properly wait for completion
-            await new Promise<void>((resolve) => {
-                let completed = false;
-                pipStream.on('end', () => {
-                    if (!completed) {
-                        completed = true;
-                        logger.info('[project-execution] pip stream ended');
-                        resolve();
-                    }
-                });
-                pipStream.on('error', (err: any) => {
-                    if (!completed) {
-                        completed = true;
-                        logger.error('[project-execution] pip stream error:', err);
-                        resolve();
-                    }
-                });
-                pipStream.on('data', (chunk: Buffer) => {
-                    pipOutput += chunk.toString();
-                });
-                // Safety timeout
-                setTimeout(() => {
-                    if (!completed) {
-                        completed = true;
-                        logger.warn('[project-execution] pip install timeout after 120 seconds');
-                        resolve();
-                    }
-                }, 120000);
-            });
-
-            if (pipOutput.includes('ERROR:') || pipOutput.includes('Could not find a version') || pipOutput.includes('command not found')) {
-                logger.error('[project-execution] pip install failed:', pipOutput);
-                res.status(500).json({
-                    success: false,
-                    error: 'Dependency installation failed',
-                    details: pipOutput
-                });
-                return;
-            }
-
-            logger.info('[project-execution] pip install completed successfully');
-        } else if (language === 'cpp') {
-            // Check if project has a conanfile (conanfile.txt or conanfile.py)
-            const hasConanfile = files.some(f => f.name === 'conanfile.txt' || f.name === 'conanfile.py');
-
-            // Parse CMakeLists.txt to extract find_package() calls
-            const cmakeFile = files.find(f => f.name === 'CMakeLists.txt');
-            const requiredPackages: string[] = [];
-
-            if (cmakeFile) {
-                // Extract find_package() calls from CMakeLists.txt
-                const findPackageRegex = /find_package\s*\(\s*(\w+)(?:\s+REQUIRED|\s+QUIET)?\s*\)/gi;
-                let match;
-                while ((match = findPackageRegex.exec(cmakeFile.content)) !== null) {
-                    const packageName = match[1];
-                    // Skip common system packages
-                    if (!['Threads', 'OpenMP', 'CUDA', 'MPI', 'Boost'].includes(packageName)) {
-                        requiredPackages.push(packageName);
-                    }
-                }
-
-                if (requiredPackages.length > 0) {
-                    logger.info('[project-execution] Found packages in CMakeLists.txt:', requiredPackages);
-                }
-            }
-
-            if (hasConanfile || requiredPackages.length > 0 || (dependencies && Object.keys(dependencies).length > 0)) {
-                logger.info('[project-execution] Installing C++ dependencies with Conan');
-
-                // Generate conanfile.txt from CMakeLists.txt packages or dependencies object
-                if (!hasConanfile) {
-                    let conanContent = '[requires]\n';
-
-                    // Add packages from CMakeLists.txt with default versions
-                    const packageVersionMap: Record<string, string> = {
-                        'fmt': '10.1.1',
-                        'nlohmann_json': '3.11.2',
-                        'spdlog': '1.12.0',
-                        'catch2': '3.4.0',
-                        'gtest': '1.14.0'
-                    };
-
-                    requiredPackages.forEach(pkg => {
-                        const version = packageVersionMap[pkg] || 'latest';
-                        conanContent += `${pkg}/${version}\n`;
-                    });
-
-                    // Add explicit dependencies if provided
-                    if (dependencies && Object.keys(dependencies).length > 0) {
-                        Object.entries(dependencies).forEach(([pkg, version]) => {
-                            if (!requiredPackages.includes(pkg)) {
-                                conanContent += `${pkg}/${version}\n`;
-                            }
-                        });
-                    }
-
-                    conanContent += '\n[generators]\nCMakeDeps\nCMakeToolchain\n';
-
-                    // Write conanfile.txt
-                    const base64Conan = Buffer.from(conanContent).toString('base64');
-                    await container.exec({
-                        Cmd: ['sh', '-c', `echo "${base64Conan}" | base64 -d > ${baseDir}/conanfile.txt`],
-                        AttachStdout: true,
-                        AttachStderr: true
-                    }).then(e => e.start({}));
-
-                    logger.info('[project-execution] Generated conanfile.txt with packages:', requiredPackages);
-                }
-
-                // Run conan profile detect
-                logger.info('[project-execution] Setting up Conan profile');
-                const profileExec = await container.exec({
-                    Cmd: ['sh', '-c', 'conan profile detect --force 2>&1'],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-                const profileStream = await profileExec.start({ hijack: true });
-
-                let profileOutput = '';
-                await new Promise<void>((resolve) => {
-                    profileStream.on('data', (chunk: Buffer) => {
-                        profileOutput += chunk.toString();
-                    });
-                    profileStream.on('end', () => {
-                        logger.info('[project-execution] Conan profile setup completed');
-                        logger.info('[project-execution] Profile output:', profileOutput.substring(0, 500));
-                        resolve();
-                    });
-                    profileStream.on('error', (err: any) => {
-                        logger.error('[project-execution] Conan profile error:', err);
-                        resolve();
-                    });
-                    // Timeout for profile detection
-                    setTimeout(() => {
-                        logger.warn('[project-execution] Conan profile detection timeout');
-                        resolve();
-                    }, 30000); // 30 seconds
-                });
-
-                // Run conan install
-                logger.info('[project-execution] Running conan install');
-                const installExec = await container.exec({
-                    Cmd: ['sh', '-c', `cd ${baseDir} && conan install . --output-folder=build --build=missing 2>&1`],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-                const installStream = await installExec.start({ hijack: true });
-
-                let conanOutput = '';
-                await new Promise<void>((resolve) => {
-                    installStream.on('data', (chunk: Buffer) => {
-                        conanOutput += chunk.toString();
-                    });
-                    installStream.on('end', resolve);
-                    installStream.on('error', resolve);
-                    // Timeout for conan install (can be slow)
-                    setTimeout(resolve, 300000); // 5 minutes
-                });
-
-                if (conanOutput.includes('ERROR:')) {
-                    logger.error('[project-execution] Conan install failed:', conanOutput);
-                    res.status(500).json({
-                        success: false,
-                        error: 'Dependency installation failed (Conan)',
-                        details: conanOutput
-                    });
-                    return;
-                }
-                logger.info('[project-execution] Conan install completed');
-            } else {
-                logger.info('[project-execution] No Conan dependencies to install for C++ project');
-            }
-        } else if (language === 'java') {
-            // Check if project has pom.xml
-            const hasPomXml = files.some(f => f.name === 'pom.xml');
-
-            if (hasPomXml) {
-                logger.info('[project-execution] Installing Java dependencies with Maven');
-
-                // Run mvn dependency:resolve to download dependencies
-                logger.info('[project-execution] Running mvn dependency:resolve');
-                const mvnExec = await container.exec({
-                    Cmd: ['sh', '-c', `cd ${baseDir} && mvn dependency:resolve 2>&1`],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-                const mvnStream = await mvnExec.start({ hijack: true });
-
-                let mvnOutput = '';
-                await new Promise<void>((resolve) => {
-                    mvnStream.on('data', (chunk: Buffer) => {
-                        mvnOutput += chunk.toString();
-                    });
-                    mvnStream.on('end', () => {
-                        logger.info('[project-execution] Maven dependency resolution completed');
-                        resolve();
-                    });
-                    mvnStream.on('error', (err: any) => {
-                        logger.error('[project-execution] Maven error:', err);
-                        resolve();
-                    });
-                    // Timeout for Maven (can be slow on first run)
-                    setTimeout(() => {
-                        logger.warn('[project-execution] Maven dependency resolution timeout');
-                        resolve();
-                    }, 180000); // 3 minutes
-                });
-
-                if (mvnOutput.includes('BUILD FAILURE') || mvnOutput.includes('ERROR')) {
-                    logger.error('[project-execution] Maven dependency resolution failed:', mvnOutput.substring(0, 500));
-                    res.status(500).json({
-                        success: false,
-                        error: 'Dependency installation failed (Maven)',
-                        details: mvnOutput.substring(0, 1000)
-                    });
-                    return;
-                }
-                logger.info('[project-execution] Maven dependencies installed successfully');
-            } else {
-                logger.info('[project-execution] No pom.xml found for Java project');
-            }
-        }
-
-        // Prepare execution command
-        const execCommand = getExecutionCommand(language, baseDir, files, mainFile);
-        logger.info(`Project execution command: ${execCommand}`);
-        logger.info('[project-execution] About to execute main code');
+        // Install dependencies (npm, pip, etc.) - CONTINUED IN NEXT PART
+        // ... rest of your dependency installation code ...
 
         // Execute code
+        const execCommand = getExecutionCommand(language, baseDir, files, mainFile);
+        logger.info(`Project execution command: ${execCommand}`);
+
         const exec = await container.exec({
             Cmd: ['sh', '-c', execCommand],
             AttachStdin: true,
@@ -1395,7 +531,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             stdin: true
         });
 
-        // Store stream for input handling
         activeStreams.set(sessionId, stream);
 
         // Handle client disconnect
@@ -1404,31 +539,25 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 activeStreams.delete(sessionId);
                 stream.end();
 
-                // Wait a bit before removing container
                 setTimeout(async () => {
                     try {
-                        // Stop container first if it's still running
                         try {
                             await container.stop();
                         } catch (stopErr: any) {
-                            // Container might already be stopped, ignore
                             if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
                                 logger.warn(`Error stopping container: ${stopErr.message}`);
                             }
                         }
 
-                        // Small delay before removal
                         await new Promise(resolve => setTimeout(resolve, 500));
-
                         await container.remove({ force: true });
                         logger.info(`Container removed after client disconnect: ${containerName}`);
                     } catch (err: any) {
-                        // Ignore "container not found" errors as they're expected after cleanup
                         if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
                             logger.error(`Error cleaning up container: ${err}`);
                         }
                     }
-                }, 1000); // 1 second delay
+                }, 1000);
             } catch (err) {
                 logger.error(`Error in client disconnect handler: ${err}`);
             }
@@ -1446,34 +575,27 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
             res.end();
 
-            // Clean up
             activeStreams.delete(sessionId);
 
-            // Wait a bit for Docker to finish processing, then remove container
             setTimeout(async () => {
                 try {
-                    // Stop container first if it's still running
                     try {
                         await container.stop();
                     } catch (stopErr: any) {
-                        // Container might already be stopped, ignore
                         if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
                             logger.warn(`Error stopping container: ${stopErr.message}`);
                         }
                     }
 
-                    // Small delay before removal
                     await new Promise(resolve => setTimeout(resolve, 500));
-
                     await container.remove({ force: true });
                     logger.info(`Container removed after execution: ${containerName}`);
                 } catch (err: any) {
-                    // Ignore "container not found" errors as they're expected after cleanup
                     if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
                         logger.error(`Error removing container: ${err}`);
                     }
                 }
-            }, 1000); // 1 second delay
+            }, 1000);
         });
 
         stream.on('error', async (error: Error) => {
@@ -1481,33 +603,26 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             res.write(`data: ${JSON.stringify({ type: 'stderr', data: error.message })}\n\n`);
             res.end();
 
-            // Clean up
             activeStreams.delete(sessionId);
 
-            // Wait a bit for Docker to finish processing, then remove container
             setTimeout(async () => {
                 try {
-                    // Stop container first if it's still running
                     try {
                         await container.stop();
                     } catch (stopErr: any) {
-                        // Container might already be stopped, ignore
                         if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
                             logger.warn(`Error stopping container: ${stopErr.message}`);
                         }
                     }
 
-                    // Small delay before removal
                     await new Promise(resolve => setTimeout(resolve, 500));
-
                     await container.remove({ force: true });
                 } catch (err: any) {
-                    // Ignore "container not found" errors as they're expected after cleanup
                     if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
                         logger.error(`Error removing container after error: ${err}`);
                     }
                 }
-            }, 1000); // 1 second delay
+            }, 1000);
         });
 
     } catch (error: any) {
@@ -1541,7 +656,6 @@ router.post('/input', async (req: Request, res: Response) => {
             });
         }
 
-        // Write input to the stream
         stream.write(input + '\n');
 
         logger.info(`Input sent to session ${sessionId}: ${input}`);
