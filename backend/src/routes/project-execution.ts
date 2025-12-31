@@ -471,15 +471,17 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     entry_point=""
                     if [ -f "\$extract_dir/package.json" ]; then
                         main_field=\$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
-                        if [ -n "\$main_field" ]; then
+                        if [ -n "\$main_field" ] && [ -f "\$extract_dir/\$main_field" ]; then
                             entry_point="\$main_field"
                             echo "[custom-libs] Entry point from package.json: \$entry_point"
+                        else
+                            echo "[custom-libs] package.json main field '\$main_field' does not exist, searching for alternatives..."
                         fi
                     fi
                     
-                    # Fallback entry point detection
+                    # Fallback entry point detection - check common locations
                     if [ -z "\$entry_point" ]; then
-                        for candidate in "index.js" "dayjs.min.js" "src/index.js" "lib/index.js" "dist/index.js" "dist/dayjs.min.js"; do
+                        for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js" "dayjs.min.js" "dist/dayjs.min.js" "build/dayjs.min.js" "src/dayjs.js" "lib/dayjs.js" "build/index.esm.js" "build/index.js"; do
                             if [ -f "\$extract_dir/\$candidate" ]; then
                                 entry_point="\$candidate"
                                 echo "[custom-libs] Found fallback entry point: \$entry_point"
@@ -488,9 +490,77 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         done
                     fi
                     
-                    # List what we have
+                    # If still no entry point, look for any .js file in common directories
+                    if [ -z "\$entry_point" ]; then
+                        echo "[custom-libs] No standard entry point found, searching for any .js files..."
+                        for dir in "." "src" "lib" "dist" "build"; do
+                            if [ -d "\$extract_dir/\$dir" ]; then
+                                js_file=\$(find "\$extract_dir/\$dir" -maxdepth 1 -name "*.js" -type f 2>/dev/null | head -n1)
+                                if [ -n "\$js_file" ]; then
+                                    entry_point=\$(echo "\$js_file" | sed "s|\$extract_dir/||")
+                                    echo "[custom-libs] Found .js file as entry point: \$entry_point"
+                                    break
+                                fi
+                            fi
+                        done
+                    fi
+                    
+                    # Last resort - check if this is a source package that needs building
+                    if [ -z "\$entry_point" ]; then
+                        if [ -f "\$extract_dir/package.json" ]; then
+                            # Check if there's a build script and try to build
+                            has_build=\$(grep -c '"build"' "\$extract_dir/package.json" || echo "0")
+                            if [ "\$has_build" -gt 0 ]; then
+                                echo "[custom-libs] WARNING: This appears to be a source package - attempting to build..."
+                                cd "\$extract_dir"
+                                
+                                # Install dev dependencies and build
+                                npm install --legacy-peer-deps 2>&1 | tail -5 || true
+                                npm run build 2>&1 | tail -10 || true
+                                
+                                cd - > /dev/null
+                                
+                                # Now try to find the entry point again
+                                main_field=\$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
+                                if [ -n "\$main_field" ] && [ -f "\$extract_dir/\$main_field" ]; then
+                                    entry_point="\$main_field"
+                                    echo "[custom-libs] After build, entry point found: \$entry_point"
+                                else
+                                    # Check common build outputs
+                                    for candidate in "dayjs.min.js" "dist/index.js" "lib/index.js" "build/index.js"; do
+                                        if [ -f "\$extract_dir/\$candidate" ]; then
+                                            entry_point="\$candidate"
+                                            echo "[custom-libs] After build, found entry point: \$entry_point"
+                                            break
+                                        fi
+                                    done
+                                fi
+                            fi
+                        fi
+                        
+                        if [ -z "\$entry_point" ]; then
+                            echo "[custom-libs] ERROR: No valid entry point found for \$pkg_name"
+                            echo "[custom-libs] Consider using 'npm pack' to create a proper npm tarball"
+                        fi
+                    fi
+                    
+                    # List what we have - show more details
                     echo "[custom-libs] Contents of extracted dir:"
                     ls -la "\$extract_dir" | head -20
+                    
+                    # Show contents of key directories
+                    if [ -d "\$extract_dir/src" ]; then
+                        echo "[custom-libs] Contents of src/:"
+                        ls -la "\$extract_dir/src" | head -10
+                    fi
+                    if [ -d "\$extract_dir/build" ]; then
+                        echo "[custom-libs] Contents of build/:"
+                        ls -la "\$extract_dir/build" | head -10
+                    fi
+                    if [ -d "\$extract_dir/dist" ]; then
+                        echo "[custom-libs] Contents of dist/:"
+                        ls -la "\$extract_dir/dist" | head -10
+                    fi
                     
                     # Copy to node_modules with the ACTUAL package name
                     echo "[custom-libs] Installing as: \$pkg_name"
@@ -553,9 +623,9 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         resolve(err);
                     });
                     setTimeout(() => {
-                        logger.warn('[custom-libs] Timeout after 15s');
+                        logger.warn('[custom-libs] Timeout after 120s');
                         resolve(undefined);
-                    }, 15000);
+                    }, 120000);
                 });
             }
         }
