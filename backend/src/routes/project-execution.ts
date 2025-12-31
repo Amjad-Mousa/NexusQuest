@@ -112,8 +112,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         fileType: lib.fileType
                     }));
                     logger.info(`[project-execution] Auto-including ${customLibraries.length} custom libraries from project ${projectId}`);
-                } else {
-                    logger.info(`[project-execution] No custom libraries found on project ${projectId} to auto-include`);
                 }
             } catch (e: any) {
                 logger.warn(`[project-execution] Failed to load project libraries for ${projectId}: ${e?.message || e}`);
@@ -186,12 +184,12 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 setTimeout(resolve, 1000);
             });
             if (permsOutput.includes('writable')) {
-                logger.info('[project-execution] /dependencies is writable for coderunner');
+                logger.info('[project-execution] /dependencies is writable');
             } else {
-                logger.warn('[project-execution] /dependencies is NOT writable, caching may be skipped');
+                logger.warn('[project-execution] /dependencies is NOT writable');
             }
         } catch (e: any) {
-            logger.warn(`[project-execution] Failed to set permissions on /dependencies: ${e?.message || e}`);
+            logger.warn(`[project-execution] Failed to set permissions: ${e?.message || e}`);
         }
 
         // Create base directory
@@ -249,7 +247,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             const customLibDir = `/custom-libs/${projectId}`;
 
             // Create directory
-            logger.info(`[project-execution] Creating custom libs directory: ${customLibDir}`);
             try {
                 const mkCustomDirExec = await container.exec({
                     User: 'root',
@@ -279,8 +276,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             if (!project) {
                 logger.error(`[project-execution] Project ${projectId} not found in database`);
             } else {
-                logger.info(`[project-execution] Loaded project from database: ${project.name}`);
-
                 // Process each library - READ FROM DATABASE ONLY
                 for (const lib of customLibraries) {
                     try {
@@ -299,8 +294,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             continue;
                         }
 
-                        logger.info(`[project-execution] Found library in database: ${dbLib.originalName}`);
-
                         // Extract fileContent from database
                         let libContent: Buffer | null = null;
 
@@ -308,10 +301,8 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                             if (Buffer.isBuffer(dbLib.fileContent)) {
                                 libContent = dbLib.fileContent;
                             } else if (dbLib.fileContent.buffer) {
-                                // MongoDB Binary type
                                 libContent = Buffer.from(dbLib.fileContent.buffer);
                             } else if (dbLib.fileContent.data) {
-                                // Another MongoDB Binary format
                                 libContent = Buffer.from(dbLib.fileContent.data);
                             } else if (typeof dbLib.fileContent === 'string') {
                                 libContent = Buffer.from(dbLib.fileContent, 'base64');
@@ -329,8 +320,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         const targetName = dbLib.originalName;
                         const targetPathInContainer = `${customLibDir}/${targetName}`;
                         const base64LibContent = libContent.toString('base64');
-
-                        logger.info(`[project-execution] Copying library to container: ${targetName} (${libContent.length} bytes)`);
 
                         const copyLibExec = await container.exec({
                             Cmd: ['sh', '-c', `echo "${base64LibContent}" | base64 -d > ${targetPathInContainer} && ls -lh ${targetPathInContainer} && echo "COPY_SUCCESS"`],
@@ -357,27 +346,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 }
             }
 
-            // Verify copied files
-            logger.info('[project-execution] Verifying copied libraries...');
-            try {
-                const verifyExec = await container.exec({
-                    Cmd: ['sh', '-c', `ls -la ${customLibDir}/ && echo "VERIFY_DONE"`],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-                const verifyStream = await verifyExec.start({ hijack: true });
-                let verifyOutput = '';
-                await new Promise((resolve) => {
-                    verifyStream.on('data', (chunk: Buffer) => { verifyOutput += chunk.toString(); });
-                    verifyStream.on('end', resolve);
-                    verifyStream.on('error', resolve);
-                    setTimeout(resolve, 2000);
-                });
-                logger.info('[project-execution] Directory contents:', verifyOutput.trim());
-            } catch (e: any) {
-                logger.warn(`[project-execution] Could not verify: ${e?.message || e}`);
-            }
-
             // Extract and sync (JavaScript only)
             if (language === 'javascript') {
                 logger.info('[project-execution] Extracting and syncing JavaScript libraries');
@@ -388,14 +356,13 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 CUSTOM_DIR="${customLibDir}"
                 BASE_DIR="${baseDir}"
                 
-                echo "[custom-libs] Starting extraction from $CUSTOM_DIR"
+                echo "[custom-libs] Starting extraction"
                 
                 if [ ! -d "$CUSTOM_DIR" ]; then
                     echo "[custom-libs] ERROR: Directory does not exist"
                     exit 1
                 fi
                 
-                ls -la "$CUSTOM_DIR"
                 file_count=$(ls -1 "$CUSTOM_DIR" 2>/dev/null | wc -l | tr -d ' ')
                 echo "[custom-libs] Found $file_count file(s)"
                 
@@ -423,7 +390,6 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                         rm -rf "$extract_dir" 2>/dev/null || true
                         mkdir -p "$extract_dir"
                         
-                        echo "[custom-libs] Extracting..."
                         tar -xzf "$libfile" -C "$extract_dir" 2>&1 || tar -xf "$libfile" -C "$extract_dir" 2>&1
                         
                         # Flatten if single nested directory
@@ -511,12 +477,161 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             }
         }
 
-        // Install dependencies (npm, pip, etc.) - CONTINUED IN NEXT PART
-        // ... rest of your dependency installation code ...
+        // ==========================================
+        // INSTALL DEPENDENCIES (npm, pip, maven, conan)
+        // ==========================================
+
+        if (language === 'javascript') {
+            logger.info('[project-execution] Installing JavaScript dependencies');
+            const npmInstallExec = await container.exec({
+                Cmd: ['sh', '-c', `
+                        set -e
+                        CACHE_DIR="${cacheDir}"
+                        BASE_DIR="${baseDir}"
+                        if [ -d "$CACHE_DIR/node_modules" ] && [ -f "$CACHE_DIR/.cache-complete" ]; then
+                            echo "✓ [dependency-cache] Using cached dependencies"
+                            cp -r $CACHE_DIR/node_modules $BASE_DIR/ 2>&1 || echo "Cache copy failed"
+                            if [ -d "$BASE_DIR/node_modules" ]; then
+                                echo "npm_install_done"
+                                exit 0
+                            fi
+                        fi
+                        echo "⚙ [dependency-cache] Installing dependencies..."
+                        cd $BASE_DIR
+                        npm install --legacy-peer-deps > npm-install.log 2>&1
+                        if [ $? -eq 0 ]; then
+                            echo "[dependency-cache] Caching dependencies..."
+                            mkdir -p $CACHE_DIR
+                            cp -r $BASE_DIR/node_modules $CACHE_DIR/ 2>&1 || echo "Warning: Failed to cache"
+                            touch $CACHE_DIR/.cache-complete
+                            echo "✓ [dependency-cache] Dependencies cached"
+                            echo "npm_install_done"
+                        else
+                            echo "npm_install_failed"
+                            exit 1
+                        fi
+                    `],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+            const npmStream = await npmInstallExec.start({ hijack: true });
+
+            let npmCompleted = false;
+            await new Promise<void>((resolve) => {
+                npmStream.on('data', (chunk: Buffer) => {
+                    const output = chunk.toString();
+                    logger.info('[npm]:', output.trim());
+                    if (output.includes('npm_install_done') || output.includes('npm_install_failed')) {
+                        if (!npmCompleted) {
+                            npmCompleted = true;
+                            resolve();
+                        }
+                    }
+                });
+                npmStream.on('end', () => {
+                    if (!npmCompleted) {
+                        npmCompleted = true;
+                        resolve();
+                    }
+                });
+                npmStream.on('error', () => {
+                    if (!npmCompleted) {
+                        npmCompleted = true;
+                        resolve();
+                    }
+                });
+                setTimeout(() => {
+                    if (!npmCompleted) {
+                        npmCompleted = true;
+                        resolve();
+                    }
+                }, 120000);
+            });
+
+        } else if (language === 'python') {
+            logger.info('[project-execution] Installing Python dependencies');
+            const requirementsContent = Object.entries(dependencies || {})
+                .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
+                .join('\n');
+            const base64Requirements = Buffer.from(requirementsContent).toString('base64');
+            const writePipExec = await container.exec({
+                Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+            const pipFileStream = await writePipExec.start({});
+            pipFileStream.resume();
+            await new Promise(resolve => {
+                pipFileStream.on('end', resolve);
+                pipFileStream.on('error', resolve);
+                setTimeout(resolve, 1000);
+            });
+
+            const pipInstallExec = await container.exec({
+                Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1`],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+            const pipStream = await pipInstallExec.start({ hijack: true });
+
+            await new Promise<void>((resolve) => {
+                let completed = false;
+                pipStream.on('end', () => {
+                    if (!completed) {
+                        completed = true;
+                        resolve();
+                    }
+                });
+                pipStream.on('error', () => {
+                    if (!completed) {
+                        completed = true;
+                        resolve();
+                    }
+                });
+                setTimeout(() => {
+                    if (!completed) {
+                        completed = true;
+                        resolve();
+                    }
+                }, 120000);
+            });
+
+        } else if (language === 'cpp') {
+            const hasConanfile = files.some(f => f.name === 'conanfile.txt' || f.name === 'conanfile.py');
+            if (hasConanfile) {
+                logger.info('[project-execution] Installing C++ dependencies with Conan');
+
+                const profileExec = await container.exec({
+                    Cmd: ['sh', '-c', 'conan profile detect --force 2>&1'],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                await profileExec.start({});
+
+                const installExec = await container.exec({
+                    Cmd: ['sh', '-c', `cd ${baseDir} && conan install . --output-folder=build --build=missing 2>&1`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                await installExec.start({});
+            }
+
+        } else if (language === 'java') {
+            const hasPomXml = files.some(f => f.name === 'pom.xml');
+            if (hasPomXml) {
+                logger.info('[project-execution] Installing Java dependencies with Maven');
+                const mvnExec = await container.exec({
+                    Cmd: ['sh', '-c', `cd ${baseDir} && mvn dependency:resolve 2>&1`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                await mvnExec.start({});
+            }
+        }
 
         // Execute code
         const execCommand = getExecutionCommand(language, baseDir, files, mainFile);
-        logger.info(`Project execution command: ${execCommand}`);
+        logger.info(`Executing: ${execCommand}`);
 
         const exec = await container.exec({
             Cmd: ['sh', '-c', execCommand],
@@ -538,32 +653,22 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             try {
                 activeStreams.delete(sessionId);
                 stream.end();
-
                 setTimeout(async () => {
                     try {
-                        try {
-                            await container.stop();
-                        } catch (stopErr: any) {
-                            if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
-                                logger.warn(`Error stopping container: ${stopErr.message}`);
-                            }
-                        }
-
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await container.stop();
                         await container.remove({ force: true });
-                        logger.info(`Container removed after client disconnect: ${containerName}`);
                     } catch (err: any) {
-                        if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                            logger.error(`Error cleaning up container: ${err}`);
+                        if (err.statusCode !== 404) {
+                            logger.error(`Cleanup error: ${err}`);
                         }
                     }
                 }, 1000);
             } catch (err) {
-                logger.error(`Error in client disconnect handler: ${err}`);
+                logger.error(`Disconnect handler error: ${err}`);
             }
         });
 
-        // Stream output to client
+        // Stream output
         stream.on('data', (chunk: Buffer) => {
             const output = chunk.toString('utf8').replace(/[\x00-\x08]/g, '');
             if (output.trim()) {
@@ -574,25 +679,14 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
         stream.on('end', async () => {
             res.write(`data: ${JSON.stringify({ type: 'end', data: '' })}\n\n`);
             res.end();
-
             activeStreams.delete(sessionId);
-
             setTimeout(async () => {
                 try {
-                    try {
-                        await container.stop();
-                    } catch (stopErr: any) {
-                        if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
-                            logger.warn(`Error stopping container: ${stopErr.message}`);
-                        }
-                    }
-
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await container.stop();
                     await container.remove({ force: true });
-                    logger.info(`Container removed after execution: ${containerName}`);
                 } catch (err: any) {
-                    if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                        logger.error(`Error removing container: ${err}`);
+                    if (err.statusCode !== 404) {
+                        logger.error(`Cleanup error: ${err}`);
                     }
                 }
             }, 1000);
@@ -602,31 +696,21 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             logger.error(`Stream error: ${error.message}`);
             res.write(`data: ${JSON.stringify({ type: 'stderr', data: error.message })}\n\n`);
             res.end();
-
             activeStreams.delete(sessionId);
-
             setTimeout(async () => {
                 try {
-                    try {
-                        await container.stop();
-                    } catch (stopErr: any) {
-                        if (stopErr.statusCode !== 304 && stopErr.statusCode !== 404) {
-                            logger.warn(`Error stopping container: ${stopErr.message}`);
-                        }
-                    }
-
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await container.stop();
                     await container.remove({ force: true });
                 } catch (err: any) {
-                    if (err.statusCode !== 404 && !err.message?.includes('No such container')) {
-                        logger.error(`Error removing container after error: ${err}`);
+                    if (err.statusCode !== 404) {
+                        logger.error(`Cleanup error: ${err}`);
                     }
                 }
             }, 1000);
         });
 
     } catch (error: any) {
-        logger.error('Project execution failed:', error);
+        logger.error('Execution failed:', error);
         res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
         res.end();
     }
@@ -634,7 +718,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
 
 /**
  * POST /api/projects/input
- * Send input to running project container
+ * Send input to running container
  */
 router.post('/input', async (req: Request, res: Response) => {
     const { sessionId, input } = req.body;
@@ -648,17 +732,15 @@ router.post('/input', async (req: Request, res: Response) => {
 
     try {
         const stream = activeStreams.get(sessionId);
-
         if (!stream) {
             return res.status(404).json({
                 success: false,
-                error: 'No active execution found for this session',
+                error: 'No active execution found',
             });
         }
 
         stream.write(input + '\n');
-
-        logger.info(`Input sent to session ${sessionId}: ${input}`);
+        logger.info(`Input sent to ${sessionId}: ${input}`);
         res.json({ success: true });
     } catch (error: any) {
         logger.error('Failed to send input:', error);
