@@ -385,249 +385,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     }
                 }
             }
-
-            // Extract and sync (JavaScript only)
-            if (language === 'javascript') {
-                logger.info('[project-execution] Extracting and syncing JavaScript libraries');
-
-                const extractAndSyncExec = await container.exec({
-                    Cmd: ['sh', '-c', `
-                set -e
-                CUSTOM_DIR="${customLibDir}"
-                BASE_DIR="${baseDir}"
-                
-                echo "[custom-libs] Starting extraction"
-                
-                if [ ! -d "$CUSTOM_DIR" ]; then
-                    echo "[custom-libs] ERROR: Directory does not exist"
-                    exit 1
-                fi
-                
-                file_count=$(ls -1 "$CUSTOM_DIR" 2>/dev/null | wc -l | tr -d ' ')
-                echo "[custom-libs] Found \$file_count file(s)"
-                
-                if [ "\$file_count" = "0" ]; then
-                    echo "[custom-libs] No files to process"
-                    exit 0
-                fi
-                
-                mkdir -p "$BASE_DIR/node_modules"
-                
-                for libfile in "$CUSTOM_DIR"/*; do
-                    if [ ! -f "\$libfile" ]; then
-                        continue
-                    fi
-                    
-                    filename=\$(basename "\$libfile")
-                    echo "[custom-libs] Processing: \$filename"
-                    
-                    # Skip non-archive files or already extracted dirs
-                    if ! echo "\$filename" | grep -iE '\\.(tar\\.gz|tgz)$' >/dev/null; then
-                        cp "\$libfile" "$BASE_DIR/\$filename"
-                        echo "[custom-libs] ✓ Copied: \$filename"
-                        continue
-                    fi
-                    
-                    # Extract archive name without extension
-                    archive_name=\$(echo "\$filename" | sed -E 's/\\.(tar\\.gz|tgz)$//')
-                    
-                    extract_dir="$CUSTOM_DIR/extracted_\$archive_name"
-                    rm -rf "\$extract_dir" 2>/dev/null || true
-                    mkdir -p "\$extract_dir"
-                    
-                    echo "[custom-libs] Extracting to: \$extract_dir"
-                    tar -xzf "\$libfile" -C "\$extract_dir" 2>&1 || tar -xf "\$libfile" -C "\$extract_dir" 2>&1
-                    
-                    # Flatten if single nested directory (npm tarballs have package/ dir)
-                    subdir_count=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-                    top_file_count=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
-                    
-                    if [ "\$subdir_count" = "1" ] && [ "\$top_file_count" = "0" ]; then
-                        nested_dir=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
-                        if [ -n "\$nested_dir" ]; then
-                            echo "[custom-libs] Flattening nested directory: \$nested_dir"
-                            temp_dir="$CUSTOM_DIR/temp_\$\$"
-                            mv "\$nested_dir" "\$temp_dir"
-                            rm -rf "\$extract_dir"
-                            mv "\$temp_dir" "\$extract_dir"
-                        fi
-                    fi
-                    
-                    # Get the actual package name from package.json
-                    pkg_name=""
-                    if [ -f "\$extract_dir/package.json" ]; then
-                        pkg_name=\$(grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"name"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
-                        echo "[custom-libs] Package name from package.json: \$pkg_name"
-                    fi
-                    
-                    # Fallback to archive name without version if no package.json
-                    if [ -z "\$pkg_name" ]; then
-                        # Try to extract base name without version (e.g., dayjs-1.11.18 -> dayjs)
-                        pkg_name=\$(echo "\$archive_name" | sed -E 's/-[0-9]+\\.[0-9]+\\.[0-9]+.*$//')
-                        echo "[custom-libs] Inferred package name: \$pkg_name"
-                    fi
-                    
-                    # Find entry point from package.json
-                    entry_point=""
-                    if [ -f "\$extract_dir/package.json" ]; then
-                        main_field=\$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
-                        if [ -n "\$main_field" ] && [ -f "\$extract_dir/\$main_field" ]; then
-                            entry_point="\$main_field"
-                            echo "[custom-libs] Entry point from package.json: \$entry_point"
-                        else
-                            echo "[custom-libs] package.json main field '\$main_field' does not exist, searching for alternatives..."
-                        fi
-                    fi
-                    
-                    # Fallback entry point detection - check common locations
-                    if [ -z "\$entry_point" ]; then
-                        for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js" "dayjs.min.js" "dist/dayjs.min.js" "build/dayjs.min.js" "src/dayjs.js" "lib/dayjs.js" "build/index.esm.js" "build/index.js"; do
-                            if [ -f "\$extract_dir/\$candidate" ]; then
-                                entry_point="\$candidate"
-                                echo "[custom-libs] Found fallback entry point: \$entry_point"
-                                break
-                            fi
-                        done
-                    fi
-                    
-                    # If still no entry point, look for any .js file in common directories
-                    if [ -z "\$entry_point" ]; then
-                        echo "[custom-libs] No standard entry point found, searching for any .js files..."
-                        for dir in "." "src" "lib" "dist" "build"; do
-                            if [ -d "\$extract_dir/\$dir" ]; then
-                                js_file=\$(find "\$extract_dir/\$dir" -maxdepth 1 -name "*.js" -type f 2>/dev/null | head -n1)
-                                if [ -n "\$js_file" ]; then
-                                    entry_point=\$(echo "\$js_file" | sed "s|\$extract_dir/||")
-                                    echo "[custom-libs] Found .js file as entry point: \$entry_point"
-                                    break
-                                fi
-                            fi
-                        done
-                    fi
-                    
-                    # Last resort - check if this is a source package that needs building
-                    if [ -z "\$entry_point" ]; then
-                        if [ -f "\$extract_dir/package.json" ]; then
-                            # Check if there's a build script and try to build
-                            has_build=\$(grep -c '"build"' "\$extract_dir/package.json" || echo "0")
-                            if [ "\$has_build" -gt 0 ]; then
-                                echo "[custom-libs] WARNING: This appears to be a source package - attempting to build..."
-                                cd "\$extract_dir"
-                                
-                                # Install dev dependencies and build
-                                npm install --legacy-peer-deps 2>&1 | tail -5 || true
-                                npm run build 2>&1 | tail -10 || true
-                                
-                                cd - > /dev/null
-                                
-                                # Now try to find the entry point again
-                                main_field=\$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
-                                if [ -n "\$main_field" ] && [ -f "\$extract_dir/\$main_field" ]; then
-                                    entry_point="\$main_field"
-                                    echo "[custom-libs] After build, entry point found: \$entry_point"
-                                else
-                                    # Check common build outputs
-                                    for candidate in "dayjs.min.js" "dist/index.js" "lib/index.js" "build/index.js"; do
-                                        if [ -f "\$extract_dir/\$candidate" ]; then
-                                            entry_point="\$candidate"
-                                            echo "[custom-libs] After build, found entry point: \$entry_point"
-                                            break
-                                        fi
-                                    done
-                                fi
-                            fi
-                        fi
-                        
-                        if [ -z "\$entry_point" ]; then
-                            echo "[custom-libs] ERROR: No valid entry point found for \$pkg_name"
-                            echo "[custom-libs] Consider using 'npm pack' to create a proper npm tarball"
-                        fi
-                    fi
-                    
-                    # List what we have - show more details
-                    echo "[custom-libs] Contents of extracted dir:"
-                    ls -la "\$extract_dir" | head -20
-                    
-                    # Show contents of key directories
-                    if [ -d "\$extract_dir/src" ]; then
-                        echo "[custom-libs] Contents of src/:"
-                        ls -la "\$extract_dir/src" | head -10
-                    fi
-                    if [ -d "\$extract_dir/build" ]; then
-                        echo "[custom-libs] Contents of build/:"
-                        ls -la "\$extract_dir/build" | head -10
-                    fi
-                    if [ -d "\$extract_dir/dist" ]; then
-                        echo "[custom-libs] Contents of dist/:"
-                        ls -la "\$extract_dir/dist" | head -10
-                    fi
-                    
-                    # Copy to node_modules with the ACTUAL package name
-                    echo "[custom-libs] Installing as: \$pkg_name"
-                    rm -rf "$BASE_DIR/node_modules/\$pkg_name" 2>/dev/null || true
-                    cp -r "\$extract_dir" "$BASE_DIR/node_modules/\$pkg_name"
-                    
-                    # Also create alias with the versioned name for backwards compatibility
-                    if [ "\$pkg_name" != "\$archive_name" ]; then
-                        rm -rf "$BASE_DIR/node_modules/\$archive_name" 2>/dev/null || true
-                        cp -r "\$extract_dir" "$BASE_DIR/node_modules/\$archive_name"
-                        echo "[custom-libs] Also installed as: \$archive_name"
-                    fi
-                    
-                    # Create index.js wrapper in node_modules if entry point is not index.js
-                    if [ -n "\$entry_point" ] && [ "\$entry_point" != "index.js" ]; then
-                        if [ ! -f "$BASE_DIR/node_modules/\$pkg_name/index.js" ]; then
-                            printf "module.exports = require('./\$entry_point');\\n" > "$BASE_DIR/node_modules/\$pkg_name/index.js"
-                            echo "[custom-libs] Created index.js wrapper pointing to \$entry_point"
-                        fi
-                    fi
-                    
-                    # Copy to project directory as well for relative requires
-                    rm -rf "$BASE_DIR/\$pkg_name" 2>/dev/null || true
-                    cp -r "\$extract_dir" "$BASE_DIR/\$pkg_name"
-                    
-                    # Create a wrapper .js file for relative require
-                    if [ -n "\$entry_point" ]; then
-                        printf "module.exports = require('./\$pkg_name/\$entry_point');\\n" > "$BASE_DIR/\$pkg_name.js"
-                    fi
-                    
-                    echo "[custom-libs] ✓ Processed: \$pkg_name (from \$filename)"
-                done
-                
-                echo "[custom-libs] Final node_modules contents:"
-                ls -la "$BASE_DIR/node_modules" | head -20
-                
-                echo "[custom-libs] ✓ Complete"
-            `],
-                    AttachStdout: true,
-                    AttachStderr: true
-                });
-
-                const extractStream = await extractAndSyncExec.start({ hijack: true });
-
-                await new Promise((resolve) => {
-                    extractStream.on('data', (chunk: Buffer) => {
-                        const output = chunk.toString();
-                        output.split('\n').forEach(line => {
-                            if (line.trim()) {
-                                logger.info('[custom-libs]:', line.trim());
-                            }
-                        });
-                    });
-                    extractStream.on('end', () => {
-                        logger.info('[custom-libs] Extraction complete');
-                        resolve(undefined);
-                    });
-                    extractStream.on('error', (err: any) => {
-                        logger.error('[custom-libs] Error:', err);
-                        resolve(err);
-                    });
-                    setTimeout(() => {
-                        logger.warn('[custom-libs] Timeout after 120s');
-                        resolve(undefined);
-                    }, 120000);
-                });
-            }
+            // NOTE: Extraction to node_modules happens AFTER npm install to avoid being overwritten
         }
 
         // ==========================================
@@ -780,6 +538,163 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 });
                 await mvnExec.start({});
             }
+        }
+
+        // ==========================================
+        // EXTRACT CUSTOM LIBRARIES TO node_modules (AFTER npm install)
+        // ==========================================
+        if (language === 'javascript' && customLibraries && customLibraries.length > 0 && projectId) {
+            logger.info('[project-execution] Extracting custom libraries to node_modules (after npm install)');
+
+            const customLibDir = `/custom-libs/${projectId}`;
+
+            const extractAndSyncExec = await container.exec({
+                Cmd: ['sh', '-c', `
+                set -e
+                CUSTOM_DIR="${customLibDir}"
+                BASE_DIR="${baseDir}"
+                
+                echo "[custom-libs] Starting extraction to node_modules"
+                
+                if [ ! -d "$CUSTOM_DIR" ]; then
+                    echo "[custom-libs] ERROR: Custom libs directory does not exist"
+                    exit 1
+                fi
+                
+                file_count=\$(ls -1 "$CUSTOM_DIR" 2>/dev/null | grep -E '\\.(tar\\.gz|tgz)$' | wc -l | tr -d ' ')
+                echo "[custom-libs] Found \$file_count archive file(s)"
+                
+                if [ "\$file_count" = "0" ]; then
+                    echo "[custom-libs] No archive files to process"
+                    exit 0
+                fi
+                
+                # Ensure node_modules exists
+                mkdir -p "$BASE_DIR/node_modules"
+                
+                for libfile in "$CUSTOM_DIR"/*.tar.gz "$CUSTOM_DIR"/*.tgz; do
+                    if [ ! -f "\$libfile" ]; then
+                        continue
+                    fi
+                    
+                    filename=\$(basename "\$libfile")
+                    echo "[custom-libs] Processing: \$filename"
+                    
+                    # Extract archive name without extension
+                    archive_name=\$(echo "\$filename" | sed -E 's/\\.(tar\\.gz|tgz)$//')
+                    
+                    extract_dir="$CUSTOM_DIR/extracted_\$archive_name"
+                    rm -rf "\$extract_dir" 2>/dev/null || true
+                    mkdir -p "\$extract_dir"
+                    
+                    echo "[custom-libs] Extracting to: \$extract_dir"
+                    tar -xzf "\$libfile" -C "\$extract_dir" 2>&1 || tar -xf "\$libfile" -C "\$extract_dir" 2>&1
+                    
+                    # Flatten if single nested directory (npm tarballs have package/ dir)
+                    subdir_count=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+                    top_file_count=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+                    
+                    if [ "\$subdir_count" = "1" ] && [ "\$top_file_count" = "0" ]; then
+                        nested_dir=\$(find "\$extract_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1)
+                        if [ -n "\$nested_dir" ]; then
+                            echo "[custom-libs] Flattening nested directory"
+                            temp_dir="$CUSTOM_DIR/temp_\$\$"
+                            mv "\$nested_dir" "\$temp_dir"
+                            rm -rf "\$extract_dir"
+                            mv "\$temp_dir" "\$extract_dir"
+                        fi
+                    fi
+                    
+                    # Get the actual package name from package.json
+                    pkg_name=""
+                    if [ -f "\$extract_dir/package.json" ]; then
+                        pkg_name=\$(grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"name"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
+                        echo "[custom-libs] Package name from package.json: \$pkg_name"
+                    fi
+                    
+                    # Fallback to archive name without version if no package.json
+                    if [ -z "\$pkg_name" ]; then
+                        pkg_name=\$(echo "\$archive_name" | sed -E 's/-[0-9]+\\.[0-9]+\\.[0-9]+.*$//')
+                        echo "[custom-libs] Inferred package name: \$pkg_name"
+                    fi
+                    
+                    # Find entry point from package.json
+                    entry_point=""
+                    if [ -f "\$extract_dir/package.json" ]; then
+                        main_field=\$(grep -oE '"main"[[:space:]]*:[[:space:]]*"[^"]+"' "\$extract_dir/package.json" | sed 's/"main"[[:space:]]*:[[:space:]]*"\\([^"]*\\)"/\\1/' | head -n1)
+                        if [ -n "\$main_field" ] && [ -f "\$extract_dir/\$main_field" ]; then
+                            entry_point="\$main_field"
+                            echo "[custom-libs] Entry point from package.json: \$entry_point"
+                        fi
+                    fi
+                    
+                    # Fallback entry point detection
+                    if [ -z "\$entry_point" ]; then
+                        for candidate in "index.js" "src/index.js" "lib/index.js" "dist/index.js"; do
+                            if [ -f "\$extract_dir/\$candidate" ]; then
+                                entry_point="\$candidate"
+                                echo "[custom-libs] Found fallback entry point: \$entry_point"
+                                break
+                            fi
+                        done
+                    fi
+                    
+                    # Copy to node_modules with the ACTUAL package name
+                    echo "[custom-libs] Installing as: \$pkg_name"
+                    rm -rf "$BASE_DIR/node_modules/\$pkg_name" 2>/dev/null || true
+                    cp -r "\$extract_dir" "$BASE_DIR/node_modules/\$pkg_name"
+                    
+                    # Also create alias with the versioned name
+                    if [ "\$pkg_name" != "\$archive_name" ]; then
+                        rm -rf "$BASE_DIR/node_modules/\$archive_name" 2>/dev/null || true
+                        cp -r "\$extract_dir" "$BASE_DIR/node_modules/\$archive_name"
+                        echo "[custom-libs] Also installed as: \$archive_name"
+                    fi
+                    
+                    # Create index.js wrapper if entry point is not index.js
+                    if [ -n "\$entry_point" ] && [ "\$entry_point" != "index.js" ]; then
+                        if [ ! -f "$BASE_DIR/node_modules/\$pkg_name/index.js" ]; then
+                            printf "module.exports = require('./\$entry_point');\\n" > "$BASE_DIR/node_modules/\$pkg_name/index.js"
+                            echo "[custom-libs] Created index.js wrapper pointing to \$entry_point"
+                        fi
+                    fi
+                    
+                    echo "[custom-libs] ✓ Installed: \$pkg_name"
+                done
+                
+                echo "[custom-libs] Final node_modules custom libs:"
+                ls -la "$BASE_DIR/node_modules" | grep -E 'dayjs|lodash' | head -10 || echo "(none matching)"
+                
+                echo "[custom-libs] ✓ Complete"
+            `],
+                AttachStdout: true,
+                AttachStderr: true
+            });
+
+            const extractStream = await extractAndSyncExec.start({ hijack: true });
+
+            await new Promise((resolve) => {
+                extractStream.on('data', (chunk: Buffer) => {
+                    const output = chunk.toString();
+                    output.split('\n').forEach(line => {
+                        if (line.trim()) {
+                            logger.info('[custom-libs]:', line.trim());
+                        }
+                    });
+                });
+                extractStream.on('end', () => {
+                    logger.info('[custom-libs] Extraction complete');
+                    resolve(undefined);
+                });
+                extractStream.on('error', (err: any) => {
+                    logger.error('[custom-libs] Error:', err);
+                    resolve(err);
+                });
+                setTimeout(() => {
+                    logger.warn('[custom-libs] Timeout after 60s');
+                    resolve(undefined);
+                }, 60000);
+            });
         }
 
         // Execute code
