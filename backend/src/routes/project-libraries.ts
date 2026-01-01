@@ -12,10 +12,23 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-    const allowedExtensions = ['.jar', '.whl', '.so', '.dll', '.dylib', '.a', '.lib', '.tar.gz', '.zip', '.gz'];
+    const allowedExtensions = [
+        '.jar',      // Java
+        '.whl',      // Python wheels
+        '.so',       // Shared libraries (C/C++)
+        '.a',        // Static libraries (C/C++)
+        '.dll',      // Windows libraries
+        '.dylib',    // macOS libraries
+        '.lib',      // Windows static libraries
+        '.tar.gz',   // Compressed archives
+        '.tgz',      // Compressed archives
+        '.zip',      // ZIP archives
+        '.gz'        // Gzip compressed
+    ];
     const ext = path.extname(file.originalname).toLowerCase();
+    const fullExt = file.originalname.toLowerCase().endsWith('.tar.gz') ? '.tar.gz' : ext;
 
-    if (allowedExtensions.includes(ext) || ext === '.gz') {
+    if (allowedExtensions.includes(fullExt) || allowedExtensions.includes(ext)) {
         cb(null, true);
     } else {
         cb(new Error(`File type not allowed. Allowed types: ${allowedExtensions.join(', ')}`));

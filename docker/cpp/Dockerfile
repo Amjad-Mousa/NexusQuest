@@ -5,7 +5,7 @@ FROM alpine:latest
 WORKDIR /app
 
 # Install GCC, CMake and build essentials (STL is included with GCC)
-# Also install Python and pip for Conan
+# Also install Python and pip for Conan, and unzip for archive extraction
 RUN apk add --no-cache \
     g++ \
     cmake \
@@ -13,7 +13,8 @@ RUN apk add --no-cache \
     git \
     python3 \
     py3-pip \
-    coreutils
+    coreutils \
+    unzip
 
 # Install Conan globally as root (easier for Alpine)
 RUN pip3 install --break-system-packages conan

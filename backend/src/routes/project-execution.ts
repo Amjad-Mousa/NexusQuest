@@ -38,12 +38,14 @@ function getExecutionCommand(language: string, baseDir: string, files: Array<{ n
             return `cd ${baseDir} && python ${mainFile}`;
         case 'java':
             const javaFiles = files.filter(f => f.name.endsWith('.java')).map(f => f.name).join(' ');
-            return `cd ${baseDir} && javac ${javaFiles} && java ${mainFile.replace('.java', '')}`;
+            // Include custom libraries from lib/ directory in classpath
+            return `cd ${baseDir} && javac -cp ".:lib/*" ${javaFiles} && java -cp ".:lib/*" ${mainFile.replace('.java', '')}`;
         case 'javascript':
             return `cd ${baseDir} && node ${mainFile}`;
         case 'cpp':
             const cppFiles = files.filter(f => f.name.endsWith('.cpp')).map(f => f.name).join(' ');
-            return `cd ${baseDir} && g++ -std=c++20 -I${baseDir} ${cppFiles} -o a.out && ./a.out`;
+            // Include custom libraries: headers from include/, libraries from lib/
+            return `cd ${baseDir} && g++ -std=c++20 -I${baseDir} -I${baseDir}/include -L${baseDir}/lib ${cppFiles} -o a.out && ./a.out`;
         default:
             throw new Error(`Unsupported language: ${language}`);
     }
