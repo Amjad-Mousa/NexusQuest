@@ -517,78 +517,43 @@ router.post('/:id/run', async (req: AuthRequest, res: Response) => {
             error?: string;
         }>;
 
-        // Execute all test cases in parallel
-        const testPromises = visibleTestCases.map(async (test, i) => {
-            try {
-                const timeoutMs = 10000;
-                let timeoutId: NodeJS.Timeout;
+        // Execute test cases sequentially to avoid Docker container overload
+        const timeoutMs = 15000;
 
-                const execPromise = executeCodeInTempContainer(code, quiz.language, test.input, {
+        for (let i = 0; i < visibleTestCases.length; i++) {
+            const test = visibleTestCases[i];
+            try {
+                const execResult = await executeCodeInTempContainer(code, quiz.language, test.input, {
                     sessionIdPrefix: 'quiz-test',
                     timeoutMs: timeoutMs
                 });
 
-                const timeoutPromise = new Promise<never>((_, reject) => {
-                    timeoutId = setTimeout(() => {
-                        reject(new Error(`Test execution timeout (${timeoutMs / 1000} seconds)`));
-                    }, timeoutMs);
-                });
+                const actual = execResult.error
+                    ? execResult.error
+                    : execResult.output;
 
-                const execResult = await Promise.race([
-                    execPromise,
-                    timeoutPromise
-                ]).finally(() => {
-                    if (timeoutId!) clearTimeout(timeoutId);
-                });
+                const passed = !execResult.error && normalize(actual) === normalize(test.expectedOutput);
 
-                const actual = (execResult as any).error
-                    ? (execResult as any).error
-                    : (execResult as any).output;
-
-                const passed = !(execResult as any).error && normalize(actual) === normalize(test.expectedOutput);
-
-                return {
+                results.push({
                     index: i,
                     passed,
                     input: test.input,
                     expectedOutput: test.expectedOutput,
                     actualOutput: actual,
-                    error: (execResult as any).error || undefined,
-                };
+                    error: execResult.error || undefined,
+                });
             } catch (error: any) {
                 logger.error(`Quiz test case ${i} failed:`, error.message);
-                return {
+                results.push({
                     index: i,
                     passed: false,
                     input: test.input,
                     expectedOutput: test.expectedOutput,
                     actualOutput: '',
                     error: error?.message || 'Execution failed',
-                };
-            }
-        });
-
-        // Wait for all tests to complete
-        const settledResults = await Promise.allSettled(testPromises);
-
-        // Process results
-        settledResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-                results.push(result.value);
-            } else {
-                results.push({
-                    index,
-                    passed: false,
-                    input: visibleTestCases[index].input,
-                    expectedOutput: visibleTestCases[index].expectedOutput,
-                    actualOutput: '',
-                    error: result.reason?.message || 'Test execution failed',
                 });
             }
-        });
-
-        // Sort results by index
-        results.sort((a, b) => a.index - b.index);
+        }
 
         const passed = results.filter(r => r.passed).length;
 
@@ -661,75 +626,41 @@ router.post('/:id/submit', async (req: AuthRequest, res: Response) => {
             error?: string;
         }>;
 
-        // Execute all test cases in parallel
-        const testPromises = testCases.map(async (test, i) => {
-            try {
-                const timeoutMs = 10000;
-                let timeoutId: NodeJS.Timeout;
+        // Execute test cases sequentially to avoid Docker container overload
+        const timeoutMs = 15000;
 
-                const execPromise = executeCodeInTempContainer(submittedCode, quiz.language, test.input, {
+        for (let i = 0; i < testCases.length; i++) {
+            const test = testCases[i];
+            try {
+                const execResult = await executeCodeInTempContainer(submittedCode, quiz.language, test.input, {
                     sessionIdPrefix: 'quiz-submit',
                     timeoutMs: timeoutMs
                 });
 
-                const timeoutPromise = new Promise<never>((_, reject) => {
-                    timeoutId = setTimeout(() => {
-                        reject(new Error(`Test execution timeout (${timeoutMs / 1000} seconds)`));
-                    }, timeoutMs);
-                });
+                const actual = execResult.error
+                    ? execResult.error
+                    : execResult.output;
 
-                const execResult = await Promise.race([
-                    execPromise,
-                    timeoutPromise
-                ]).finally(() => {
-                    if (timeoutId!) clearTimeout(timeoutId);
-                });
+                const passed = !execResult.error && normalize(actual) === normalize(test.expectedOutput);
 
-                const actual = (execResult as any).error
-                    ? (execResult as any).error
-                    : (execResult as any).output;
-
-                const passed = !(execResult as any).error && normalize(actual) === normalize(test.expectedOutput);
-
-                return {
+                results.push({
                     index: i,
                     passed,
                     input: test.isHidden ? '(hidden)' : test.input,
                     actualOutput: test.isHidden ? (passed ? '(correct)' : '(incorrect)') : actual,
-                    error: (execResult as any).error || undefined,
-                };
+                    error: execResult.error || undefined,
+                });
             } catch (error: any) {
                 logger.error(`Quiz submit test case ${i} failed:`, error.message);
-                return {
+                results.push({
                     index: i,
                     passed: false,
                     input: test.isHidden ? '(hidden)' : test.input,
                     actualOutput: '',
                     error: error?.message || 'Execution failed',
-                };
-            }
-        });
-
-        // Wait for all tests to complete
-        const settledResults = await Promise.allSettled(testPromises);
-
-        // Process results
-        settledResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-                results.push(result.value);
-            } else {
-                results.push({
-                    index,
-                    passed: false,
-                    input: testCases[index].isHidden ? '(hidden)' : testCases[index].input,
-                    actualOutput: '',
-                    error: result.reason?.message || 'Test execution failed',
                 });
             }
-        });
-
-        // Sort results by index
-        results.sort((a, b) => a.index - b.index);
+        }
 
         const passed = results.filter(r => r.passed).length;
         const allPassed = passed === results.length;
