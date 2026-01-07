@@ -168,7 +168,7 @@ export function ChatPage() {
   );
 
   return (
-    <div className={`min-h-screen flex flex-col relative ${
+    <div className={`h-screen flex flex-col overflow-hidden ${
       theme === 'dark'
         ? 'bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white'
         : 'bg-gradient-to-br from-gray-50 via-white to-gray-50 text-gray-900'
@@ -182,7 +182,7 @@ export function ChatPage() {
       )}
       
       {/* Header - Fixed at top */}
-      <header className={`sticky top-0 z-20 w-full px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
+      <header className={`flex-shrink-0 z-20 w-full px-6 py-4 border-b flex items-center justify-between backdrop-blur-xl shadow-sm ${
         theme === 'dark'
           ? 'border-gray-800/50 bg-gray-950/80'
           : 'border-gray-200 bg-white/80'
@@ -212,7 +212,7 @@ export function ChatPage() {
       </header>
 
       {/* Messages Area - Scrollable */}
-      <main className="flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <main className="flex-1 overflow-y-auto flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="py-6">
           {renderedMessages}
           {messages.length === 0 && (
@@ -252,12 +252,12 @@ export function ChatPage() {
       </main>
 
       {/* Input Area - Fixed at bottom */}
-      <div className={`flex-shrink-0 z-10 py-4 px-4 sm:px-6 lg:px-8 w-full max-w-5xl mx-auto ${
+      <div className={`flex-shrink-0 z-10 py-4 px-4 sm:px-6 lg:px-8 w-full ${
         theme === 'dark'
           ? 'bg-gray-950/95 border-t border-gray-800/50'
           : 'bg-gray-50/95 border-t border-gray-200'
       }`}>
-        <div className="flex gap-3 items-end">
+        <div className="flex gap-3 items-end w-full max-w-5xl mx-auto">
           <div className="flex-1 relative">
             <input
               className={`w-full px-5 py-3.5 rounded-2xl text-sm outline-none transition-all shadow-lg ${
