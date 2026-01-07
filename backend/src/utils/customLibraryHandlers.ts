@@ -269,13 +269,22 @@ function getCppExtractionScript(customLibDir: string, baseDir: string): string {
                 unzip -q -o "\$archive" -d "\$tmpdir" 2>&1 || echo "[custom-libs-cpp] Warning: unzip had issues"
             fi
             
+            # Copy library files (.so, .a)
             find "\$tmpdir" \\( -name "*.so" -o -name "*.so.*" -o -name "*.a" \\) -exec cp {} "\$LIB_DIR/" \\; 2>/dev/null || true
-            find "\$tmpdir" \\( -name "*.h" -o -name "*.hpp" -o -name "*.hxx" \\) -exec cp {} "\$INCLUDE_DIR/" \\; 2>/dev/null || true
             
+            # First, check for an include directory and copy with structure preserved
+            inc_found=0
             for inc_dir in \$(find "\$tmpdir" -type d -name "include" 2>/dev/null); do
                 echo "[custom-libs-cpp] Found include directory: \$inc_dir"
                 cp -r "\$inc_dir"/* "\$INCLUDE_DIR/" 2>/dev/null || true
+                inc_found=1
             done
+            
+            # Only copy flat headers if no include directory was found
+            if [ "\$inc_found" -eq 0 ]; then
+                echo "[custom-libs-cpp] No include directory found, copying headers flat"
+                find "\$tmpdir" \\( -name "*.h" -o -name "*.hpp" -o -name "*.hxx" \\) -exec cp {} "\$INCLUDE_DIR/" \\; 2>/dev/null || true
+            fi
             
             rm -rf "\$tmpdir"
             echo "[custom-libs-cpp] ✓ Extracted: \$filename"
@@ -551,6 +560,15 @@ export async function extractCustomLibraries(
     const extractStream = await extractExec.start({ hijack: true });
 
     await new Promise((resolve) => {
+        let resolved = false;
+        const timeoutId = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                logger.warn(`[custom-libs-${language}] Timeout after 60s`);
+                resolve(undefined);
+            }
+        }, 60000);
+
         extractStream.on('data', (chunk: Buffer) => {
             const output = chunk.toString();
             output.split('\n').forEach((line: string) => {
@@ -560,17 +578,21 @@ export async function extractCustomLibraries(
             });
         });
         extractStream.on('end', () => {
-            logger.info(`[custom-libs-${language}] Extraction complete`);
-            resolve(undefined);
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timeoutId);
+                logger.info(`[custom-libs-${language}] Extraction complete`);
+                resolve(undefined);
+            }
         });
         extractStream.on('error', (err: any) => {
-            logger.error(`[custom-libs-${language}] Error:`, err);
-            resolve(err);
+            if (!resolved) {
+                resolved = true;
+                clearTimeout(timeoutId);
+                logger.error(`[custom-libs-${language}] Error:`, err);
+                resolve(err);
+            }
         });
-        setTimeout(() => {
-            logger.warn(`[custom-libs-${language}] Timeout after 60s`);
-            resolve(undefined);
-        }, 60000);
     });
 }
 
