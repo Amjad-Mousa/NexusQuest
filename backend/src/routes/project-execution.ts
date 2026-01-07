@@ -462,52 +462,69 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
             });
 
         } else if (language === 'python') {
-            logger.info('[project-execution] Installing Python dependencies');
             const requirementsContent = Object.entries(dependencies || {})
                 .map(([pkg, version]) => (version === '*' ? pkg : `${pkg}==${version}`))
                 .join('\n');
-            const base64Requirements = Buffer.from(requirementsContent).toString('base64');
-            const writePipExec = await container.exec({
-                Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const pipFileStream = await writePipExec.start({});
-            pipFileStream.resume();
-            await new Promise(resolve => {
-                pipFileStream.on('end', resolve);
-                pipFileStream.on('error', resolve);
-                setTimeout(resolve, 1000);
-            });
 
-            const pipInstallExec = await container.exec({
-                Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1`],
-                AttachStdout: true,
-                AttachStderr: true
-            });
-            const pipStream = await pipInstallExec.start({ hijack: true });
+            // Only run pip install if there are dependencies to install
+            if (requirementsContent.trim()) {
+                logger.info('[project-execution] Installing Python dependencies from requirements.txt');
+                const base64Requirements = Buffer.from(requirementsContent).toString('base64');
+                const writePipExec = await container.exec({
+                    Cmd: ['sh', '-c', `echo "${base64Requirements}" | base64 -d > ${baseDir}/requirements.txt`],
+                    AttachStdout: true,
+                    AttachStderr: true
+                });
+                const pipFileStream = await writePipExec.start({});
+                pipFileStream.resume();
+                await new Promise(resolve => {
+                    pipFileStream.on('end', resolve);
+                    pipFileStream.on('error', resolve);
+                    setTimeout(resolve, 1000);
+                });
 
-            await new Promise<void>((resolve) => {
-                let completed = false;
-                pipStream.on('end', () => {
-                    if (!completed) {
-                        completed = true;
-                        resolve();
-                    }
+                const pipInstallExec = await container.exec({
+                    Cmd: ['sh', '-c', `cd ${baseDir} && pip install --user -r requirements.txt 2>&1 || echo "[pip] install completed with warnings"`],
+                    AttachStdout: true,
+                    AttachStderr: true
                 });
-                pipStream.on('error', () => {
-                    if (!completed) {
-                        completed = true;
-                        resolve();
-                    }
+                const pipStream = await pipInstallExec.start({ hijack: true });
+
+                await new Promise<void>((resolve) => {
+                    let completed = false;
+                    pipStream.on('data', (chunk: Buffer) => {
+                        const output = chunk.toString();
+                        output.split('\n').forEach(line => {
+                            if (line.trim()) {
+                                logger.info(`[pip]:`, line.trim());
+                            }
+                        });
+                    });
+                    pipStream.on('end', () => {
+                        if (!completed) {
+                            completed = true;
+                            logger.info('[project-execution] Python pip install completed');
+                            resolve();
+                        }
+                    });
+                    pipStream.on('error', (err: any) => {
+                        if (!completed) {
+                            completed = true;
+                            logger.warn('[project-execution] Python pip install error:', err.message);
+                            resolve();
+                        }
+                    });
+                    setTimeout(() => {
+                        if (!completed) {
+                            completed = true;
+                            logger.warn('[project-execution] Python pip install timeout (60s)');
+                            resolve();
+                        }
+                    }, 60000); // Reduced from 120s to 60s
                 });
-                setTimeout(() => {
-                    if (!completed) {
-                        completed = true;
-                        resolve();
-                    }
-                }, 120000);
-            });
+            } else {
+                logger.info('[project-execution] No Python dependencies in requirements.txt, skipping pip install');
+            }
 
         } else if (language === 'cpp') {
             const hasConanfile = files.some(f => f.name === 'conanfile.txt' || f.name === 'conanfile.py');
@@ -659,6 +676,9 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     exit 0
                 fi
                 
+                echo "[custom-libs-py] Contents of custom libs dir:"
+                ls -la "$CUSTOM_DIR" 2>/dev/null || echo "(empty)"
+                
                 whl_count=\$(ls -1 "$CUSTOM_DIR"/*.whl 2>/dev/null | wc -l | tr -d ' ')
                 tar_count=\$(ls -1 "$CUSTOM_DIR"/*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
                 echo "[custom-libs-py] Found \$whl_count wheel(s) and \$tar_count tarball(s)"
@@ -668,15 +688,30 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     exit 0
                 fi
                 
-                for pkg in "$CUSTOM_DIR"/*.whl "$CUSTOM_DIR"/*.tar.gz; do
+                # Install wheel files
+                for pkg in "$CUSTOM_DIR"/*.whl; do
                     if [ ! -f "\$pkg" ]; then
                         continue
                     fi
                     filename=\$(basename "\$pkg")
-                    echo "[custom-libs-py] Installing: \$filename"
-                    pip install --user --no-deps "\$pkg" 2>&1 || echo "[custom-libs-py] Warning: Failed to install \$filename"
+                    echo "[custom-libs-py] Installing wheel: \$filename"
+                    pip install --user --no-deps --no-index --quiet "\$pkg" 2>&1 || echo "[custom-libs-py] Warning: pip install failed for \$filename"
                     echo "[custom-libs-py] ✓ Installed: \$filename"
                 done
+                
+                # Install tar.gz files
+                for pkg in "$CUSTOM_DIR"/*.tar.gz; do
+                    if [ ! -f "\$pkg" ]; then
+                        continue
+                    fi
+                    filename=\$(basename "\$pkg")
+                    echo "[custom-libs-py] Installing tarball: \$filename"
+                    pip install --user --no-deps --no-index --quiet "\$pkg" 2>&1 || echo "[custom-libs-py] Warning: pip install failed for \$filename"
+                    echo "[custom-libs-py] ✓ Installed: \$filename"
+                done
+                
+                echo "[custom-libs-py] Installed packages:"
+                pip list --user 2>/dev/null | head -20 || echo "(unable to list)"
                 
                 echo "[custom-libs-py] ✓ Complete"
                 `;
