@@ -674,6 +674,19 @@ function App({ user, onLogout }: AppProps) {
         ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900'
         : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'
     }`}>
+      {/* User Side Panel */}
+      <UserSidePanel
+        theme={theme}
+        setTheme={setTheme}
+        user={user}
+        avatarImage={avatarImage}
+        fontSize={fontSize}
+        setFontSize={setFontSize}
+        isOpen={showSidePanel}
+        onClose={() => setShowSidePanel(false)}
+        onLogout={onLogout}
+      />
+
       {/* Header */}
       <Header
         theme={theme}
