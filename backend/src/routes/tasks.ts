@@ -259,78 +259,43 @@ router.post('/:id/run-tests', async (req: AuthRequest, res: Response) => {
       error?: string;
     }>;
 
-    // Execute all test cases in parallel with individual timeouts
-    const testPromises = testCases.map(async (test, i) => {
-      try {
-        // Individual timeout per test with abort capability
-        const timeoutMs = 10000;
-        let timeoutId: NodeJS.Timeout;
+    // Execute test cases sequentially to avoid Docker container overload
+    const timeoutMs = 15000; // Increased timeout per test
 
-        const execPromise = executeCodeInTempContainer(code, task.language, test.input, {
+    for (let i = 0; i < testCases.length; i++) {
+      const test = testCases[i];
+      try {
+        const execResult = await executeCodeInTempContainer(code, task.language, test.input, {
           sessionIdPrefix: 'task-test',
           timeoutMs: timeoutMs
         });
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error(`Test execution timeout (${timeoutMs / 1000} seconds)`));
-          }, timeoutMs);
-        });
+        const actual = execResult.error
+          ? execResult.error
+          : execResult.output;
 
-        const execResult = await Promise.race([
-          execPromise,
-          timeoutPromise
-        ]).finally(() => {
-          if (timeoutId!) clearTimeout(timeoutId);
-        });
+        const passed = !execResult.error && normalize(actual) === normalize(test.expectedOutput);
 
-        const actual = (execResult as any).error
-          ? (execResult as any).error
-          : (execResult as any).output;
-
-        const passed = !(execResult as any).error && normalize(actual) === normalize(test.expectedOutput);
-
-        return {
+        results.push({
           index: i,
           passed,
           // Show input only if not hidden
           input: test.isHidden ? '(hidden)' : test.input,
           // Never show expected output to students
           actualOutput: test.isHidden ? (passed ? '(correct)' : '(incorrect)') : actual,
-          error: (execResult as any).error || undefined,
-        };
+          error: execResult.error || undefined,
+        });
       } catch (error: any) {
         logger.error(`Test case ${i} failed:`, error.message);
-        return {
+        results.push({
           index: i,
           passed: false,
           input: test.isHidden ? '(hidden)' : test.input,
           actualOutput: '',
           error: error?.message || 'Execution failed',
-        };
-      }
-    });
-
-    // Wait for all tests to complete (with their individual timeouts)
-    const settledResults = await Promise.allSettled(testPromises);
-
-    // Process results
-    settledResults.forEach((result, index) => {
-      if (result.status === 'fulfilled') {
-        results.push(result.value);
-      } else {
-        results.push({
-          index,
-          passed: false,
-          input: testCases[index].isHidden ? '(hidden)' : testCases[index].input,
-          actualOutput: '',
-          error: result.reason?.message || 'Test execution failed',
         });
       }
-    });
-
-    // Sort results by index to maintain order
-    results.sort((a, b) => a.index - b.index);
+    }
 
     const passed = results.filter(r => r.passed).length;
 

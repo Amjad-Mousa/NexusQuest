@@ -3,17 +3,37 @@ import { logger } from './logger.js';
 // Shared helper to demultiplex Docker multiplexed streams
 // Format per Docker: [streamType:1][reserved:3][payloadSize:4][payload:N]
 // streamType: 1 = stdout, 2 = stderr
-export function demuxStream(stream: any): Promise<{ stdout: string; stderr: string }> {
+export function demuxStream(stream: any, timeoutMs: number = 30000): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
     let dataReceived = false;
+    let resolved = false;
 
-    const timeout = setTimeout(() => {
+    const cleanup = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(noDataWarningTimeout);
+      clearTimeout(hardTimeout);
+    };
+
+    const noDataWarningTimeout = setTimeout(() => {
       if (!dataReceived) {
         logger?.warn?.('No data received from stream after 2 seconds');
       }
     }, 2000);
+
+    // Hard timeout to prevent indefinite hanging
+    const hardTimeout = setTimeout(() => {
+      if (!resolved) {
+        cleanup();
+        logger?.warn?.(`Stream timeout after ${timeoutMs}ms - returning partial output`);
+        try {
+          stream.destroy();
+        } catch {}
+        resolve({ stdout, stderr });
+      }
+    }, timeoutMs);
 
     stream.on('data', (chunk: Buffer) => {
       dataReceived = true;
@@ -36,19 +56,26 @@ export function demuxStream(stream: any): Promise<{ stdout: string; stderr: stri
           offset += 8 + payloadSize;
         }
       } catch (err) {
-        clearTimeout(timeout);
+        cleanup();
         reject(err);
       }
     });
 
     stream.on('end', () => {
-      clearTimeout(timeout);
+      cleanup();
       resolve({ stdout, stderr });
     });
 
     stream.on('error', (err: Error) => {
-      clearTimeout(timeout);
+      cleanup();
       reject(err);
+    });
+
+    stream.on('close', () => {
+      if (!resolved) {
+        cleanup();
+        resolve({ stdout, stderr });
+      }
     });
   });
 }

@@ -154,15 +154,17 @@ export async function executeCodeInTempContainer(
         stream.end();
 
         // Collect output with timeout
-        const outputPromise = demuxStream(stream);
+        const outputPromise = demuxStream(stream, timeoutMs);
 
         const timeoutPromise = new Promise<{ stdout: string; stderr: string }>((_, reject) => {
             setTimeout(() => {
                 if (stream) {
-                    stream.destroy();
+                    try {
+                        stream.destroy();
+                    } catch {}
                 }
                 reject(new Error(`Execution timeout (${timeoutMs / 1000} seconds)`));
-            }, timeoutMs + 2000); // Extra buffer beyond container timeout
+            }, timeoutMs + 1000); // Small buffer beyond container timeout
         });
 
         const { stdout, stderr } = await Promise.race([outputPromise, timeoutPromise]);
