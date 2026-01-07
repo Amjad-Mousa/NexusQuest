@@ -792,7 +792,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     fi
                 done
                 
-                # Copy headers
+                # Copy headers directly from custom libs dir
                 for hdr in "$CUSTOM_DIR"/*.h "$CUSTOM_DIR"/*.hpp "$CUSTOM_DIR"/*.hxx; do
                     if [ -f "\$hdr" ]; then
                         cp "\$hdr" "\$INCLUDE_DIR/"
@@ -800,7 +800,7 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     fi
                 done
                 
-                # Extract archives
+                # Extract archives to /tmp (writable) then copy to project
                 for archive in "$CUSTOM_DIR"/*.tar.gz "$CUSTOM_DIR"/*.zip; do
                     if [ ! -f "\$archive" ]; then
                         continue
@@ -808,20 +808,27 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                     filename=\$(basename "\$archive")
                     echo "[custom-libs-cpp] Extracting: \$filename"
                     
-                    tmpdir="$CUSTOM_DIR/extract_\$\$"
+                    # Use /tmp for extraction (always writable)
+                    tmpdir="/tmp/cpp_extract_\$\$"
                     mkdir -p "\$tmpdir"
                     
                     if echo "\$filename" | grep -qE '\\.tar\\.gz$'; then
-                        tar -xzf "\$archive" -C "\$tmpdir" 2>&1
+                        tar -xzf "\$archive" -C "\$tmpdir" 2>&1 || echo "[custom-libs-cpp] Warning: tar extraction had issues"
                     elif echo "\$filename" | grep -qE '\\.zip$'; then
-                        unzip -q -o "\$archive" -d "\$tmpdir" 2>&1 || true
+                        unzip -q -o "\$archive" -d "\$tmpdir" 2>&1 || echo "[custom-libs-cpp] Warning: unzip had issues"
                     fi
                     
-                    # Copy libraries
+                    # Copy libraries to lib/
                     find "\$tmpdir" \\( -name "*.so" -o -name "*.so.*" -o -name "*.a" \\) -exec cp {} "\$LIB_DIR/" \\; 2>/dev/null || true
                     
-                    # Copy headers
+                    # Copy headers to include/
                     find "\$tmpdir" \\( -name "*.h" -o -name "*.hpp" -o -name "*.hxx" \\) -exec cp {} "\$INCLUDE_DIR/" \\; 2>/dev/null || true
+                    
+                    # Also check for include directories in the archive and copy their contents
+                    for inc_dir in \$(find "\$tmpdir" -type d -name "include" 2>/dev/null); do
+                        echo "[custom-libs-cpp] Found include directory: \$inc_dir"
+                        cp -r "\$inc_dir"/* "\$INCLUDE_DIR/" 2>/dev/null || true
+                    done
                     
                     rm -rf "\$tmpdir"
                     echo "[custom-libs-cpp] ✓ Extracted: \$filename"
@@ -831,9 +838,12 @@ router.post('/execute', async (req: ProjectExecutionRequest, res: Response) => {
                 ls -la "\$LIB_DIR" 2>/dev/null || echo "(empty)"
                 
                 echo "[custom-libs-cpp] Contents of include/:"
-                ls -la "\$INCLUDE_DIR" 2>/dev/null || echo "(empty)"
+                ls -la "\$INCLUDE_DIR" 2>/dev/null | head -20 || echo "(empty)"
                 
-                echo "[custom-libs-cpp] ✓ Complete - Use -I include/ -L lib/ -l<libname> to link"
+                header_count=\$(find "\$INCLUDE_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')
+                echo "[custom-libs-cpp] Total headers installed: \$header_count"
+                
+                echo "[custom-libs-cpp] ✓ Complete - Use -I include/ -L lib/ to compile"
                 `;
             }
 
