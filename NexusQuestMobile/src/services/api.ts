@@ -1,8 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// تغيير الـ IP حسب جهازك - استخدم IP الكمبيوتر مش localhost
-const API_URL = 'http://192.168.1.100:3001'; // Backend running on port 3001
+// Production server URL
+const API_URL = 'https://muhjah.com/nexusquest';
 
 const api = axios.create({
   baseURL: API_URL,

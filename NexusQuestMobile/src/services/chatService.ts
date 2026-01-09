@@ -2,8 +2,9 @@ import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
 
-// Must match the backend host/port used by the web chat service
-const CHAT_URL = 'http://192.168.1.7:9876';
+// Production server URL
+const API_URL = 'https://muhjah.com/nexusquest';
+const SOCKET_ORIGIN = new URL(API_URL).origin;
 
 let socket: Socket | null = null;
 
@@ -31,10 +32,14 @@ export async function connectChat(): Promise<Socket | null> {
 
     if (socket?.connected) return socket;
 
-    socket = io(CHAT_URL, {
+    socket = io(SOCKET_ORIGIN + '/chat', {
+      path: '/nexusquest/socket.io',
       auth: { token },
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
     });
 
     return socket;
